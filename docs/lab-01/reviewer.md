@@ -1,7 +1,8 @@
 # Lab 1 — Peer Review Record
 
-**Author:** Tanadet — GitHub: @Kawi-HBLI
-**Peer reviewer:** R1NNE0 — GitHub: @R1NNE0 (main reviewer), Bank848 — GitHub: @Bank848 (Issue 2 review)
+**Author:** Tanadet Nuchaikaew — 67070501060 — GitHub: @Kawi-HBLI
+**Peer reviewer:** Songwit Rueangsawat — 67070501081 — GitHub: @R1NNE0 (main reviewer), Bank848 — GitHub: @Bank848 (Issue 2 review)
+**Partner I reviewed:** Thanawat Suntarawattana — 67070501022 — GitHub: @Maibokdaimhai
 
 ## Pull Requests I authored (reviewed by my partner)
 | PR | Branch | Reviewer | Verdict |
