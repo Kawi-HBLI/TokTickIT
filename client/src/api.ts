@@ -20,6 +20,10 @@ export async function checkSystem(): Promise<SystemStatus> {
   if (!res.ok) {
     throw new Error("Backend is unavailable");
   }
-  // We will fetch categories in Issue 4. For now, return empty array.
-  return { online: true, categories: [] };
+  const catRes = await fetch(`${API_URL}/api/categories`);
+  if (!catRes.ok) {
+    throw new Error("Failed to fetch categories");
+  }
+  const categories: Category[] = await catRes.json();
+  return { online: true, categories };
 }
