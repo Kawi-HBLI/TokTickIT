@@ -1,13 +1,21 @@
-# Lab 1 — AI Use and Reflection  (fill this in)
+# Lab 1 — AI Use and Reflection
 
-**LLM/agent used:** <name>
+**LLM/agent used:** Gemini 3.1 Pro (High) via Antigravity IDE
 
 ## Selected key prompts (6–10)
 | # | Prompt (summarised) | What I did with the result |
 |---|---------------------|----------------------------|
-| 1 |  |  |
-| 2 |  |  |
+| 1 | "I've set up the Kanban board already, can you check if anything's off? Also I have Docker installed — if it's easier to use Docker for the DB, let's go with that." (Issue 1) | The AI suggested spinning up PostgreSQL via `docker-compose.yml` instead of installing pgAdmin locally. I went with it because it keeps the DB isolated and everyone on the team gets the same setup without messing with local passwords or ports. |
+| 2 | "Let's start Issue 2. We need a GET /api/health route in server/src/app.ts that returns 200 with JSON. Write the code and run vitest to see if health.test.ts passes." | I gave it the exact file and test name so it wouldn't guess. The route was simple but I forgot to also wire up the frontend to call it — my peer reviewer caught that, and I had to push a second commit to fix `api.ts` and `App.tsx`. Lesson learned: read the full acceptance criteria before marking something done. |
+| 3 | "For Issue 3 we need a Category model in schema.prisma — id as Int PK, name as String Unique, createdAt as DateTime. Create the schema and run the migration." | The AI generated the model and ran `prisma migrate dev`. It also wrote the seed script using `upsert` so running it twice doesn't create duplicates. I didn't know about upsert before this — it's basically "insert if missing, skip if exists", which is exactly what you want for seed data. |
+| 4 | "Time for Issue 4. Database is ready. Create GET /api/categories that fetches all categories from Postgres via Prisma, returns {id, name} ordered by id. Do the server side first, then the client." | The AI used `getPrisma().category.findMany()` with `select` and `orderBy` to only return what's needed. It also added a try/catch that returns a 500 with a generic error message instead of leaking DB details. I thought that was a nice touch for security. |
+| 5 | "Now hook up the frontend — App.tsx should show the categories when the system check passes. Update api.ts to fetch /api/categories instead of returning an empty array." | It chained a second fetch in `checkSystem()` after the health check, then rendered the category list using `.map()`. The existing state machine pattern (idle → loading → success/error) stayed the same, which kept things clean. |
+| 6 | "Write tests for the categories endpoint like health.test.ts. Also fill in the two todo client tests — success showing categories and error showing offline." | This was where I learned about mocking. The client tests use `vi.spyOn` to fake the API response so the tests don't depend on a running backend. The server tests use Supertest like before. All 5 tests passed (2 server, 3 client). |
+| 7 | "Update the docs — ai_use.md, reviewer.md, tests.md — to cover everything we did across Issues 1 through 4." | I asked the AI to help write documentation at the end when all the code was done. That way the reflections are more accurate because I already know what worked and what didn't. I still reviewed everything myself to make sure it matched what actually happened. |
 
 ## Reflection
-Two or three sentences: what made your prompts better, and one place you had to
-correct or reject what the agent produced.
+The main thing I took away from Lab 1 is that giving the AI specific context makes a huge difference. When I told it exactly which file to edit and which test to run, the output was spot-on. When I was vague, it missed things (like the frontend part of Issue 2 that my reviewer flagged).
+
+The Docker decision in Issue 1 turned out to be really useful — no one had to deal with local Postgres setup issues. And seeing the full-stack flow come together (Prisma schema → migration → seed → Express route → React fetch → UI) helped me understand how each layer depends on the one below it. Issue 4 literally couldn't work until Issue 3's Category model was merged.
+
+One mistake I made was not reading the full acceptance criteria for Issue 2. I only implemented the backend route and forgot about the frontend requirement. My peer reviewer caught it, which is exactly what code review is for. Next time I'll go through the checklist before pushing.
