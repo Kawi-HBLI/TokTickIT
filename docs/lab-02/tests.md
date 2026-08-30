@@ -32,6 +32,8 @@ No required test may be skipped, disabled, commented out, or marked Pass without
 
 | Test ID | Requirement / AC | What It Tests | Expected Result | Automated Test File | Final Status |
 |---|---|---|---|---|---|
+| DB-SCHEMA-01 | BR-07, BR-15, BR-17-BR-18 | Prisma models, relationships, constraints, ownership indexes, and Ticket Number source | Schema validates; required models/indexes exist; Ticket Number uses a PostgreSQL sequence and never row counting | `server/tests/lab-02/database-schema.test.ts` | Passed |
+| DB-SEED-01 | BR-01-BR-03, AC-01 | Required Categories, Related Systems, active Requesters, inactive Requester, and repeatable seeding | Required values exist and running the upserts twice creates no duplicate natural keys | `server/tests/lab-02/seed.test.ts` | Passed |
 | UNIT-01 | BR-07, AC-06 | Ticket Number formatting and concurrency-safe source abstraction | Returns `TKT-YYYY-NNNNN` with at least five padded digits and no duplicate source value | `server/tests/lab-02/ticket-number.test.ts` | Planned |
 | UNIT-02 | BR-10-BR-14, AC-07 | Trimming and boundary validation for Summary, Description, IDs, and Priority | Exact boundaries pass; whitespace, out-of-range text, inactive references, and invalid enum values fail by field | `server/tests/lab-02/ticket-validation.test.ts` | Planned |
 | UNIT-03 | BR-25-BR-27, AC-10 | Attachment extension, MIME, size, count, and safe filename rules | Permitted boundary files pass; mismatched/unsupported/oversized/count-six files fail safely | `server/tests/lab-02/attachment-validation.test.ts` | Planned |
