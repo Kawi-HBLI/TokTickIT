@@ -2,26 +2,15 @@
 
 **LLM/agent used:** OpenAI Codex (GPT-5). An earlier first draft was also prepared with an AI assistant in Antigravity IDE.
 
-I am recording only prompts that materially changed the engineering work. This list will grow gradually as later Issues introduce decisions worth keeping.
-
 ## Selected Key Prompts
 
 | # | Selected Prompt | What I Did With the Result |
 |---|---|---|
 | 1 | "Read the Lab 2 labsheet and inspect the current repository. Review `specification.md`, `tests.md`, `ui-spec.md`, and `api-spec.md` as one engineering contract. Resolve ambiguities in Requester context, ownership, duplicate submission, pagination, Attachment behavior, errors, UI states, and test traceability before writing implementation code." | This turned the broad stakeholder request into a consistent contract with numbered FRs, BRs, and ACs. I accepted `x-requester-id` as the temporary Requester context, safe `404` ownership behavior, an `Idempotency-Key` for duplicate protection, explicit Attachment failure rules, and AC-to-test traceability. |
-
-## Prompt Pattern I Learned
-
-My prompts work better when they include:
-
-```text
-Context + exact files/scope + important constraints + expected result + stopping point
-```
-
-For example:
-
-> Read the Lab 2 contract and edit only the relevant files under `docs/lab-02`. Keep all FR, BR, AC, API, UI, and test IDs consistent. Verify the result, commit on the current feature branch, but do not push or create a PR.
+| 2 | "Review the Lab 2 specification and test plan before implementation. Check for conflicting business rules, missing API behavior, and acceptance criteria without test coverage. Trace what happens if ticket creation succeeds but an attachment upload fails. Separate planned tests from verified results and suggest concrete review comments." | The review identified unsupported test-pass claims, conflicting ticket-number rules, missing API details, and incorrect AC/test mappings. I requested corrections and a clear attachment failure/rollback flow with a planned test before approving the revised documents. [Review discussion](https://github.com/Maibokdaimhai/TokTickIT/pull/16) |
 
 ## My Reflection
 
-I am still learning how to write good prompts, so my first messages were short and sometimes left the agent to guess the scope. This prompt worked better because it named the contract files, the decisions that needed attention, and the stopping point before implementation. I will add more prompts only when later work produces another important decision or correction.
+AI was most useful when checking how the documents fit together. A requirement can look clear on its own but still conflict with an API response or have no test that proves it. Comparing the specification, API, UI, and test plan helped catch those gaps before coding.
+
+The peer review also showed why failure cases matter. Creating a ticket and uploading a file are separate steps, so the contract needs to explain what happens if only one succeeds. I also learned that a test plan is not evidence of passing tests: results must stay pending until the tests actually run.
