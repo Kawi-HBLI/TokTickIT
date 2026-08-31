@@ -49,5 +49,13 @@ Category table.
 - **Server**: Run `npm test` in the `server` folder. Database-backed tests require
   PostgreSQL to be running with migrations and seed data applied.
 - **Lab 2 database checks only**: Run
-  `npx vitest run tests/lab-02/database-schema.test.ts tests/lab-02/seed.test.ts`
-  in the `server` folder.
+  `npx vitest run tests/lab-02`
+  in the `server` folder. The integration suite applies all migrations to a
+  uniquely named temporary schema in the database from `server/.env`, seeds it
+  twice, and tests persisted ticket numbers and constraints. The database user
+  needs permission to create/drop schemas. The suite removes only its own
+  temporary schema; it does not reset the application's schema or sequence.
+
+Existing Lab 2 databases also need `npx prisma migrate deploy` to apply the
+ticket-number formatting correction. It preserves existing records and the
+sequence position while allowing numbers longer than five digits.
