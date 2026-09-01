@@ -1,34 +1,69 @@
+import type { PrismaClient } from "@prisma/client";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { getPrisma } from "../src/prisma.js";
+import { categories, relatedSystems, requesterUsers } from "./seed-data.js";
 
-// Issue 3 — seed the four supported categories.
-// The four names are: Account and Access, Hardware, Software, Network.
-// Requirement: running the seed twice must NOT create duplicates.
-// Hint: prisma.category.upsert({ where:{name}, update:{}, create:{name} }).
-async function main() {
-  const prisma = getPrisma();
-  const categories = [
-    { id: 1, name: "Account and Access" },
-    { id: 2, name: "Hardware" },
-    { id: 3, name: "Software" },
-    { id: 4, name: "Network" },
-  ];
+type SeedClient = Pick<
+  PrismaClient,
+  "category" | "relatedSystem" | "requesterUser"
+>;
 
+export async function seedDatabase(prisma: SeedClient): Promise<void> {
   for (const category of categories) {
     await prisma.category.upsert({
       where: { name: category.name },
-      update: {},
+      update: { isActive: category.isActive },
       create: category,
     });
   }
 
-  console.log("Database seeded successfully with Categories.");
+  for (const relatedSystem of relatedSystems) {
+    await prisma.relatedSystem.upsert({
+      where: { name: relatedSystem.name },
+      update: {
+        description: relatedSystem.description,
+        isActive: relatedSystem.isActive,
+      },
+      create: relatedSystem,
+    });
+  }
+
+  for (const requesterUser of requesterUsers) {
+    await prisma.requesterUser.upsert({
+      where: { email: requesterUser.email },
+      update: {
+        name: requesterUser.name,
+        department: requesterUser.department,
+        isActive: requesterUser.isActive,
+      },
+      create: requesterUser,
+    });
+  }
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await getPrisma().$disconnect();
+async function main(): Promise<void> {
+  const prisma = getPrisma();
+
+  try {
+    await seedDatabase(prisma);
+    console.log(
+      `Database seeded: ${categories.length} categories, ` +
+        `${relatedSystems.length} related systems, and ` +
+        `${requesterUsers.length} requester users.`,
+    );
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+const entryPoint = process.argv[1]
+  ? pathToFileURL(resolve(process.argv[1])).href
+  : undefined;
+
+if (entryPoint === import.meta.url) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
   });
+}

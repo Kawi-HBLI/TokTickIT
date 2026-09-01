@@ -32,6 +32,8 @@ No required test may be skipped, disabled, commented out, or marked Pass without
 
 | Test ID | Requirement / AC | What It Tests | Expected Result | Automated Test File | Final Status |
 |---|---|---|---|---|---|
+| DB-SCHEMA-01 | BR-07, BR-15, BR-17-BR-18 | Prisma models, relationships, constraints, ownership indexes, and Ticket Number source | Schema validates; required models/indexes exist; Ticket Number uses a PostgreSQL sequence and never row counting | `server/tests/lab-02/database-schema.test.ts` | Passed |
+| DB-SEED-01 | BR-01-BR-03, AC-01 | Required Categories, Related Systems, active Requesters, inactive Requester, and repeatable seeding | Required values exist and running the upserts twice creates no duplicate natural keys | `server/tests/lab-02/seed.test.ts` | Passed |
 | UNIT-01 | BR-07, AC-06 | Ticket Number formatting and concurrency-safe source abstraction | Returns `TKT-YYYY-NNNNN` with at least five padded digits and no duplicate source value | `server/tests/lab-02/ticket-number.test.ts` | Planned |
 | UNIT-02 | BR-10-BR-14, AC-07 | Trimming and boundary validation for Summary, Description, IDs, and Priority | Exact boundaries pass; whitespace, out-of-range text, inactive references, and invalid enum values fail by field | `server/tests/lab-02/ticket-validation.test.ts` | Planned |
 | UNIT-03 | BR-25-BR-27, AC-10 | Attachment extension, MIME, size, count, and safe filename rules | Permitted boundary files pass; mismatched/unsupported/oversized/count-six files fail safely | `server/tests/lab-02/attachment-validation.test.ts` | Planned |
@@ -41,6 +43,7 @@ No required test may be skipped, disabled, commented out, or marked Pass without
 
 | Test ID | Requirement / AC | What It Tests | Expected Result | Automated Test File | Final Status |
 |---|---|---|---|---|---|
+| DB-INTEGRATION-01 | BR-01-BR-03, BR-07, BR-15, BR-17-BR-18 | Fresh migration chain, real seed repeatability, persisted Ticket Number boundaries through bigint maximum, 20 concurrent inserts, idempotency uniqueness, and restricted Requester deletion | Migrations apply to an empty isolated schema; seed preserves identities; full digits and unique numbers persist; database constraints reject invalid writes | `server/tests/lab-02/database.integration.test.ts` | Passed |
 | API-REF-01 | FR-01, BR-02, AC-01 | Active Development Requester endpoint and repeatable seed | `200`; four or more active Requesters returned; inactive Requester absent; running seed twice creates no duplicates | `server/tests/lab-02/requesters-reference.api.test.ts` | Planned |
 | API-REF-02 | FR-04, AC-04 | Empty and unexpected reference-data failure behavior | Empty array or safe `500` contract returned without internal details | `server/tests/lab-02/requesters-reference.api.test.ts` | Planned |
 | API-REF-03 | FR-04, BR-12 | Active Categories and Related Systems | `200`; required seeded active values returned in documented order; inactive values absent | `server/tests/lab-02/requesters-reference.api.test.ts` | Planned |
@@ -171,6 +174,29 @@ npx playwright test
 Database migration/seed and any test-database setup commands must be documented in README before final verification.
 
 ## 7. Final Results
+
+### Feature #13 verification — 2026-08-31 (ICT)
+
+On `feature/2-database-schema-seed`, the ticket-number regression tests first
+failed against the original formatter: `100000` became `10000`, and subsequent
+inserts collided. After the forward migration
+`20260831040000_preserve_ticket_number_digits`:
+
+- Server tests: **20 passed in 5 files**, including 8 PostgreSQL integration tests.
+- TypeScript build and Prisma validation passed; all 3 migrations were applied
+  on the existing development database, with no Prisma schema drift.
+- The integration suite applied all migrations to an empty temporary schema,
+  seeded twice without duplicates or changed identities, and verified boundary
+  values, concurrent inserts, and database constraints.
+- Existing development Category IDs/names, Ticket count, and sequence position
+  were unchanged after migration/testing. No temporary test schemas remained.
+- [PR #20](https://github.com/Kawi-HBLI/TokTickIT/pull/20) records the published
+  commit SHA and review status for this verification.
+
+These results cover the database feature only. Later API/UI/E2E work and the
+final integrated Lab 2 verification below are still pending.
+
+### Final integrated Lab 2 results
 
 To be completed using copied final output from the actual commands:
 
