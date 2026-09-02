@@ -8,7 +8,7 @@
 | PR | Branch | Reviewer | Verdict |
 |----|--------|----------|---------|
 | [#12](https://github.com/Kawi-HBLI/TokTickIT/pull/12) | feature/1-spec-and-test-plan | @R1NNE0 | Approved on 2026-08-30; merged by @R1NNE0 into lab2-staging as `21e20fd` |
-|    | feature/2-database-schema-seed | | |
+| [#20](https://github.com/Kawi-HBLI/TokTickIT/pull/20) | feature/2-database-schema-seed | @R1NNE0 | Approved on 2026-09-02; merged into lab2-staging as `51fa6ce` |
 |    | feature/3-requester-context | | |
 |    | feature/4-create-ticket | | |
 |    | feature/5-my-tickets | | |
@@ -20,6 +20,8 @@
 - **PR #12:** [Review by @R1NNE0](https://github.com/Kawi-HBLI/TokTickIT/pull/12#pullrequestreview-5060922044) approved the specification, test traceability, and UI/API contracts. The reviewer recommended creating the remaining Issues on the project board and recording this review after merge.
 - **My response:** [Reply](https://github.com/Kawi-HBLI/TokTickIT/pull/12#issuecomment-5468970735) confirmed that all seven Lab 2 Issues had been created with their implementation order and dependencies documented, and stated that this review would be recorded after merge.
 - **Outcome:** The reviewer merged PR #12 on 2026-08-30 at 22:46 ICT. This entry records the review after merge; later PR verdicts remain blank until their reviews occur.
+- **PR #20:** [Review by @R1NNE0](https://github.com/Kawi-HBLI/TokTickIT/pull/20#pullrequestreview-5069973864) approved the Lab 2 database foundation, including the corrected migration sequence, idempotent seed behavior, and the verified server test suite.
+- **Outcome:** PR #20 was merged into `lab2-staging` as `51fa6ce` on 2026-09-02. The next feature branch was created from that merged staging state.
 
 ## Pull Requests I reviewed for my partner
 
