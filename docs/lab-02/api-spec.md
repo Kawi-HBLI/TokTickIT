@@ -37,6 +37,7 @@ Idempotency-Key: 6aa9ca67-a155-4a67-96f0-e2e6f977c89d
 
 - First successful use returns `201 Created`.
 - Retrying the same key with the same normalized Ticket payload returns the original Ticket with `200 OK`, header `Idempotency-Replayed: true`, and creates no duplicate.
+- Normalization trims text and parses IDs; attachment order, safe original name, MIME, size, and a content digest are included in the comparison. A replay returns the saved original creation response, including any attachment warnings, and does not upload the files again. Internal fingerprints/receipts are not public response fields.
 - Reusing the key for a different normalized payload returns `409 Conflict`.
 - A new user-initiated submission uses a new UUID.
 

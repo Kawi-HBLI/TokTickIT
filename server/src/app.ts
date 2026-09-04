@@ -1,13 +1,14 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { getPrisma } from "./prisma.js";
+import { createTicketRouter } from "./create-ticket.js";
 
 
 // The Express app is exported separately from app.listen() (see index.ts) so
 // Supertest can import `app` without opening a port. Do not merge these files.
 export const app = express();
 
-app.use(cors());          // already wired: lets the Vite dev server call this API
+app.use(cors({ exposedHeaders: ["Idempotency-Replayed"] }));
 app.use(express.json());
 
 // ---------------------------------------------------------------------------
@@ -25,13 +26,14 @@ app.get("/api/health", (_req: Request, res: Response) => {
 app.get("/api/categories", async (_req: Request, res: Response) => {
   try {
     const categories = await getPrisma().category.findMany({
+      where: { isActive: true },
       select: { id: true, name: true },
       orderBy: { id: "asc" },
     });
-    res.status(200).json(categories);
+    res.status(200).json({ data: categories });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to retrieve categories" });
+    res.status(500).json({ error: { code: "REFERENCE_DATA_UNAVAILABLE", message: "Categories are temporarily unavailable.", retryable: true } });
   }
 });
 
@@ -55,4 +57,15 @@ app.get("/api/requesters", async (_req: Request, res: Response) => {
   }
 });
 
+app.get("/api/related-systems", async (_req, res) => {
+  try {
+    const data = await getPrisma().relatedSystem.findMany({ where: { isActive: true },
+      select: { id: true, name: true, description: true }, orderBy: [{ name: "asc" }, { id: "asc" }] });
+    res.json({ data });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: { code: "REFERENCE_DATA_UNAVAILABLE", message: "Related Systems are temporarily unavailable.", retryable: true } });
+  }
+});
+app.use("/api/tickets", createTicketRouter);
 export default app;

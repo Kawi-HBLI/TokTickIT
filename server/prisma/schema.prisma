@@ -53,24 +53,26 @@ model RelatedSystem {
 }
 
 model Ticket {
-  id                Int             @id @default(autoincrement())
-  ticketNumber      String          @unique @default(dbgenerated("next_ticket_number()"))
-  requesterId       Int
-  idempotencyKey    String
-  categoryId        Int
-  relatedSystemId   Int
-  summary           String
-  description       String
-  requestedPriority TicketPriority
-  itPriority        TicketPriority?
-  currentStatus     TicketStatus    @default(NEW)
-  ticketOwner       String?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  requester         RequesterUser   @relation(fields: [requesterId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  category          Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  relatedSystem     RelatedSystem   @relation(fields: [relatedSystemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  attachments       Attachment[]
+  id                  Int             @id @default(autoincrement())
+  ticketNumber        String          @unique @default(dbgenerated("next_ticket_number()"))
+  requesterId         Int
+  idempotencyKey      String
+  creationFingerprint String?
+  creationResponse    Json?
+  categoryId          Int
+  relatedSystemId     Int
+  summary             String
+  description         String
+  requestedPriority   TicketPriority
+  itPriority          TicketPriority?
+  currentStatus       TicketStatus    @default(NEW)
+  ticketOwner         String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  requester           RequesterUser   @relation(fields: [requesterId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  category            Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  relatedSystem       RelatedSystem   @relation(fields: [relatedSystemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  attachments         Attachment[]
 
   @@unique([requesterId, idempotencyKey])
   @@index([requesterId, updatedAt])

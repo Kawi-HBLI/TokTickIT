@@ -128,7 +128,13 @@ Full presentation and interaction rules are defined in `docs/lab-02/ui-spec.md`.
 - **RequesterUser:** `id`, `name`, `email` (unique), `department`, `isActive`, `createdAt`, `updatedAt`.
 - **Category:** existing fields plus `isActive` and `updatedAt`.
 - **RelatedSystem:** `id`, `name` (unique), `description`, `isActive`, `createdAt`, `updatedAt`.
-- **Ticket:** `id`, `ticketNumber` (unique), `requesterId`, `idempotencyKey`, `categoryId`, `relatedSystemId`, `summary`, `description`, `requestedPriority`, `itPriority` (nullable), `currentStatus` (default `NEW`), `ticketOwner` (nullable), `createdAt`, `updatedAt`.
+- **Ticket:** `id`, `ticketNumber` (unique), `requesterId`, `idempotencyKey`, `creationFingerprint` (nullable, internal), `creationResponse` (nullable JSON, internal), `categoryId`, `relatedSystemId`, `summary`, `description`, `requestedPriority`, `itPriority` (nullable), `currentStatus` (default `NEW`), `ticketOwner` (nullable), `createdAt`, `updatedAt`.
+
+The internal creation fingerprint and immutable response receipt support BR-15:
+retries compare normalized form values and ordered attachment metadata/content,
+then return the original response including partial-upload warnings. These fields
+are never exposed as Ticket properties. Nullable columns preserve pre-increment
+rows; a key used by a row without a receipt returns a safe conflict.
 - **Attachment:** `id`, `ticketId`, `originalName`, `storedName` (unique), `mimeType`, `sizeBytes`, `isRemoved` (default `false`), `removalReason` (nullable), `removedAt` (nullable), `removedByRequesterId` (nullable), `createdAt`.
 
 ### Relationships and Constraints

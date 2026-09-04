@@ -161,6 +161,12 @@ Reference-data loading disables affected controls and displays a loading state. 
 
 Cancel returns to My Tickets. If the form is dirty, Cancel requires confirmation.
 
+For an uncertain submission outcome (network loss, server failure, or an invalid
+success response), retain and temporarily lock the draft. Explain that the
+request may already have succeeded and offer Retry with the same submission key.
+Do not silently turn an edited draft into a new submission while resolving that
+outcome. A confirmed validation rejection unlocks the fields for correction.
+
 ## 8. My Tickets Screen
 
 Route: `/tickets`
