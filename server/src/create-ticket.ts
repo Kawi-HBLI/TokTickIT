@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { getPrisma } from "./prisma.js";
 import { requireRequester } from "./requester-context.js";
 import { TicketError, validateTicket } from "./ticket-validation.js";
+import { validateTicketQuery } from "./ticket-query.js";
 import { attachmentStorage, MAX_FILE_BYTES, validateFiles } from "./attachment-storage.js";
 
 const upload = multer({ storage: multer.memoryStorage(),
@@ -22,6 +23,108 @@ const ticketSelect = {
 } satisfies Prisma.TicketSelect;
 
 export const createTicketRouter = Router();
+
+createTicketRouter.get("/", requireRequester, async (req, res, next) => {
+  try {
+    const query = validateTicketQuery(req.query as Record<string, unknown>);
+    const requesterId = req.requester!.id;
+
+    if (query.categoryId !== null) {
+      const activeCategory = await getPrisma().category.findFirst({
+        where: { id: query.categoryId, isActive: true },
+      });
+      if (!activeCategory) {
+        throw new TicketError(400, "INVALID_QUERY", "Some query parameters are invalid.", [
+          { field: "categoryId", message: "Category does not exist or is inactive." },
+        ]);
+      }
+    }
+
+    const where: Prisma.TicketWhereInput = {
+      requesterId,
+      ...(query.categoryId !== null ? { categoryId: query.categoryId } : {}),
+      ...(query.requestedPriority !== null ? { requestedPriority: query.requestedPriority } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { ticketNumber: { contains: query.search, mode: "insensitive" } },
+              { summary: { contains: query.search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    };
+
+    const totalItems = await getPrisma().ticket.count({ where });
+    const totalPages = Math.ceil(totalItems / query.pageSize);
+    const skip = (query.page - 1) * query.pageSize;
+    const orderBy: Prisma.TicketOrderByWithRelationInput[] = [
+      { [query.sortBy]: query.sortOrder },
+      { ticketNumber: "desc" },
+    ];
+
+    const tickets =
+      totalItems > 0 && skip < totalItems
+        ? await getPrisma().ticket.findMany({
+            where,
+            skip,
+            take: query.pageSize,
+            orderBy,
+            select: {
+              id: true,
+              ticketNumber: true,
+              summary: true,
+              requestedPriority: true,
+              currentStatus: true,
+              createdAt: true,
+              updatedAt: true,
+              category: { select: { id: true, name: true } },
+              relatedSystem: { select: { id: true, name: true } },
+              _count: {
+                select: {
+                  attachments: {
+                    where: { isRemoved: false },
+                  },
+                },
+              },
+            },
+          })
+        : [];
+
+    const data = tickets.map((t) => ({
+      id: t.id,
+      ticketNumber: t.ticketNumber,
+      summary: t.summary,
+      requestedPriority: t.requestedPriority,
+      currentStatus: t.currentStatus,
+      createdAt: t.createdAt.toISOString(),
+      updatedAt: t.updatedAt.toISOString(),
+      category: t.category,
+      relatedSystem: t.relatedSystem,
+      activeAttachmentCount: t._count.attachments,
+    }));
+
+    res.status(200).json({
+      data,
+      pagination: {
+        page: query.page,
+        pageSize: query.pageSize,
+        totalItems,
+        totalPages,
+        hasPreviousPage: query.page > 1,
+        hasNextPage: query.page < totalPages,
+      },
+      query: {
+        search: query.search,
+        categoryId: query.categoryId,
+        requestedPriority: query.requestedPriority,
+        sortBy: query.sortBy,
+        sortOrder: query.sortOrder,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 createTicketRouter.post("/", requireRequester, (req, _res, next) => {
   const key = req.header("Idempotency-Key");
   if (!key || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key))
@@ -97,7 +200,7 @@ createTicketRouter.post("/", requireRequester, (req, _res, next) => {
   }
 });
 
-const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
+const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
   if (error instanceof multer.MulterError) {
     const tooLarge = error.code === "LIMIT_FILE_SIZE";
     res.status(tooLarge ? 413 : 400).json({ error: {
@@ -109,9 +212,14 @@ const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
     res.status(error.status).json({ error: { code: error.code, message: error.message,
       ...(error.fields ? { fields: error.fields } : {}), retryable: false } });
   } else {
-    console.error("Ticket creation failed", error);
-    res.status(500).json({ error: { code: "TICKET_CREATE_FAILED",
-      message: "The ticket could not be created. Please retry the same submission.", retryable: true } });
+    console.error("Ticket operation failed", error);
+    if (req.method === "GET") {
+      res.status(500).json({ error: { code: "TICKET_LIST_FAILED",
+        message: "Tickets are temporarily unavailable. Please try again.", retryable: true } });
+    } else {
+      res.status(500).json({ error: { code: "TICKET_CREATE_FAILED",
+        message: "The ticket could not be created. Please retry the same submission.", retryable: true } });
+    }
   }
 };
 createTicketRouter.use(errorHandler);

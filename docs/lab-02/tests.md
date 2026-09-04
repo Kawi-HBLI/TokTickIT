@@ -37,7 +37,7 @@ No required test may be skipped, disabled, commented out, or marked Pass without
 | UNIT-01 | BR-07, AC-06 | Ticket Number formatting and concurrency-safe source abstraction | Returns `TKT-YYYY-NNNNN` with at least five padded digits and no duplicate source value | `server/tests/lab-02/ticket-number.test.ts` | Planned |
 | UNIT-02 | BR-10-BR-14, AC-07 | Trimming and boundary validation for Summary, Description, IDs, and Priority | Exact boundaries pass; whitespace, out-of-range text, inactive references, and invalid enum values fail by field | `server/tests/lab-02/ticket-validation.test.ts` | Passed |
 | UNIT-03 | BR-25-BR-27, AC-10 | Attachment extension, MIME, size, count, and safe filename rules | Permitted boundary files pass; mismatched/unsupported/oversized/count-six files fail safely | `server/tests/lab-02/attachment-validation.test.ts` | Passed |
-| UNIT-04 | BR-19-BR-22, AC-13, AC-14 | Query parsing, allowed page sizes, sort fields, priority order, and defaults | Valid query is normalized; invalid values fail; stable defaults are applied | `server/tests/lab-02/ticket-query.test.ts` | Planned |
+| UNIT-04 | BR-19-BR-22, AC-13, AC-14 | Query parsing, allowed page sizes, sort fields, priority order, and defaults | Valid query is normalized; invalid values fail; stable defaults are applied | `server/tests/lab-02/ticket-query.test.ts` | Passed |
 
 ### 3.2 API and Integration Tests
 
@@ -54,10 +54,10 @@ No required test may be skipped, disabled, commented out, or marked Pass without
 | API-CREATE-04 | BR-16, BR-33, AC-09 | Unexpected database failure | Safe `500`; no stack/database detail returned; inconsistent partial Ticket absent | `server/tests/lab-02/create-ticket.api.test.ts` | Passed |
 | API-ATT-01 | BR-25-BR-28, AC-10 | Invalid file during creation/upload | Unsupported, mismatched, oversized, or count-six operation is rejected and invalid data is not persisted | `server/tests/lab-02/create-ticket.api.test.ts` (creation); `server/tests/lab-02/attachments.api.test.ts` (later upload) | Passed for creation; existing-ticket upload remains Planned |
 | API-ATT-02 | BR-29, AC-11 | Unexpected file-storage failure after Ticket creation | Ticket remains; incomplete file/metadata cleaned; failed filename warning returned | `server/tests/lab-02/create-ticket.api.test.ts` (creation); `server/tests/lab-02/attachments.api.test.ts` (later upload) | Passed for creation; existing-ticket upload remains Planned |
-| API-LIST-01 | FR-08, BR-17, AC-12 | Ownership-scoped My Tickets for Requester A and B | `200`; each response contains only the selected Requester's Tickets | `server/tests/lab-02/my-tickets.api.test.ts` | Planned |
-| API-LIST-02 | FR-09, BR-19, BR-20, AC-13 | Case-insensitive search and combined Category/Priority filters | Only matching owned Tickets returned; clearing parameters restores unfiltered results | `server/tests/lab-02/my-tickets.api.test.ts` | Planned |
-| API-LIST-03 | FR-10, BR-21, BR-22, AC-14 | Default/explicit stable sort, page metadata, boundaries, and invalid query values | Correct order and metadata; page beyond end is empty; invalid query returns `400` | `server/tests/lab-02/my-tickets.api.test.ts` | Planned |
-| API-LIST-04 | BR-23, AC-15 | No owned Tickets versus no matching results | Both return valid empty data/metadata that the UI can distinguish from applied query state | `server/tests/lab-02/my-tickets.api.test.ts` | Planned |
+| API-LIST-01 | FR-08, BR-17, AC-12 | Ownership-scoped My Tickets for Requester A and B | `200`; each response contains only the selected Requester's Tickets | `server/tests/lab-02/my-tickets.api.test.ts` | Passed |
+| API-LIST-02 | FR-09, BR-19, BR-20, AC-13 | Case-insensitive search and combined Category/Priority filters | Only matching owned Tickets returned; clearing parameters restores unfiltered results | `server/tests/lab-02/my-tickets.api.test.ts` | Passed |
+| API-LIST-03 | FR-10, BR-21, BR-22, AC-14 | Default/explicit stable sort, page metadata, boundaries, and invalid query values | Correct order and metadata; page beyond end is empty; invalid query returns `400` | `server/tests/lab-02/my-tickets.api.test.ts` | Passed |
+| API-LIST-04 | BR-23, AC-15 | No owned Tickets versus no matching results | Both return valid empty data/metadata that the UI can distinguish from applied query state | `server/tests/lab-02/my-tickets.api.test.ts` | Passed |
 | API-DETAIL-01 | FR-11, BR-24, AC-16 | Owned Ticket Detail and Attachment metadata | `200`; complete read-only Ticket with active and removed metadata; no stored path exposed | `server/tests/lab-02/ticket-detail.api.test.ts` | Planned |
 | API-DETAIL-02 | FR-16, BR-18, AC-17 | Missing and cross-Requester Ticket Detail | Both return `404` with the same safe error shape and no Ticket data | `server/tests/lab-02/ticket-detail.api.test.ts` | Planned |
 | API-ATT-03 | FR-12, AC-18 | Add valid Attachment to owned Ticket below limit | `201`; metadata and file saved; active count increases; preview/download available | `server/tests/lab-02/attachments.api.test.ts` | Planned |
@@ -80,10 +80,10 @@ No required test may be skipped, disabled, commented out, or marked Pass without
 | UI-CREATE-03 | FR-07, AC-08 | Busy and duplicate-submit behavior | Submit disabled with busy text; repeated activation creates one request | `client/tests/lab-02/CreateTicket.test.tsx` | Passed |
 | UI-CREATE-04 | BR-16, BR-34, AC-09 | API/reference failure with retained values and Retry | Safe message shown; typed/selected values remain; retry works | `client/tests/lab-02/CreateTicket.test.tsx` | Passed |
 | UI-CREATE-05 | BR-29, AC-11 | Ticket success with partial Attachment warning | Ticket Number remains visible; failed filenames and retry-from-detail action shown | `client/tests/lab-02/CreateTicket.test.tsx` | Passed for warning display; actual Detail retry awaits next feature |
-| UI-LIST-01 | FR-08, AC-12 | Requester-owned list and switching behavior | A's rows/cards disappear after switching to B; B's result loads | `client/tests/lab-02/MyTickets.test.tsx` | Planned |
-| UI-LIST-02 | FR-09, AC-13 | Search, combined filters, clear filters, and page reset | Correct query sent; Clear restores controls; page returns to 1 | `client/tests/lab-02/MyTickets.test.tsx` | Planned |
-| UI-LIST-03 | FR-10, AC-14 | Sort, page size, pagination controls, loading, and invalid-query failure | Correct query/metadata rendered; boundaries disabled; safe error shown | `client/tests/lab-02/MyTickets.test.tsx` | Planned |
-| UI-LIST-04 | BR-23, AC-15 | Empty versus no-results states | Distinct messages and Create Ticket/Clear Filters actions | `client/tests/lab-02/MyTickets.test.tsx` | Planned |
+| UI-LIST-01 | FR-08, AC-12 | Requester-owned list and switching behavior | A's rows/cards disappear after switching to B; B's result loads | `client/tests/lab-02/MyTickets.test.tsx` | Passed |
+| UI-LIST-02 | FR-09, AC-13 | Search, combined filters, clear filters, and page reset | Correct query sent; Clear restores controls; page returns to 1 | `client/tests/lab-02/MyTickets.test.tsx` | Passed |
+| UI-LIST-03 | FR-10, AC-14 | Sort, page size, pagination controls, loading, and invalid-query failure | Correct query/metadata rendered; boundaries disabled; safe error shown | `client/tests/lab-02/MyTickets.test.tsx` | Passed |
+| UI-LIST-04 | BR-23, AC-15 | Empty versus no-results states | Distinct messages and Create Ticket/Clear Filters actions | `client/tests/lab-02/MyTickets.test.tsx` | Passed |
 | UI-DETAIL-01 | FR-11, AC-16 | Owned read-only Ticket Detail | Required values and Attachment metadata rendered with read-only treatment | `client/tests/lab-02/RequesterTicketDetail.test.tsx` | Planned |
 | UI-DETAIL-02 | AC-17 | Not-found/ownership and unexpected failure states | Same safe not-found UI for protected/missing; unexpected failure offers Retry/Back | `client/tests/lab-02/RequesterTicketDetail.test.tsx` | Planned |
 | UI-ATT-01 | BR-25-BR-28, AC-10 | File selection type/size/count validation | Invalid filename identified; submit/upload blocked; valid selections retained | `client/tests/lab-02/CreateTicket.test.tsx` (creation); `client/tests/lab-02/AttachmentSection.test.tsx` (later upload) | Passed for creation; existing-ticket upload remains Planned |
@@ -234,6 +234,19 @@ Working tree: `feature/4-create-ticket`, based on merged `lab2-staging`
   (six moderate, one high, one critical), but the read-only follow-up audit timed
   out at the npm registry. Packages/exposure have not been verified and no bulk
   remediation was performed. Re-run `npm audit` before release.
+
+### Feature #17 verification — 2026-09-04 (ICT)
+
+Working tree: `feature/5-my-tickets`, based on merged `lab2-staging` `7d3f9b8`.
+
+- Server tests: **135 passed in 12 files**, including 40 query validation unit tests (`ticket-query.test.ts`), 16 My Tickets API integration tests (`my-tickets.api.test.ts`), and 8 PostgreSQL integration tests. TypeScript build passed.
+- Server coverage includes ownership boundaries (requesters only see their own tickets), case-insensitive search by ticket number and summary, category and priority filtering, sort order by `updatedAt`, `createdAt`, and `requestedPriority` (with secondary sort `ticketNumber desc`), server-side pagination with allowed page sizes (10, 20, 50), and safe `500` error responses.
+- Client tests: **28 passed in 4 files**, including 9 My Tickets workflow tests (`MyTickets.test.tsx`). TypeScript and Vite production builds passed cleanly.
+- Client coverage includes requester switching, real-time query updates, search/filter reset to page 1, sort and page size controls, previous/next pagination boundaries, empty state with "Create Ticket" link, and no-results state with "Clear Filters" action.
+- Review regressions: obsolete search successes and failures cannot overwrite the latest result or clear its loading state. Category loading/failure is visible; Retry Categories preserves search and other filters. These four new client checks failed before the fixes and passed afterward.
+- API contract assertions now require `INVALID_QUERY` for invalid list queries (including inactive Category) and `TICKET_LIST_FAILED` for unexpected list failures. A new API-LIST-05 test injects an isolated database count failure and verifies the safe retryable `500` envelope without internal details.
+- The existing Create Ticket reference-failure test opens `/tickets/new` directly so its one-shot mock targets that screen rather than My Tickets' new Category load. Its original retention/retry/field-error assertions remain intact.
+- Desktop-table/mobile-card styles are implemented, but this verification does not establish full visual/accessibility conformance or zero overflow. Real-browser viewport checks remain pending; the preview connection was unavailable during review. Unit/component checks do not replace those checks.
 
 ### Final integrated Lab 2 results (pending)
 

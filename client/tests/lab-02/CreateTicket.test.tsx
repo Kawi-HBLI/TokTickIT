@@ -131,6 +131,8 @@ describe("Create Ticket", () => {
   });
 
   it("keeps typed values through a reference-data failure and shows server field messages inline", async () => {
+    // Target Create Ticket directly; My Tickets now loads its own Category reference.
+    window.history.replaceState({}, "", "/tickets/new");
     vi.spyOn(api, "getCategories").mockRejectedValueOnce(new api.ApiError("Categories are unavailable.", 500)).mockResolvedValueOnce(categories);
     const user = await renderTicketPage();
     await user.type(screen.getByRole("textbox", { name: /summary/i }), "Keep this summary");
