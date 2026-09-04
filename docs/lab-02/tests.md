@@ -35,8 +35,8 @@ No required test may be skipped, disabled, commented out, or marked Pass without
 | DB-SCHEMA-01 | BR-07, BR-15, BR-17-BR-18 | Prisma models, relationships, constraints, ownership indexes, and Ticket Number source | Schema validates; required models/indexes exist; Ticket Number uses a PostgreSQL sequence and never row counting | `server/tests/lab-02/database-schema.test.ts` | Passed |
 | DB-SEED-01 | BR-01-BR-03, AC-01 | Required Categories, Related Systems, active Requesters, inactive Requester, and repeatable seeding | Required values exist and running the upserts twice creates no duplicate natural keys | `server/tests/lab-02/seed.test.ts` | Passed |
 | UNIT-01 | BR-07, AC-06 | Ticket Number formatting and concurrency-safe source abstraction | Returns `TKT-YYYY-NNNNN` with at least five padded digits and no duplicate source value | `server/tests/lab-02/ticket-number.test.ts` | Planned |
-| UNIT-02 | BR-10-BR-14, AC-07 | Trimming and boundary validation for Summary, Description, IDs, and Priority | Exact boundaries pass; whitespace, out-of-range text, inactive references, and invalid enum values fail by field | `server/tests/lab-02/ticket-validation.test.ts` | Planned |
-| UNIT-03 | BR-25-BR-27, AC-10 | Attachment extension, MIME, size, count, and safe filename rules | Permitted boundary files pass; mismatched/unsupported/oversized/count-six files fail safely | `server/tests/lab-02/attachment-validation.test.ts` | Planned |
+| UNIT-02 | BR-10-BR-14, AC-07 | Trimming and boundary validation for Summary, Description, IDs, and Priority | Exact boundaries pass; whitespace, out-of-range text, inactive references, and invalid enum values fail by field | `server/tests/lab-02/ticket-validation.test.ts` | Passed |
+| UNIT-03 | BR-25-BR-27, AC-10 | Attachment extension, MIME, size, count, and safe filename rules | Permitted boundary files pass; mismatched/unsupported/oversized/count-six files fail safely | `server/tests/lab-02/attachment-validation.test.ts` | Passed |
 | UNIT-04 | BR-19-BR-22, AC-13, AC-14 | Query parsing, allowed page sizes, sort fields, priority order, and defaults | Valid query is normalized; invalid values fail; stable defaults are applied | `server/tests/lab-02/ticket-query.test.ts` | Planned |
 
 ### 3.2 API and Integration Tests
@@ -46,14 +46,14 @@ No required test may be skipped, disabled, commented out, or marked Pass without
 | DB-INTEGRATION-01 | BR-01-BR-03, BR-07, BR-15, BR-17-BR-18 | Fresh migration chain, real seed repeatability, persisted Ticket Number boundaries through bigint maximum, 20 concurrent inserts, idempotency uniqueness, and restricted Requester deletion | Migrations apply to an empty isolated schema; seed preserves identities; full digits and unique numbers persist; database constraints reject invalid writes | `server/tests/lab-02/database.integration.test.ts` | Passed |
 | API-REF-01 | FR-01, BR-02, AC-01 | Active Development Requester endpoint and repeatable seed | `200`; four or more active Requesters returned; inactive Requester absent; running seed twice creates no duplicates | `server/tests/lab-02/requesters-reference.api.test.ts` | Passed |
 | API-REF-02 | FR-04, AC-04 | Empty and unexpected reference-data failure behavior | Empty array or safe `500` contract returned without internal details | `server/tests/lab-02/requesters-reference.api.test.ts` | Passed |
-| API-REF-03 | FR-04, BR-12 | Active Categories and Related Systems | `200`; required seeded active values returned in documented order; inactive values absent | `server/tests/lab-02/requesters-reference.api.test.ts` | Planned |
+| API-REF-03 | FR-04, BR-12 | Active Categories and Related Systems | `200`; required seeded active values returned in documented order; inactive values absent | `server/tests/lab-02/create-ticket.api.test.ts` | Passed |
 | API-CTX-01 | BR-04, BR-05, AC-05 | Missing, malformed, unknown, and inactive `x-requester-id` | Each Requester-owned endpoint rejects the context safely and returns no Ticket data | `server/tests/lab-02/requester-context.api.test.ts` | Passed for shared Requester boundary; endpoint reuse verified with each later Ticket feature |
-| API-CREATE-01 | FR-05, FR-06, AC-06 | Valid Ticket creation for header Requester | `201`; exactly one persisted Ticket with matching owner, backend Ticket Number/date, and `NEW` status | `server/tests/lab-02/create-ticket.api.test.ts` | Planned |
-| API-CREATE-02 | BR-10-BR-14, AC-07 | Missing, whitespace, boundary, invalid reference, and invalid Priority payloads | `400` field errors; no Ticket persisted | `server/tests/lab-02/create-ticket.api.test.ts` | Planned |
-| API-CREATE-03 | FR-07, BR-15, AC-08 | Duplicate/concurrent submission protection | Same key/payload returns the original Ticket and one row exists; same key/different payload returns `409` | `server/tests/lab-02/create-ticket.api.test.ts` | Planned |
-| API-CREATE-04 | BR-16, BR-33, AC-09 | Unexpected database failure | Safe `500`; no stack/database detail returned; inconsistent partial Ticket absent | `server/tests/lab-02/create-ticket.api.test.ts` | Planned |
-| API-ATT-01 | BR-25-BR-28, AC-10 | Invalid file during creation/upload | Unsupported, mismatched, oversized, or count-six operation is rejected and invalid data is not persisted | `server/tests/lab-02/attachments.api.test.ts` | Planned |
-| API-ATT-02 | BR-29, AC-11 | Unexpected file-storage failure after Ticket creation | Ticket remains; incomplete file/metadata cleaned; failed filename warning returned | `server/tests/lab-02/attachments.api.test.ts` | Planned |
+| API-CREATE-01 | FR-05, FR-06, AC-06 | Valid Ticket creation for header Requester | `201`; exactly one persisted Ticket with matching owner, backend Ticket Number/date, and `NEW` status | `server/tests/lab-02/create-ticket.api.test.ts` | Passed |
+| API-CREATE-02 | BR-10-BR-14, AC-07 | Missing, whitespace, boundary, invalid reference, and invalid Priority payloads | `400` field errors; no Ticket persisted | `server/tests/lab-02/create-ticket.api.test.ts` | Passed |
+| API-CREATE-03 | FR-07, BR-15, AC-08 | Duplicate/concurrent submission protection | Same key/payload returns the original Ticket and one row exists; same key/different payload returns `409` | `server/tests/lab-02/create-ticket.api.test.ts` | Passed |
+| API-CREATE-04 | BR-16, BR-33, AC-09 | Unexpected database failure | Safe `500`; no stack/database detail returned; inconsistent partial Ticket absent | `server/tests/lab-02/create-ticket.api.test.ts` | Passed |
+| API-ATT-01 | BR-25-BR-28, AC-10 | Invalid file during creation/upload | Unsupported, mismatched, oversized, or count-six operation is rejected and invalid data is not persisted | `server/tests/lab-02/create-ticket.api.test.ts` (creation); `server/tests/lab-02/attachments.api.test.ts` (later upload) | Passed for creation; existing-ticket upload remains Planned |
+| API-ATT-02 | BR-29, AC-11 | Unexpected file-storage failure after Ticket creation | Ticket remains; incomplete file/metadata cleaned; failed filename warning returned | `server/tests/lab-02/create-ticket.api.test.ts` (creation); `server/tests/lab-02/attachments.api.test.ts` (later upload) | Passed for creation; existing-ticket upload remains Planned |
 | API-LIST-01 | FR-08, BR-17, AC-12 | Ownership-scoped My Tickets for Requester A and B | `200`; each response contains only the selected Requester's Tickets | `server/tests/lab-02/my-tickets.api.test.ts` | Planned |
 | API-LIST-02 | FR-09, BR-19, BR-20, AC-13 | Case-insensitive search and combined Category/Priority filters | Only matching owned Tickets returned; clearing parameters restores unfiltered results | `server/tests/lab-02/my-tickets.api.test.ts` | Planned |
 | API-LIST-03 | FR-10, BR-21, BR-22, AC-14 | Default/explicit stable sort, page metadata, boundaries, and invalid query values | Correct order and metadata; page beyond end is empty; invalid query returns `400` | `server/tests/lab-02/my-tickets.api.test.ts` | Planned |
@@ -73,20 +73,20 @@ No required test may be skipped, disabled, commented out, or marked Pass without
 |---|---|---|---|---|---|
 | UI-REQ-01 | FR-01, AC-01 | Selector loading and active Requester rendering | Loading controls disabled; only active Requesters shown; testing-only text visible | `client/tests/lab-02/RequesterSelector.test.tsx` | Passed |
 | UI-REQ-02 | FR-02, AC-02 | Route guard with no selected Requester | Requester-specific screen withheld and selector shown | `client/tests/lab-02/RequesterSelector.test.tsx` | Passed |
-| UI-REQ-03 | FR-03, BR-06, AC-03 | Selection storage, shell identity, switching, and dirty-form confirmation | New identity stored/displayed; old data cleared; unsaved change confirmation works | `client/tests/lab-02/RequesterSelector.test.tsx` | Partial: storage, shell, switch, and Cancel passed; dirty-form confirmation is completed with Create Ticket |
+| UI-REQ-03 | FR-03, BR-06, AC-03 | Selection storage, shell identity, switching, and dirty-form confirmation | New identity stored/displayed; old data cleared; unsaved change confirmation works | `client/tests/lab-02/RequesterSelector.test.tsx` | Passed for current screens; dirty/switch checks also in `client/tests/lab-02/CreateTicket.test.tsx` |
 | UI-REQ-04 | AC-04 | Empty Requester list and API failure | Correct distinct message; Continue disabled; Retry available only for failure | `client/tests/lab-02/RequesterSelector.test.tsx` | Passed |
-| UI-CREATE-01 | FR-04-FR-06, AC-06 | Reference data, read-only values, valid submit, and success | DB reference options shown; generated fields non-editable; response Ticket Number/date displayed | `client/tests/lab-02/CreateTicket.test.tsx` | Planned |
-| UI-CREATE-02 | BR-10-BR-14, AC-07 | Required, whitespace, and boundary field validation | Inline associated messages; API not called while invalid | `client/tests/lab-02/CreateTicket.test.tsx` | Planned |
-| UI-CREATE-03 | FR-07, AC-08 | Busy and duplicate-submit behavior | Submit disabled with busy text; repeated activation creates one request | `client/tests/lab-02/CreateTicket.test.tsx` | Planned |
-| UI-CREATE-04 | BR-16, BR-34, AC-09 | API/reference failure with retained values and Retry | Safe message shown; typed/selected values remain; retry works | `client/tests/lab-02/CreateTicket.test.tsx` | Planned |
-| UI-CREATE-05 | BR-29, AC-11 | Ticket success with partial Attachment warning | Ticket Number remains visible; failed filenames and retry-from-detail action shown | `client/tests/lab-02/CreateTicket.test.tsx` | Planned |
+| UI-CREATE-01 | FR-04-FR-06, AC-06 | Reference data, read-only values, valid submit, and success | DB reference options shown; generated fields non-editable; response Ticket Number/date displayed | `client/tests/lab-02/CreateTicket.test.tsx` | Passed |
+| UI-CREATE-02 | BR-10-BR-14, AC-07 | Required, whitespace, and boundary field validation | Inline associated messages; API not called while invalid | `client/tests/lab-02/CreateTicket.test.tsx` | Passed |
+| UI-CREATE-03 | FR-07, AC-08 | Busy and duplicate-submit behavior | Submit disabled with busy text; repeated activation creates one request | `client/tests/lab-02/CreateTicket.test.tsx` | Passed |
+| UI-CREATE-04 | BR-16, BR-34, AC-09 | API/reference failure with retained values and Retry | Safe message shown; typed/selected values remain; retry works | `client/tests/lab-02/CreateTicket.test.tsx` | Passed |
+| UI-CREATE-05 | BR-29, AC-11 | Ticket success with partial Attachment warning | Ticket Number remains visible; failed filenames and retry-from-detail action shown | `client/tests/lab-02/CreateTicket.test.tsx` | Passed for warning display; actual Detail retry awaits next feature |
 | UI-LIST-01 | FR-08, AC-12 | Requester-owned list and switching behavior | A's rows/cards disappear after switching to B; B's result loads | `client/tests/lab-02/MyTickets.test.tsx` | Planned |
 | UI-LIST-02 | FR-09, AC-13 | Search, combined filters, clear filters, and page reset | Correct query sent; Clear restores controls; page returns to 1 | `client/tests/lab-02/MyTickets.test.tsx` | Planned |
 | UI-LIST-03 | FR-10, AC-14 | Sort, page size, pagination controls, loading, and invalid-query failure | Correct query/metadata rendered; boundaries disabled; safe error shown | `client/tests/lab-02/MyTickets.test.tsx` | Planned |
 | UI-LIST-04 | BR-23, AC-15 | Empty versus no-results states | Distinct messages and Create Ticket/Clear Filters actions | `client/tests/lab-02/MyTickets.test.tsx` | Planned |
 | UI-DETAIL-01 | FR-11, AC-16 | Owned read-only Ticket Detail | Required values and Attachment metadata rendered with read-only treatment | `client/tests/lab-02/RequesterTicketDetail.test.tsx` | Planned |
 | UI-DETAIL-02 | AC-17 | Not-found/ownership and unexpected failure states | Same safe not-found UI for protected/missing; unexpected failure offers Retry/Back | `client/tests/lab-02/RequesterTicketDetail.test.tsx` | Planned |
-| UI-ATT-01 | BR-25-BR-28, AC-10 | File selection type/size/count validation | Invalid filename identified; submit/upload blocked; valid selections retained | `client/tests/lab-02/AttachmentSection.test.tsx` | Planned |
+| UI-ATT-01 | BR-25-BR-28, AC-10 | File selection type/size/count validation | Invalid filename identified; submit/upload blocked; valid selections retained | `client/tests/lab-02/CreateTicket.test.tsx` (creation); `client/tests/lab-02/AttachmentSection.test.tsx` (later upload) | Passed for creation; existing-ticket upload remains Planned |
 | UI-ATT-02 | FR-12, AC-18 | Valid upload state and success | Busy state blocks duplicate; filename/count update announced | `client/tests/lab-02/AttachmentSection.test.tsx` | Planned |
 | UI-ATT-03 | AC-19 | Five-active limit | Add control disabled with explanatory text | `client/tests/lab-02/AttachmentSection.test.tsx` | Planned |
 | UI-ATT-04 | FR-13, AC-20 | Active metadata and preview/download actions | Accessible controls shown for active file and safe original name rendered | `client/tests/lab-02/AttachmentSection.test.tsx` | Planned |
@@ -196,7 +196,46 @@ inserts collided. After the forward migration
 These results cover the database feature only. Later API/UI/E2E work and the
 final integrated Lab 2 verification below are still pending.
 
-### Final integrated Lab 2 results
+### Feature #16 verification — 2026-09-04 (ICT)
+
+Working tree: `feature/4-create-ticket`, based on merged `lab2-staging`
+`19f8bfb`. This increment is not committed yet.
+
+- The initial Create Ticket API test failed with `404` before the route existed,
+  then passed after implementation. Boundary/fault-injection coverage was added
+  afterward; this is not a claim that every test followed a recorded red/green cycle.
+- Server: **79 tests passed in 10 files**, including 21 Create Ticket API tests,
+  16 field-validation tests, and 8 attachment-validation tests. TypeScript build passed.
+- Client: **19 tests passed in 3 files**, including 11 Create Ticket tests;
+  TypeScript/Vite build passed. Coverage includes invalid-file blocking,
+  requester-switch discard/keep, browser-history guard, server field errors,
+  partial warnings, busy protection, and same-key retries. Uncertain failures
+  keep the draft locked until retry resolves; a confirmed validation rejection
+  unlocks it for correction.
+- The malformed-multipart regression first returned `500`; after parser-error
+  handling it returns non-retryable `400`. The final full run has no skipped tests.
+- PostgreSQL 15 ran in Docker (`toktickit-db`, port 5433). All four migrations
+  applied to isolated test schemas; creation tests used a unique temporary upload
+  directory. Concurrent replay, conflicting payload/content, five-file/5 MiB
+  boundaries, inactive references, partial writes, real metadata failures,
+  and final receipt failure cleanup were verified.
+- Browser smoke check at `http://127.0.0.1:5173`: select a seeded Requester,
+  load references, reject an empty form with first-error focus, retain a dirty
+  draft after Keep editing, restore focus, and submit successfully. Local smoke
+  Ticket `TKT-2026-00002` was created; it remains in the development database.
+- Create form viewport checks at 390x844, 834x1112, and 1440x900 reported no
+  horizontal document overflow. Mobile/tablet screenshots were inspected, and
+  browser logs contained no warnings/errors during the smoke flow. This is not
+  a complete visual regression, axe audit, or full Lab 2 E2E pass; those rows remain Planned.
+- My Tickets, real Ticket Detail, and retrying a failed attachment from Detail
+  remain dependent on the next feature increments. Success/warning UI provides
+  the future actions/instructions, but View Ticket currently explains that scope.
+- Dependency audit is **inconclusive**: installation reported eight advisories
+  (six moderate, one high, one critical), but the read-only follow-up audit timed
+  out at the npm registry. Packages/exposure have not been verified and no bulk
+  remediation was performed. Re-run `npm audit` before release.
+
+### Final integrated Lab 2 results (pending)
 
 To be completed using copied final output from the actual commands:
 

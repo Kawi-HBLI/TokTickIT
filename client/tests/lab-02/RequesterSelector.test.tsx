@@ -82,7 +82,7 @@ describe("Development Requester selector", () => {
     await screen.findByText("Welcome, Jennifer Anderson");
 
     await user.click(screen.getByRole("button", { name: "Change Requester" }));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Select Development Requester" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.getByText("Welcome, Jennifer Anderson")).toBeInTheDocument();
     expect(sessionStorage.getItem(REQUESTER_STORAGE_KEY)).toBe("1");

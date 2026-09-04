@@ -19,8 +19,7 @@ export default function RequesterSelector({ isChanging = false, onContinue, onCa
   }
 
   return (
-    <section className="requester-card" aria-labelledby="requester-selector-title"
-      {...(isChanging ? { role: "dialog", "aria-modal": true } : {})}>
+    <section className="requester-card" aria-labelledby="requester-selector-title">
       <p className="brand-kicker">TOKTICKIT · IT SERVICE DESK</p>
       <h1 id="requester-selector-title">Select Development Requester</h1>
       <p className="selector-explanation">
