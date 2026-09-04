@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, writeFile, unlink } from "node:fs/promises";
+import { access, mkdir, writeFile, unlink } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TicketError } from "./ticket-validation.js";
@@ -8,13 +8,37 @@ const types: Record<string, string> = {
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
   ".webp": "image/webp", ".pdf": "application/pdf",
 };
+export function decodeOriginalName(name: string): string {
+  const hasOnlyLatin1 = /^[\x00-\xFF]*$/.test(name);
+  const hasExtendedAscii = /[\x80-\xFF]/.test(name);
+  if (hasOnlyLatin1 && hasExtendedAscii) {
+    try {
+      const decoded = Buffer.from(name, "latin1").toString("utf8");
+      if (!decoded.includes("\ufffd")) {
+        return decoded;
+      }
+    } catch {
+      // ignore fallback
+    }
+  }
+  return name;
+}
+
 export function safeFilename(name: string): string {
-  return name.replaceAll("\\", "/").split("/").pop()!
+  const decoded = decodeOriginalName(name);
+  return decoded.replaceAll("\\", "/").split("/").pop()!
     .replace(/[\x00-\x1f\x7f]/g, "").slice(0, 240);
 }
-export function validateFiles(files: Express.Multer.File[]) {
-  if (files.length > 5) throw new TicketError(400, "VALIDATION_ERROR", "Select at most five files.",
-    [{ field: "attachments", message: "Select at most five files." }]);
+
+export function contentDispositionHeader(type: "inline" | "attachment", originalName: string): string {
+  const safe = safeFilename(originalName);
+  const asciiFallback = safe.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "") || "attachment";
+  const encoded = encodeURIComponent(safe);
+  return `${type}; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
+}
+export function validateFiles(files: Express.Multer.File[], maxFiles = 5) {
+  if (files.length > maxFiles) throw new TicketError(400, "VALIDATION_ERROR", `Select at most ${maxFiles} files.`,
+    [{ field: "attachments", message: `Select at most ${maxFiles} files.` }]);
   return files.map(file => {
     const originalName = safeFilename(file.originalname);
     const extension = extname(originalName).toLowerCase();
@@ -27,11 +51,22 @@ export function validateFiles(files: Express.Multer.File[]) {
 }
 // Never expose this private directory via express.static.
 const defaultRoot = fileURLToPath(new URL("../uploads/", import.meta.url));
-function filePath(name: string) {
+export function filePath(name: string) {
   if (!/^[a-f0-9-]{36}\.(jpg|jpeg|png|webp|pdf)$/.test(name)) throw new Error("Invalid stored filename");
   return join(process.env.UPLOAD_DIR || defaultRoot, name);
 }
 export const attachmentStorage = {
+  getPath(name: string) {
+    return filePath(name);
+  },
+  async exists(name: string) {
+    try {
+      await access(filePath(name));
+      return true;
+    } catch {
+      return false;
+    }
+  },
   async write(name: string, bytes: Buffer) {
     const path = filePath(name);
     await mkdir(process.env.UPLOAD_DIR || defaultRoot, { recursive: true });

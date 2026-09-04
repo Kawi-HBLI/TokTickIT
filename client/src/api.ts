@@ -73,6 +73,52 @@ export interface MyTicketsResponse {
   };
 }
 
+export interface AttachmentItem {
+  id: number;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  isRemoved: boolean;
+  createdAt: string;
+  removedAt?: string | null;
+  removalReason?: string | null;
+}
+
+export interface TicketDetail {
+  id: number;
+  ticketNumber: string;
+  ticketDate: string;
+  summary: string;
+  description: string;
+  requestedPriority: RequestedPriority;
+  itPriority: string | null;
+  currentStatus: string;
+  ticketOwner: string | null;
+  createdAt: string;
+  updatedAt: string;
+  requester: {
+    id: number;
+    name: string;
+    email: string;
+    department: string;
+  };
+  category: {
+    id: number;
+    name: string;
+  };
+  relatedSystem: {
+    id: number;
+    name: string;
+  };
+  attachments: AttachmentItem[];
+}
+
+export interface AttachmentListResponse {
+  data: AttachmentItem[];
+  activeCount: number;
+  activeLimit: number;
+}
+
 export interface TicketWarning {
   code: string;
   filename?: string;
@@ -225,4 +271,123 @@ export async function checkSystem(): Promise<SystemStatus> {
   const raw = await catRes.json() as Category[] | { data?: Category[] };
   const categories = Array.isArray(raw) ? raw : raw.data ?? [];
   return { online: true, categories };
+}
+
+export async function getTicketDetail(
+  requesterId: number,
+  ticketId: number,
+): Promise<TicketDetail> {
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}`, {
+    headers: requesterHeaders(requesterId),
+  });
+
+  if (!response.ok) {
+    return readError(response, "Ticket details could not be loaded.");
+  }
+
+  const payload = await response.json();
+  if (!payload || !payload.data) {
+    throw new ApiError("Invalid ticket detail response.", response.status, "INVALID_RESPONSE");
+  }
+
+  return payload.data;
+}
+
+export async function getTicketAttachments(
+  requesterId: number,
+  ticketId: number,
+): Promise<AttachmentListResponse> {
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments`, {
+    headers: requesterHeaders(requesterId),
+  });
+
+  if (!response.ok) {
+    return readError(response, "Attachments could not be loaded.");
+  }
+
+  return response.json();
+}
+
+export async function uploadAttachmentsToTicket(
+  requesterId: number,
+  ticketId: number,
+  files: File[],
+): Promise<AttachmentListResponse> {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("attachments", file));
+
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments`, {
+    method: "POST",
+    headers: requesterHeaders(requesterId),
+    body: formData,
+  });
+
+  if (!response.ok) {
+    return readError(response, "Failed to upload attachments.");
+  }
+
+  return response.json();
+}
+
+export async function removeAttachment(
+  requesterId: number,
+  attachmentId: number,
+  reason: string,
+): Promise<{ data: AttachmentItem }> {
+  const response = await fetch(`${API_URL}/api/attachments/${attachmentId}`, {
+    method: "DELETE",
+    headers: {
+      ...requesterHeaders(requesterId),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ reason }),
+  });
+
+  if (!response.ok) {
+    return readError(response, "Failed to remove attachment.");
+  }
+
+  return response.json();
+}
+
+export function getAttachmentPreviewUrl(attachmentId: number): string {
+  return `${API_URL}/api/attachments/${attachmentId}/preview`;
+}
+
+export function getAttachmentDownloadUrl(attachmentId: number): string {
+  return `${API_URL}/api/attachments/${attachmentId}/download`;
+}
+
+export async function downloadAttachmentFile(
+  requesterId: number,
+  attachmentId: number,
+): Promise<{ blob: Blob; contentType: string }> {
+  const response = await fetch(`${API_URL}/api/attachments/${attachmentId}/download`, {
+    headers: requesterHeaders(requesterId),
+  });
+
+  if (!response.ok) {
+    return readError(response, "Attachment could not be downloaded.");
+  }
+
+  const blob = await response.blob();
+  const contentType = response.headers.get("Content-Type") || "application/octet-stream";
+  return { blob, contentType };
+}
+
+export async function previewAttachmentFile(
+  requesterId: number,
+  attachmentId: number,
+): Promise<{ blob: Blob; contentType: string }> {
+  const response = await fetch(`${API_URL}/api/attachments/${attachmentId}/preview`, {
+    headers: requesterHeaders(requesterId),
+  });
+
+  if (!response.ok) {
+    return readError(response, "Attachment preview could not be loaded.");
+  }
+
+  const blob = await response.blob();
+  const contentType = response.headers.get("Content-Type") || "application/octet-stream";
+  return { blob, contentType };
 }

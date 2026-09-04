@@ -2,6 +2,7 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import { getPrisma } from "./prisma.js";
 import { createTicketRouter } from "./create-ticket.js";
+import { attachmentsRouter } from "./attachments-router.js";
 
 
 // The Express app is exported separately from app.listen() (see index.ts) so
@@ -68,4 +69,5 @@ app.get("/api/related-systems", async (_req, res) => {
   }
 });
 app.use("/api/tickets", createTicketRouter);
+app.use("/api/attachments", attachmentsRouter);
 export default app;
