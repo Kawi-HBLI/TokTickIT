@@ -10,7 +10,7 @@
 | [#12](https://github.com/Kawi-HBLI/TokTickIT/pull/12) | feature/1-spec-and-test-plan | @R1NNE0 | Approved on 2026-08-30; merged by @R1NNE0 into lab2-staging as `21e20fd` |
 | [#20](https://github.com/Kawi-HBLI/TokTickIT/pull/20) | feature/2-database-schema-seed | @R1NNE0 | Approved on 2026-09-02; merged into lab2-staging as `51fa6ce` |
 | [#21](https://github.com/Kawi-HBLI/TokTickIT/pull/21) | feature/3-requester-context | @R1NNE0 | Approved on 2026-09-04 (ICT); merged into lab2-staging as `19f8bfb` |
-|    | feature/4-create-ticket | | |
+| [#22](https://github.com/Kawi-HBLI/TokTickIT/pull/22) | feature/4-create-ticket | @R1NNE0 | Approved on 2026-09-04; merged by @R1NNE0 into lab2-staging as `7d3f9b8` |
 |    | feature/5-my-tickets | | |
 |    | feature/6-ticket-detail-attachments | | |
 |    | feature/7-e2e-release-docs | | |
@@ -23,7 +23,9 @@
 - **PR #20:** [Review by @R1NNE0](https://github.com/Kawi-HBLI/TokTickIT/pull/20#pullrequestreview-5069973864) approved the Lab 2 database foundation, including the corrected migration sequence, idempotent seed behavior, and the verified server test suite.
 - **Outcome:** PR #20 was merged into `lab2-staging` as `51fa6ce` on 2026-09-02. The next feature branch was created from that merged staging state.
 - **PR #21:** [Review by @R1NNE0](https://github.com/Kawi-HBLI/TokTickIT/pull/21) formally approved the Requester context at 01:40 ICT on 2026-09-04, covering header validation, selector/session behavior, test results, and documentation.
-- **Outcome:** PR #21 was merged into `lab2-staging` at 14:13 ICT on 2026-09-04 as `19f8bfb`. Create Ticket starts from this merged state. No review verdict is recorded for Create Ticket before its review occurs.
+- **Outcome:** PR #21 was merged into `lab2-staging` at 14:13 ICT on 2026-09-04 as `19f8bfb`. Create Ticket starts from this merged state.
+- **PR #22:** [Review by @R1NNE0](https://github.com/Kawi-HBLI/TokTickIT/pull/22) approved the Create Ticket implementation, including the authoritative ticket number generation, multipart upload handling, atomic validation, client dirty-form guards, and full test suite.
+- **Outcome:** PR #22 was merged by @R1NNE0 into `lab2-staging` as `7d3f9b8` on 2026-09-04. My Tickets starts from this merged staging state. Later PR verdicts remain blank until their reviews occur.
 
 ## Pull Requests I reviewed for my partner
 

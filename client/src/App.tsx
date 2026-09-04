@@ -1,6 +1,7 @@
 import { KeyboardEvent, useEffect, useRef, useState } from "react";
 import { checkSystem, Category } from "./api.js";
 import CreateTicket from "./CreateTicket.js";
+import MyTickets from "./MyTickets.js";
 import RequesterSelector from "./RequesterSelector.js";
 import { RequesterProvider, useRequester } from "./RequesterContext.js";
 
@@ -142,7 +143,11 @@ function AppContent() {
               </button>
             </div>
           </header>
-          {route === "/tickets/new" ? <CreateTicket onDirtyChange={setIsDirty} onBusyChange={setIsBusy} onNavigate={navigate} /> : <section className="workspace-card" id="my-tickets"><p className="section-kicker">Requester workspace</p><h1>Welcome, {currentRequester.name}</h1><h2>My Tickets</h2><p>No Ticket list is available yet. Create a Ticket to begin.</p><button className="btn btn-success" type="button" onClick={() => navigate("/tickets/new")}>Create Ticket</button></section>}
+          {route === "/tickets/new" ? (
+            <CreateTicket onDirtyChange={setIsDirty} onBusyChange={setIsBusy} onNavigate={navigate} />
+          ) : (
+            <MyTickets onNavigate={navigate} />
+          )}
         </>
       ) : (
         <RequesterSelector isChanging={isChanging} onCancel={() => setIsChanging(false)}

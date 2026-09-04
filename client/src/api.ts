@@ -29,6 +29,50 @@ export interface CreatedTicket {
   currentStatus: "NEW";
 }
 
+export interface TicketListItem {
+  id: number;
+  ticketNumber: string;
+  summary: string;
+  requestedPriority: RequestedPriority;
+  currentStatus: "NEW";
+  createdAt: string;
+  updatedAt: string;
+  category: { id: number; name: string };
+  relatedSystem: { id: number; name: string };
+  activeAttachmentCount: number;
+}
+
+export interface PaginationMeta {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+}
+
+export interface TicketQueryState {
+  search?: string;
+  categoryId?: number | null;
+  requestedPriority?: RequestedPriority | null;
+  sortBy?: "createdAt" | "updatedAt" | "requestedPriority";
+  sortOrder?: "asc" | "desc";
+  page?: number;
+  pageSize?: 10 | 20 | 50;
+}
+
+export interface MyTicketsResponse {
+  data: TicketListItem[];
+  pagination: PaginationMeta;
+  query: {
+    search: string;
+    categoryId: number | null;
+    requestedPriority: RequestedPriority | null;
+    sortBy: "createdAt" | "updatedAt" | "requestedPriority";
+    sortOrder: "asc" | "desc";
+  };
+}
+
 export interface TicketWarning {
   code: string;
   filename?: string;
@@ -132,6 +176,36 @@ export async function createTicket(
   const payload = await response.json() as { data?: CreatedTicket; warnings?: TicketWarning[] };
   if (!payload?.data?.ticketNumber || !payload.data.ticketDate) throw new ApiError("The Ticket response could not be confirmed. Please retry the same submission.", response.status, "INVALID_TICKET_RESPONSE", [], true);
   return { data: payload.data, warnings: payload.warnings ?? [], replayed: response.headers.get("Idempotency-Replayed") === "true" };
+}
+
+export async function getMyTickets(
+  requesterId: number,
+  query?: TicketQueryState,
+): Promise<MyTicketsResponse> {
+  const params = new URLSearchParams();
+  if (query?.search?.trim()) params.set("search", query.search.trim());
+  if (query?.categoryId) params.set("categoryId", String(query.categoryId));
+  if (query?.requestedPriority) params.set("requestedPriority", query.requestedPriority);
+  if (query?.sortBy) params.set("sortBy", query.sortBy);
+  if (query?.sortOrder) params.set("sortOrder", query.sortOrder);
+  if (query?.page && query.page > 1) params.set("page", String(query.page));
+  if (query?.pageSize && query.pageSize !== 10) params.set("pageSize", String(query.pageSize));
+
+  const url = `${API_URL}/api/tickets${params.toString() ? `?${params.toString()}` : ""}`;
+  const response = await fetch(url, {
+    headers: requesterHeaders(requesterId),
+  });
+
+  if (!response.ok) {
+    return readError(response, "Tickets could not be loaded. Please try again.");
+  }
+
+  const payload = (await response.json()) as MyTicketsResponse;
+  if (!payload || !Array.isArray(payload.data) || !payload.pagination) {
+    throw new ApiError("Invalid My Tickets response.", response.status, "INVALID_RESPONSE");
+  }
+
+  return payload;
 }
 
 // Issue 2 + Issue 4 — call the backend.
