@@ -175,3 +175,356 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
   .create-ticket-cta { width: 100%; justify-content: center; }
   .pagination-wrapper { flex-direction: column; align-items: center; }
 }
+
+/* ==========================================================================
+   Ticket Detail & Attachments Styling
+   ========================================================================== */
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--zen-700);
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 8px 0;
+  margin-bottom: 16px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.back-link:hover {
+  color: var(--zen-900);
+  text-decoration: underline;
+}
+
+.ticket-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px;
+  color: #48665a;
+  font-weight: 600;
+}
+
+.ticket-detail-page {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: clamp(24px, 4vw, 40px);
+  margin-top: 24px;
+  box-shadow: 0 12px 35px rgba(16, 61, 45, 0.08);
+}
+
+.ticket-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 28px;
+}
+
+.ticket-number-heading {
+  font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+  color: var(--zen-900);
+  font-weight: 800;
+  margin: 0;
+}
+
+.badge-group {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.status-new {
+  background: #e1f5fe;
+  color: #0277bd;
+  border: 1px solid #b3e5fc;
+}
+.status-removed {
+  background: #fbe9e7;
+  color: #c62828;
+  border: 1px solid #ffccbc;
+}
+
+.readonly-summary-grid {
+  margin-bottom: 28px;
+}
+
+.section-title {
+  font-size: 1.15rem;
+  font-weight: 750;
+  color: var(--zen-900);
+  margin-bottom: 16px;
+}
+
+.subsection-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--zen-900);
+  margin-bottom: 8px;
+}
+
+.meta-dl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px 24px;
+  background: #f7faf8;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin: 0;
+}
+
+.meta-dl-item dt {
+  color: #59766a;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.meta-dl-item dd {
+  margin: 0;
+  color: var(--zen-900);
+  font-weight: 600;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.problem-details {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-bottom: 32px;
+}
+
+.readonly-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.readonly-label {
+  color: #59766a;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.readonly-value {
+  background: #fafcfb;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+  color: var(--zen-900);
+  font-size: 0.98rem;
+  margin: 0;
+}
+
+.readonly-value.summary-value {
+  font-weight: 650;
+}
+
+.readonly-value.multiline {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+/* Attachments Workspace */
+.attachments-workspace {
+  border-top: 1px solid var(--border);
+  padding-top: 28px;
+}
+
+.attachments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.attachment-count-badge {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #48665a;
+  background: #edf7f1;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid #c9ddd2;
+}
+
+.attachment-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.attachment-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 18px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.attachment-item:hover {
+  border-color: #81c9a8;
+  box-shadow: 0 2px 8px rgba(16, 61, 45, 0.05);
+}
+
+.attachment-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.attachment-name {
+  font-weight: 700;
+  color: var(--zen-900);
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-meta {
+  color: #59766a;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.attachment-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.add-attachment-box {
+  background: #f7faf8;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.upload-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.upload-controls input[type="file"] {
+  max-width: 400px;
+}
+
+.busy-upload-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--zen-700);
+  font-size: 0.9rem;
+}
+
+.limit-notice {
+  margin-top: 8px;
+}
+
+/* Removed Attachments */
+.removed-attachments-area {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px dashed var(--border);
+}
+
+.removed-item {
+  background: #fafaf9;
+  border-color: #e0e0dc;
+}
+
+.removed-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.strikethrough {
+  text-decoration: line-through;
+  color: #757575;
+}
+
+.removal-reason-text {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: #555;
+  background: #f0f0ed;
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.removed-notice {
+  font-size: 0.8rem;
+  color: #9e9e9e;
+  font-style: italic;
+  font-weight: 600;
+}
+
+/* Removal Dialog */
+.removal-dialog {
+  max-width: 520px;
+  width: 92%;
+}
+
+.removal-dialog textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.detail-error-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.not-found-state {
+  border-color: #c9ddd2;
+}

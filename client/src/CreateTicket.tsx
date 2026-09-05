@@ -53,7 +53,7 @@ function fingerprint(fields: Fields, files: File[]) {
 interface CreateTicketProps {
   onDirtyChange: (dirty: boolean) => void;
   onBusyChange: (busy: boolean) => void;
-  onNavigate: (path: "/tickets" | "/tickets/new") => void;
+  onNavigate: (path: string) => void;
 }
 
 export default function CreateTicket({ onDirtyChange, onBusyChange, onNavigate }: CreateTicketProps) {
@@ -169,7 +169,7 @@ export default function CreateTicket({ onDirtyChange, onBusyChange, onNavigate }
         <p className="section-kicker">Ticket created</p><h1 id="ticket-created-title">Your Ticket has been submitted</h1>
         <dl className="success-details"><div><dt>Ticket Number</dt><dd>{success.ticketNumber}</dd></div><div><dt>Ticket Date</dt><dd>{new Date(success.ticketDate).toLocaleString()}</dd></div><div><dt>Current Status</dt><dd><span className="status-badge">New</span></dd></div></dl>
         {warnings.length > 0 && <div className="warning-alert" role="alert"><strong>Some attachments need attention.</strong><ul>{warnings.map((warning, index) => <li key={`${warning.filename ?? warning.code}-${index}`}>{warning.filename ? `${warning.filename}: ` : ""}{warning.message}</li>)}</ul><p className="mb-0">Add the affected file again from Ticket Detail.</p></div>}
-        <div className="selector-actions"><button className="btn btn-success" type="button" onClick={() => setFormError({ message: "Ticket detail will be available in the next feature.", retryable: false })}>View Ticket</button><button className="btn btn-outline-success" type="button" onClick={() => onNavigate("/tickets")}>My Tickets</button></div>
+        <div className="selector-actions"><button className="btn btn-success" type="button" onClick={() => onNavigate(`/tickets/${success.id}`)}>View Ticket</button><button className="btn btn-outline-success" type="button" onClick={() => onNavigate("/tickets")}>My Tickets</button></div>
         {formError && <p className="form-error" role="alert">{formError.message}</p>}
       </div>
     </section>

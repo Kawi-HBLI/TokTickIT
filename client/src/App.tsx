@@ -5,6 +5,8 @@ import MyTickets from "./MyTickets.js";
 import RequesterSelector from "./RequesterSelector.js";
 import { RequesterProvider, useRequester } from "./RequesterContext.js";
 
+import RequesterTicketDetail from "./RequesterTicketDetail.js";
+
 type UiState = "idle" | "loading" | "success" | "error";
 
 function SystemDiagnostics() {
@@ -60,7 +62,12 @@ function SystemDiagnostics() {
 function AppContent() {
   const { currentRequester } = useRequester();
   const [isChanging, setIsChanging] = useState(false);
-  const [route, setRoute] = useState(() => window.location.pathname === "/tickets/new" ? "/tickets/new" : "/tickets");
+  const [route, setRoute] = useState<string>(() => {
+    const path = window.location.pathname;
+    if (path === "/tickets/new") return "/tickets/new";
+    if (/^\/tickets\/\d+$/.test(path)) return path;
+    return "/tickets";
+  });
   const [isDirty, setIsDirty] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<"switch" | "cancel" | null>(null);
@@ -71,7 +78,8 @@ function AppContent() {
 
   useEffect(() => {
     const onPopState = () => {
-      const next = window.location.pathname === "/tickets/new" ? "/tickets/new" : "/tickets";
+      const path = window.location.pathname;
+      const next = path === "/tickets/new" || /^\/tickets\/\d+$/.test(path) ? path : "/tickets";
       if (isBusy || (route === "/tickets/new" && isDirty && next !== route)) {
         window.history.pushState({}, "", route);
         if (!isBusy) openConfirmation("cancel");
@@ -95,7 +103,7 @@ function AppContent() {
   }
   function closeConfirmation() { setConfirmation(null); }
 
-  function navigate(next: "/tickets" | "/tickets/new") {
+  function navigate(next: string) {
     if (isBusy) return;
     if (next === route) return;
     if (route === "/tickets/new" && isDirty) { openConfirmation("cancel"); return; }
@@ -124,6 +132,9 @@ function AppContent() {
     if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
 
+  const ticketDetailMatch = route.match(/^\/tickets\/(\d+)$/);
+  const detailTicketId = ticketDetailMatch ? parseInt(ticketDetailMatch[1], 10) : null;
+
   return (
     <main className="app-page" id="top">
       <div ref={contentRef}>
@@ -145,6 +156,8 @@ function AppContent() {
           </header>
           {route === "/tickets/new" ? (
             <CreateTicket onDirtyChange={setIsDirty} onBusyChange={setIsBusy} onNavigate={navigate} />
+          ) : detailTicketId !== null ? (
+            <RequesterTicketDetail ticketId={detailTicketId} onNavigate={navigate} />
           ) : (
             <MyTickets onNavigate={navigate} />
           )}

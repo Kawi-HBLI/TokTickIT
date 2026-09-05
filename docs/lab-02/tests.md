@@ -52,20 +52,20 @@ No required test may be skipped, disabled, commented out, or marked Pass without
 | API-CREATE-02 | BR-10-BR-14, AC-07 | Missing, whitespace, boundary, invalid reference, and invalid Priority payloads | `400` field errors; no Ticket persisted | `server/tests/lab-02/create-ticket.api.test.ts` | Passed |
 | API-CREATE-03 | FR-07, BR-15, AC-08 | Duplicate/concurrent submission protection | Same key/payload returns the original Ticket and one row exists; same key/different payload returns `409` | `server/tests/lab-02/create-ticket.api.test.ts` | Passed |
 | API-CREATE-04 | BR-16, BR-33, AC-09 | Unexpected database failure | Safe `500`; no stack/database detail returned; inconsistent partial Ticket absent | `server/tests/lab-02/create-ticket.api.test.ts` | Passed |
-| API-ATT-01 | BR-25-BR-28, AC-10 | Invalid file during creation/upload | Unsupported, mismatched, oversized, or count-six operation is rejected and invalid data is not persisted | `server/tests/lab-02/create-ticket.api.test.ts` (creation); `server/tests/lab-02/attachments.api.test.ts` (later upload) | Passed for creation; existing-ticket upload remains Planned |
-| API-ATT-02 | BR-29, AC-11 | Unexpected file-storage failure after Ticket creation | Ticket remains; incomplete file/metadata cleaned; failed filename warning returned | `server/tests/lab-02/create-ticket.api.test.ts` (creation); `server/tests/lab-02/attachments.api.test.ts` (later upload) | Passed for creation; existing-ticket upload remains Planned |
+| API-ATT-01 | BR-25-BR-28, AC-10 | Invalid file during creation/upload | Unsupported, mismatched, oversized, or count-six operation is rejected and invalid data is not persisted | `server/tests/lab-02/create-ticket.api.test.ts` (creation); `server/tests/lab-02/attachments.api.test.ts` (later upload) | Passed |
+| API-ATT-02 | BR-29, AC-11 | Unexpected file-storage failure after Ticket creation | Ticket remains; incomplete file/metadata cleaned; failed filename warning returned | `server/tests/lab-02/create-ticket.api.test.ts` (creation); `server/tests/lab-02/attachments.api.test.ts` (later upload) | Passed |
 | API-LIST-01 | FR-08, BR-17, AC-12 | Ownership-scoped My Tickets for Requester A and B | `200`; each response contains only the selected Requester's Tickets | `server/tests/lab-02/my-tickets.api.test.ts` | Passed |
 | API-LIST-02 | FR-09, BR-19, BR-20, AC-13 | Case-insensitive search and combined Category/Priority filters | Only matching owned Tickets returned; clearing parameters restores unfiltered results | `server/tests/lab-02/my-tickets.api.test.ts` | Passed |
 | API-LIST-03 | FR-10, BR-21, BR-22, AC-14 | Default/explicit stable sort, page metadata, boundaries, and invalid query values | Correct order and metadata; page beyond end is empty; invalid query returns `400` | `server/tests/lab-02/my-tickets.api.test.ts` | Passed |
 | API-LIST-04 | BR-23, AC-15 | No owned Tickets versus no matching results | Both return valid empty data/metadata that the UI can distinguish from applied query state | `server/tests/lab-02/my-tickets.api.test.ts` | Passed |
-| API-DETAIL-01 | FR-11, BR-24, AC-16 | Owned Ticket Detail and Attachment metadata | `200`; complete read-only Ticket with active and removed metadata; no stored path exposed | `server/tests/lab-02/ticket-detail.api.test.ts` | Planned |
-| API-DETAIL-02 | FR-16, BR-18, AC-17 | Missing and cross-Requester Ticket Detail | Both return `404` with the same safe error shape and no Ticket data | `server/tests/lab-02/ticket-detail.api.test.ts` | Planned |
-| API-ATT-03 | FR-12, AC-18 | Add valid Attachment to owned Ticket below limit | `201`; metadata and file saved; active count increases; preview/download available | `server/tests/lab-02/attachments.api.test.ts` | Planned |
-| API-ATT-04 | BR-26, AC-19 | Upload when five active Attachments exist | Operation rejected; existing records/files unchanged | `server/tests/lab-02/attachments.api.test.ts` | Planned |
-| API-ATT-05 | FR-13, BR-27, BR-32, AC-20 | Active preview/download and safe filename | Correct bytes/type/disposition returned; original safe filename used; server path absent | `server/tests/lab-02/attachments.api.test.ts` | Planned |
-| API-ATT-06 | FR-14, BR-30, AC-21 | Soft removal with valid/invalid reason | Valid reason stores timestamp/requester/reason; missing, short, or long reason is rejected | `server/tests/lab-02/attachments.api.test.ts` | Planned |
-| API-ATT-07 | FR-15, BR-31, BR-32, AC-22 | Removed metadata, blocked content, and repeated removal | Metadata remains; content returns `410`; repeat returns `409`; original audit data unchanged | `server/tests/lab-02/attachments.api.test.ts` | Planned |
-| API-ATT-08 | FR-16, BR-18, AC-23 | Cross-Requester Attachment metadata/upload/preview/download/removal | Every operation returns the same safe `404` behavior as missing Attachment | `server/tests/lab-02/attachments.api.test.ts` | Planned |
+| API-DETAIL-01 | FR-11, BR-24, AC-16 | Owned Ticket Detail and Attachment metadata | `200`; complete read-only Ticket with active and removed metadata; no stored path exposed | `server/tests/lab-02/ticket-detail.api.test.ts` | Passed |
+| API-DETAIL-02 | FR-16, BR-18, AC-17 | Missing and cross-Requester Ticket Detail | Both return `404` with the same safe error shape and no Ticket data | `server/tests/lab-02/ticket-detail.api.test.ts` | Passed |
+| API-ATT-03 | FR-12, AC-18 | Add valid Attachment to owned Ticket below limit | `201`; metadata and file saved; active count increases; preview/download available | `server/tests/lab-02/attachments.api.test.ts` | Passed |
+| API-ATT-04 | BR-26, AC-19 | Upload when five active Attachments exist | Operation rejected; existing records/files unchanged | `server/tests/lab-02/attachments.api.test.ts` | Passed |
+| API-ATT-05 | FR-13, BR-27, BR-32, AC-20 | Active preview/download and safe filename | Correct bytes/type/disposition returned; original safe filename used; server path absent | `server/tests/lab-02/attachments.api.test.ts` | Passed |
+| API-ATT-06 | FR-14, BR-30, AC-21 | Soft removal with valid/invalid reason | Valid reason stores timestamp/requester/reason; missing, short, or long reason is rejected | `server/tests/lab-02/attachments.api.test.ts` | Passed |
+| API-ATT-07 | FR-15, BR-31, BR-32, AC-22 | Removed metadata, blocked content, and repeated removal | Metadata remains; content returns `410`; repeat returns `409`; original audit data unchanged | `server/tests/lab-02/attachments.api.test.ts` | Passed |
+| API-ATT-08 | FR-16, BR-18, AC-23 | Cross-Requester Attachment metadata/upload/preview/download/removal | Every operation returns the same safe `404` behavior as missing Attachment | `server/tests/lab-02/attachments.api.test.ts` | Passed |
 
 ### 3.3 UI Component, Style, and Accessibility Tests
 
@@ -84,17 +84,17 @@ No required test may be skipped, disabled, commented out, or marked Pass without
 | UI-LIST-02 | FR-09, AC-13 | Search, combined filters, clear filters, and page reset | Correct query sent; Clear restores controls; page returns to 1 | `client/tests/lab-02/MyTickets.test.tsx` | Passed |
 | UI-LIST-03 | FR-10, AC-14 | Sort, page size, pagination controls, loading, and invalid-query failure | Correct query/metadata rendered; boundaries disabled; safe error shown | `client/tests/lab-02/MyTickets.test.tsx` | Passed |
 | UI-LIST-04 | BR-23, AC-15 | Empty versus no-results states | Distinct messages and Create Ticket/Clear Filters actions | `client/tests/lab-02/MyTickets.test.tsx` | Passed |
-| UI-DETAIL-01 | FR-11, AC-16 | Owned read-only Ticket Detail | Required values and Attachment metadata rendered with read-only treatment | `client/tests/lab-02/RequesterTicketDetail.test.tsx` | Planned |
-| UI-DETAIL-02 | AC-17 | Not-found/ownership and unexpected failure states | Same safe not-found UI for protected/missing; unexpected failure offers Retry/Back | `client/tests/lab-02/RequesterTicketDetail.test.tsx` | Planned |
-| UI-ATT-01 | BR-25-BR-28, AC-10 | File selection type/size/count validation | Invalid filename identified; submit/upload blocked; valid selections retained | `client/tests/lab-02/CreateTicket.test.tsx` (creation); `client/tests/lab-02/AttachmentSection.test.tsx` (later upload) | Passed for creation; existing-ticket upload remains Planned |
-| UI-ATT-02 | FR-12, AC-18 | Valid upload state and success | Busy state blocks duplicate; filename/count update announced | `client/tests/lab-02/AttachmentSection.test.tsx` | Planned |
-| UI-ATT-03 | AC-19 | Five-active limit | Add control disabled with explanatory text | `client/tests/lab-02/AttachmentSection.test.tsx` | Planned |
-| UI-ATT-04 | FR-13, AC-20 | Active metadata and preview/download actions | Accessible controls shown for active file and safe original name rendered | `client/tests/lab-02/AttachmentSection.test.tsx` | Planned |
-| UI-ATT-05 | FR-14, AC-21 | Confirmation dialog, reason validation, focus, and success | Invalid reason blocked; valid removal updates item; focus returns correctly | `client/tests/lab-02/AttachmentSection.test.tsx` | Planned |
-| UI-ATT-06 | FR-15, AC-22 | Removed Attachment presentation | Audit metadata/Removed badge shown; content/removal controls unavailable | `client/tests/lab-02/AttachmentSection.test.tsx` | Planned |
+| UI-DETAIL-01 | FR-11, AC-16 | Owned read-only Ticket Detail | Required values and Attachment metadata rendered with read-only treatment | `client/tests/lab-02/RequesterTicketDetail.test.tsx` | Passed |
+| UI-DETAIL-02 | AC-17 | Not-found/ownership and unexpected failure states | Same safe not-found UI for protected/missing; unexpected failure offers Retry/Back | `client/tests/lab-02/RequesterTicketDetail.test.tsx` | Passed |
+| UI-ATT-01 | BR-25-BR-28, AC-10 | File selection type/size/count validation | Invalid filename identified; submit/upload blocked; valid selections retained | `client/tests/lab-02/CreateTicket.test.tsx` (creation); `client/tests/lab-02/AttachmentSection.test.tsx` (later upload) | Passed |
+| UI-ATT-02 | FR-12, AC-18 | Valid upload state and success | Busy state blocks duplicate; filename/count update announced | `client/tests/lab-02/AttachmentSection.test.tsx` | Passed |
+| UI-ATT-03 | AC-19 | Five-active limit | Add control disabled with explanatory text | `client/tests/lab-02/AttachmentSection.test.tsx` | Passed |
+| UI-ATT-04 | FR-13, AC-20 | Active metadata and preview/download actions | Accessible controls shown for active file and safe original name rendered | `client/tests/lab-02/AttachmentSection.test.tsx` | Passed |
+| UI-ATT-05 | FR-14, AC-21 | Confirmation dialog, reason validation, focus, and success | Invalid reason blocked; valid removal updates item; focus returns correctly | `client/tests/lab-02/AttachmentSection.test.tsx` | Passed |
+| UI-ATT-06 | FR-15, AC-22 | Removed Attachment presentation | Audit metadata/Removed badge shown; content/removal controls unavailable | `client/tests/lab-02/AttachmentSection.test.tsx` | Passed |
 | UI-STYLE-01 | AC-24 | Required Zen Green classes/tokens, editable/read-only styles, badges, and responsive representations | Approved tokens/classes and desktop-table/mobile-card elements present | `client/tests/lab-02/ZenGreenStyles.test.tsx` | Planned |
 | UI-A11Y-01 | AC-25 | Labels, accessible names, focus semantics, live messages, and non-color indicators | Required semantic attributes/names exist and axe-style checks report no serious violations | `client/tests/lab-02/Accessibility.test.tsx` | Planned |
-| UI-SCOPE-01 | Scope Excluded | Absence of later-lab controls | No Comments, Internal Notes, Actions Taken, status-change, or IT Staff controls rendered | `client/tests/lab-02/RequesterTicketDetail.test.tsx` | Planned |
+| UI-SCOPE-01 | Scope Excluded | Absence of later-lab controls | No Comments, Internal Notes, Actions Taken, status-change, or IT Staff controls rendered | `client/tests/lab-02/RequesterTicketDetail.test.tsx` | Passed |
 
 ### 3.4 End-to-End, Responsive, and Visual Tests
 
@@ -247,6 +247,36 @@ Working tree: `feature/5-my-tickets`, based on merged `lab2-staging` `7d3f9b8`.
 - API contract assertions now require `INVALID_QUERY` for invalid list queries (including inactive Category) and `TICKET_LIST_FAILED` for unexpected list failures. A new API-LIST-05 test injects an isolated database count failure and verifies the safe retryable `500` envelope without internal details.
 - The existing Create Ticket reference-failure test opens `/tickets/new` directly so its one-shot mock targets that screen rather than My Tickets' new Category load. Its original retention/retry/field-error assertions remain intact.
 - Desktop-table/mobile-card styles are implemented, but this verification does not establish full visual/accessibility conformance or zero overflow. Real-browser viewport checks remain pending; the preview connection was unavailable during review. Unit/component checks do not replace those checks.
+
+### Feature #18 verification — 2026-09-05 (ICT)
+
+Working tree: `feature/6-ticket-detail-attachments`, based on merged `lab2-staging` `b8d5dad`.
+
+- Server tests: **143 passed in 14 files**, including 2 Ticket Detail API integration tests (`ticket-detail.api.test.ts`), 6 Attachment lifecycle API integration tests (`attachments.api.test.ts`), 40 query validation unit tests, 21 Create Ticket tests, 16 field-validation tests, 8 attachment-validation tests, and 8 PostgreSQL integration tests. Server TypeScript build passed with zero errors (`tsc`).
+- Server coverage includes:
+  - `GET /api/tickets/:id`: Complete read-only ticket data and attachments; returns `404 TICKET_NOT_FOUND` if missing or owned by another requester (tenant isolation).
+  - `GET /api/tickets/:id/attachments`: Active and removed attachment list with `activeCount` and `activeLimit: 5`.
+  - `POST /api/tickets/:id/attachments`: Concurrency-safe file upload using PostgreSQL transaction advisory locks (`pg_advisory_xact_lock`), 5 active files cap enforcement returning `409 LIMIT_EXCEEDED`, 5 MiB and MIME type validations, and clean file rollback on database failure.
+  - `GET /api/attachments/:id/preview`: Safe inline preview with `X-Content-Type-Options: nosniff`.
+  - `GET /api/attachments/:id/download`: Attachment download with safe original filename disposition.
+  - `DELETE /api/attachments/:id`: Soft removal requiring trimmed reason (5–200 characters), recording `removedByRequesterId`, `removedAt`, and `removalReason` while retaining file binary on disk; returns `410 ATTACHMENT_REMOVED` on subsequent content access and `409 ATTACHMENT_ALREADY_REMOVED` on repeated removal attempts.
+  - Path-aware safe `500` error envelopes (`TICKET_DETAIL_FAILED`, `ATTACHMENT_LIST_FAILED`, `ATTACHMENT_UPLOAD_FAILED`).
+- Client tests: **45 passed in 6 files**, including 5 Ticket Detail tests (`RequesterTicketDetail.test.tsx`) and 12 Attachment Section tests (`AttachmentSection.test.tsx`). Client TypeScript and Vite production builds passed cleanly (`tsc && vite build`).
+- Client coverage includes:
+  - Read-only Ticket Detail page rendering all attributes (ticket number, requester, category, related system, timestamps, priority badges, summary, multiline description).
+  - Safe `404` not-found state without disclosing unauthorized ticket existence, with "Back to My Tickets" navigation.
+  - Server error `500` state with retry recovery.
+  - Strict scope boundary adherence: verified absence of IT Staff controls, status changers, comment forms, internal notes, or resolution controls (`UI-SCOPE-01`).
+  - Attachment management: active list with formatted file size, upload date, inline preview, download, and remove buttons.
+  - Upload restrictions: 5-file active limit notice, file input disabled when limit reached, client-side pre-validation against oversized (>5 MiB) and unsupported file types.
+  - Removal dialog: Tab/Shift+Tab cycle within the dialog, initial focus on the reason textarea, 5–200 character trimmed reason validation, and Escape restores focus to the triggering button.
+  - Removed attachments presentation: moved to dedicated audit subsection with strikethrough, "Removed" badge, removal timestamp, recorded reason, and blocked download/preview actions.
+
+#### Browser smoke-check limitation
+
+- Chrome loaded the Requester selector and the empty My Tickets state on 2026-09-05. Selecting a Requester with existing tickets exposed local database schema drift: Prisma reported missing `Ticket.currentStatus` (`P2022`).
+- No existing local data was reset or migrated during this check. The API integration suites use isolated schemas created from the repository migrations; passing those suites does not prove the existing local database is compatible.
+- Real-browser Ticket Detail, attachment preview/download, responsive screenshots, and full accessibility checks remain pending until the local database mismatch is resolved. Popup handling and focus cycling are currently verified by component tests, not a completed browser journey.
 
 ### Final integrated Lab 2 results (pending)
 

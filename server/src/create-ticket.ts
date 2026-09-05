@@ -4,7 +4,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { getPrisma } from "./prisma.js";
 import { requireRequester } from "./requester-context.js";
-import { TicketError, validateTicket } from "./ticket-validation.js";
+import { TicketError, validateTicket, positiveId } from "./ticket-validation.js";
 import { validateTicketQuery } from "./ticket-query.js";
 import { attachmentStorage, MAX_FILE_BYTES, validateFiles } from "./attachment-storage.js";
 
@@ -200,6 +200,252 @@ createTicketRouter.post("/", requireRequester, (req, _res, next) => {
   }
 });
 
+// GET /api/tickets/:ticketId/attachments
+createTicketRouter.get("/:ticketId/attachments", requireRequester, async (req, res, next) => {
+  try {
+    const ticketId = positiveId(req.params.ticketId);
+    if (!ticketId) {
+      throw new TicketError(400, "VALIDATION_ERROR", "Invalid ticket ID.");
+    }
+
+    const ticket = await getPrisma().ticket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, requesterId: true },
+    });
+
+    if (!ticket || ticket.requesterId !== req.requester!.id) {
+      throw new TicketError(404, "TICKET_NOT_FOUND", "Ticket not found.");
+    }
+
+    const attachments = await getPrisma().attachment.findMany({
+      where: { ticketId },
+      select: {
+        id: true,
+        originalName: true,
+        mimeType: true,
+        sizeBytes: true,
+        isRemoved: true,
+        createdAt: true,
+        removedAt: true,
+        removalReason: true,
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+
+    const activeCount = attachments.filter((a) => !a.isRemoved).length;
+
+    res.status(200).json({
+      data: attachments.map((a) => ({
+        id: a.id,
+        originalName: a.originalName,
+        mimeType: a.mimeType,
+        sizeBytes: a.sizeBytes,
+        isRemoved: a.isRemoved,
+        createdAt: a.createdAt.toISOString(),
+        removedAt: a.removedAt ? a.removedAt.toISOString() : null,
+        removalReason: a.removalReason,
+      })),
+      activeCount,
+      activeLimit: 5,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/tickets/:ticketId/attachments
+createTicketRouter.post(
+  "/:ticketId/attachments",
+  requireRequester,
+  (req, res, next) => {
+    upload.array("attachments", 5)(req, res, (error) => {
+      if (
+        error &&
+        !(error instanceof multer.MulterError) &&
+        /^(Multipart:|Unexpected end of (form|file)|Malformed part header)/.test(error.message)
+      ) {
+        return next(new TicketError(400, "VALIDATION_ERROR", "Invalid multipart form. Please submit the form again."));
+      }
+      next(error);
+    });
+  },
+  async (req, res, next) => {
+    const createdFiles: string[] = [];
+    try {
+      const ticketId = positiveId(req.params.ticketId);
+      if (!ticketId) {
+        throw new TicketError(400, "VALIDATION_ERROR", "Invalid ticket ID.");
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({
+        where: { id: ticketId },
+        select: { id: true, requesterId: true },
+      });
+
+      if (!ticket || ticket.requesterId !== req.requester!.id) {
+        throw new TicketError(404, "TICKET_NOT_FOUND", "Ticket not found.");
+      }
+
+      const rawFiles = (req.files ?? []) as Express.Multer.File[];
+      if (!rawFiles || rawFiles.length === 0) {
+        throw new TicketError(400, "VALIDATION_ERROR", "Select at least one file.", [
+          { field: "attachments", message: "Select at least one file." },
+        ]);
+      }
+
+      const validated = validateFiles(rawFiles, 5);
+
+      const result = await getPrisma().$transaction(
+        async (tx) => {
+          // Lock to serialize concurrent uploads to this ticket
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('ticket_attachments'), hashtext(${String(ticketId)}))`;
+
+          const currentActiveCount = await tx.attachment.count({
+            where: { ticketId, isRemoved: false },
+          });
+
+          if (currentActiveCount + validated.length > 5) {
+            throw new TicketError(
+              409,
+              "ATTACHMENT_LIMIT_REACHED",
+              "Cannot exceed five active attachments per ticket.",
+              [{ field: "attachments", message: "Cannot exceed five active attachments per ticket." }]
+            );
+          }
+
+          const newlyCreated = [];
+          for (const { file, originalName, extension } of validated) {
+            const storedName = `${randomUUID()}${extension}`;
+            createdFiles.push(storedName);
+            await attachmentStorage.write(storedName, file.buffer);
+            const record = await tx.attachment.create({
+              data: {
+                ticketId,
+                originalName,
+                storedName,
+                mimeType: file.mimetype,
+                sizeBytes: file.size,
+              },
+            });
+            newlyCreated.push({
+              id: record.id,
+              originalName: record.originalName,
+              mimeType: record.mimeType,
+              sizeBytes: record.sizeBytes,
+              isRemoved: record.isRemoved,
+              createdAt: record.createdAt.toISOString(),
+            });
+          }
+
+          return {
+            data: newlyCreated,
+            activeCount: currentActiveCount + newlyCreated.length,
+            activeLimit: 5,
+          };
+        },
+        { maxWait: 30_000, timeout: 30_000 }
+      );
+
+      res.status(201).json(result);
+    } catch (error) {
+      await Promise.all(
+        createdFiles.map((name) =>
+          attachmentStorage.remove(name).catch((cleanupError) =>
+            console.error("Attachment upload cleanup failed", cleanupError)
+          )
+        )
+      );
+      next(error);
+    }
+  }
+);
+
+// GET /api/tickets/:ticketId
+createTicketRouter.get("/:ticketId", requireRequester, async (req, res, next) => {
+  try {
+    const ticketId = positiveId(req.params.ticketId);
+    if (!ticketId) {
+      throw new TicketError(400, "VALIDATION_ERROR", "Invalid ticket ID.");
+    }
+
+    const ticket = await getPrisma().ticket.findUnique({
+      where: { id: ticketId },
+      select: {
+        id: true,
+        ticketNumber: true,
+        requesterId: true,
+        categoryId: true,
+        relatedSystemId: true,
+        summary: true,
+        description: true,
+        requestedPriority: true,
+        itPriority: true,
+        currentStatus: true,
+        ticketOwner: true,
+        createdAt: true,
+        updatedAt: true,
+        requester: {
+          select: { id: true, name: true, email: true, department: true },
+        },
+        category: {
+          select: { id: true, name: true },
+        },
+        relatedSystem: {
+          select: { id: true, name: true },
+        },
+        attachments: {
+          select: {
+            id: true,
+            originalName: true,
+            mimeType: true,
+            sizeBytes: true,
+            isRemoved: true,
+            createdAt: true,
+            removedAt: true,
+            removalReason: true,
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        },
+      },
+    });
+
+    if (!ticket || ticket.requesterId !== req.requester!.id) {
+      throw new TicketError(404, "TICKET_NOT_FOUND", "Ticket not found.");
+    }
+
+    res.status(200).json({
+      data: {
+        id: ticket.id,
+        ticketNumber: ticket.ticketNumber,
+        ticketDate: ticket.createdAt.toISOString(),
+        summary: ticket.summary,
+        description: ticket.description,
+        requestedPriority: ticket.requestedPriority,
+        itPriority: ticket.itPriority,
+        currentStatus: ticket.currentStatus,
+        ticketOwner: ticket.ticketOwner,
+        createdAt: ticket.createdAt.toISOString(),
+        updatedAt: ticket.updatedAt.toISOString(),
+        requester: ticket.requester,
+        category: ticket.category,
+        relatedSystem: ticket.relatedSystem,
+        attachments: ticket.attachments.map((att) => ({
+          id: att.id,
+          originalName: att.originalName,
+          mimeType: att.mimeType,
+          sizeBytes: att.sizeBytes,
+          isRemoved: att.isRemoved,
+          createdAt: att.createdAt.toISOString(),
+          removedAt: att.removedAt ? att.removedAt.toISOString() : null,
+          removalReason: att.removalReason,
+        })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
   if (error instanceof multer.MulterError) {
     const tooLarge = error.code === "LIMIT_FILE_SIZE";
@@ -214,8 +460,19 @@ const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
   } else {
     console.error("Ticket operation failed", error);
     if (req.method === "GET") {
-      res.status(500).json({ error: { code: "TICKET_LIST_FAILED",
-        message: "Tickets are temporarily unavailable. Please try again.", retryable: true } });
+      if (req.path.includes("/attachments")) {
+        res.status(500).json({ error: { code: "ATTACHMENT_LIST_FAILED",
+          message: "Attachments are temporarily unavailable. Please try again.", retryable: true } });
+      } else if (req.path === "/" || req.path === "") {
+        res.status(500).json({ error: { code: "TICKET_LIST_FAILED",
+          message: "Tickets are temporarily unavailable. Please try again.", retryable: true } });
+      } else {
+        res.status(500).json({ error: { code: "TICKET_DETAIL_FAILED",
+          message: "Ticket detail is temporarily unavailable. Please try again.", retryable: true } });
+      }
+    } else if (req.method === "POST" && req.path.includes("/attachments")) {
+      res.status(500).json({ error: { code: "ATTACHMENT_UPLOAD_FAILED",
+        message: "Failed to upload attachments. Please retry.", retryable: true } });
     } else {
       res.status(500).json({ error: { code: "TICKET_CREATE_FAILED",
         message: "The ticket could not be created. Please retry the same submission.", retryable: true } });

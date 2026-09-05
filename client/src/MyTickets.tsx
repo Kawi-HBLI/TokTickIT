@@ -11,7 +11,7 @@ import {
 import { useRequester } from "./RequesterContext.js";
 
 interface MyTicketsProps {
-  onNavigate: (path: "/tickets" | "/tickets/new") => void;
+  onNavigate: (path: string) => void;
 }
 
 const defaultQuery: Required<TicketQueryState> = {
@@ -388,10 +388,7 @@ export default function MyTickets({ onNavigate }: MyTicketsProps) {
                       <button
                         type="button"
                         className="btn btn-sm btn-outline-primary view-details-btn"
-                        onClick={() => {
-                          // Handled in Issue 18: Ticket Detail
-                          alert(`Ticket Detail view for ${ticket.ticketNumber} is coming in the next feature!`);
-                        }}
+                        onClick={() => onNavigate(`/tickets/${ticket.id}`)}
                       >
                         View Details
                       </button>
@@ -441,9 +438,7 @@ export default function MyTickets({ onNavigate }: MyTicketsProps) {
                   <button
                     type="button"
                     className="btn btn-outline-primary btn-block view-details-btn"
-                    onClick={() => {
-                      alert(`Ticket Detail view for ${ticket.ticketNumber} is coming in the next feature!`);
-                    }}
+                    onClick={() => onNavigate(`/tickets/${ticket.id}`)}
                   >
                     View Details
                   </button>
