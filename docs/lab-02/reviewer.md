@@ -12,7 +12,7 @@
 | [#21](https://github.com/Kawi-HBLI/TokTickIT/pull/21) | feature/3-requester-context | @R1NNE0 | Approved on 2026-09-04 (ICT); merged into lab2-staging as `19f8bfb` |
 | [#22](https://github.com/Kawi-HBLI/TokTickIT/pull/22) | feature/4-create-ticket | @R1NNE0 | Approved on 2026-09-04; merged by @R1NNE0 into lab2-staging as `7d3f9b8` |
 | [#23](https://github.com/Kawi-HBLI/TokTickIT/pull/23) | feature/5-my-tickets | @R1NNE0 | Approved on 2026-09-04; merged by @R1NNE0 into lab2-staging as `b8d5dad` |
-|    | feature/6-ticket-detail-attachments | | |
+| [#24](https://github.com/Kawi-HBLI/TokTickIT/pull/24) | feature/6-ticket-detail-attachments | @R1NNE0 | Approved on 2026-09-04 (UTC); merged by @R1NNE0 into lab2-staging as `3baffe6` |
 |    | feature/7-e2e-release-docs | | |
 |    | lab2-staging ➔ main | | |
 
@@ -28,7 +28,14 @@
 - **Outcome:** PR #22 was merged by @R1NNE0 into `lab2-staging` as `7d3f9b8` on 2026-09-04. My Tickets starts from this merged staging state.
 - **PR #23:** [Review by @R1NNE0](https://github.com/Kawi-HBLI/TokTickIT/pull/23) requested resolving race conditions where stale queries overwrite newer results, clarifying API error codes (`INVALID_QUERY`, `TICKET_LIST_FAILED`), and preserving active search/filters when retrying categories.
 - **My response:** Fixed query-state transitions to ignore obsolete results, updated server endpoints with exact `INVALID_QUERY` / `TICKET_LIST_FAILED` error envelopes and test assertions, and retained all other filters during category reload.
-- **Outcome:** PR #23 was approved and merged by @R1NNE0 into `lab2-staging` as `b8d5dad` on 2026-09-04. Feature #18 starts from this merged staging state. Later PR verdicts remain blank until their reviews occur.
+- **Outcome:** PR #23 was approved and merged by @R1NNE0 into `lab2-staging` as `b8d5dad` on 2026-09-04. Feature #18 starts from this merged staging state.
+- **PR #24:** [Review by @R1NNE0](https://github.com/Kawi-HBLI/TokTickIT/pull/24#pullrequestreview-5117279759) directly approved PR #24 with a single **Approved** verdict without requesting changes. The reviewer commended:
+  - Robust concurrency control with PostgreSQL advisory locks enforcing the 5 active attachments limit (`API-ATT-04`).
+  - Atomic soft-removal mechanics returning HTTP 409 on repeated deletion, HTTP 410 on removed content access, and proper `X-Content-Type-Options: nosniff` security headers.
+  - Strict read-only Requester boundary (`UI-SCOPE-01`) preventing leakage of IT staff controls or comments, along with safe 404 responses for cross-requester access (`API-ATT-08`).
+  - Modal keyboard focus trapping and Escape handling in `AttachmentSection.tsx`.
+  - Confirmed that Prisma error `P2022` ("column does not exist") encountered during local test execution was strictly local schema drift resolved cleanly by running `npx prisma migrate deploy` without any code modifications.
+- **Outcome:** PR #24 was approved and merged by @R1NNE0 into `lab2-staging` as `3baffe6` on 2026-09-04. Feature #19 starts from this merged staging state. Later PR verdicts remain blank until their reviews occur.
 
 ## Pull Requests I reviewed for my partner
 
@@ -39,6 +46,7 @@
 | [Maibokdaimhai/TokTickIT #18](https://github.com/Maibokdaimhai/TokTickIT/pull/18) | `feature/lab2-ticket-creation` — feat: Create Ticket API, Form, and Validation | Requested changes twice, then approved by @Kawi-HBLI on 2026-09-04; merged into `lab2-staging` as `3ed1d03` |
 | [Maibokdaimhai/TokTickIT #19](https://github.com/Maibokdaimhai/TokTickIT/pull/19) | `feature/lab2-my-tickets` — feat: My Tickets List, Search, Filters, and Pagination | Requested changes, then approved by @Kawi-HBLI on 2026-09-04; merged into `lab2-staging` as `ee7ee47` |
 | [Maibokdaimhai/TokTickIT #20](https://github.com/Maibokdaimhai/TokTickIT/pull/20) | `feature/lab2-ticket-detail-and-attachments` — feat: Ticket Detail Screen & Soft Attachment Lifecycle | Requested changes, then approved by @Kawi-HBLI on 2026-09-04; merged into `lab2-staging` as `2534ce5` |
+| [Maibokdaimhai/TokTickIT #22](https://github.com/Maibokdaimhai/TokTickIT/pull/22) | `test/lab2-e2e-and-evidence` — test(lab-02): E2E test verification and visual screenshot evidence collection | Approved by @Kawi-HBLI on 2026-09-05; merged by @Kawi-HBLI into `lab2-staging` as `bb7e048` |
 
 ### Comments I made on my partner's PRs and how they responded
 
@@ -77,3 +85,9 @@
 - **First review — [Request changes](https://github.com/Maibokdaimhai/TokTickIT/pull/20#pullrequestreview-5112544828):** An attachment with a Thai/UTF-8 filename (such as `หลักฐาน.pdf`) saved successfully with HTTP 201, but downloading it triggered HTTP 500 because unencoded Unicode characters were inserted directly into the `Content-Disposition` header. I requested RFC 6266 / RFC 5987 formatting with an ASCII fallback and regression tests.
 - **[Partner's response](https://github.com/Maibokdaimhai/TokTickIT/pull/20#issuecomment-5540081068):** They implemented `formatContentDisposition` using ASCII fallback `filename="..."` and RFC 5987 `filename*=UTF-8''...`, added Latin-1 to UTF-8 multipart decoding, and added regression test `attachments.api.test.ts` for Thai filename upload/download.
 - **Final review — [Approve](https://github.com/Maibokdaimhai/TokTickIT/pull/20#pullrequestreview-5112664138):** Approved after confirming clean Unicode filename downloads without Node HTTP parser crashes and 35 server + 29 client tests passing. Merged into `lab2-staging` as `2534ce5`.
+
+#### Partner PR #22 — E2E Verification and Visual Evidence, 2026-09-05
+
+- **Final review — [Approve](https://github.com/Maibokdaimhai/TokTickIT/pull/22#pullrequestreview-5115972099):** I verified the complete Requester E2E flow covering Ticket creation, My Tickets search and pagination, Ticket Detail, Attachment upload, and audited soft removal. I also checked all 13 retained visual artifacts across `create-ticket/`, `my-tickets/`, and `ticket-detail/`, together with 35/35 server tests, 29/29 client tests, TypeScript checks, and the production build.
+- **[Partner's response](https://github.com/Maibokdaimhai/TokTickIT/pull/22#issuecomment-5549283012):** They acknowledged the completed review and confirmed that the PR was ready to merge.
+- **Outcome:** I merged the approved PR into `lab2-staging` as `bb7e048` on 2026-09-05.

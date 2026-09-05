@@ -1,0 +1,17 @@
+{
+  "name": "toktickit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:server": "npm --prefix server test",
+    "test:client": "npm --prefix client test",
+    "test:e2e": "playwright test",
+    "build:server": "npm --prefix server run build",
+    "build:client": "npm --prefix client run build"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.50.1"
+  }
+}
