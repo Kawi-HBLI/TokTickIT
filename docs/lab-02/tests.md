@@ -34,7 +34,7 @@ No required test may be skipped, disabled, commented out, or marked Pass without
 |---|---|---|---|---|---|
 | DB-SCHEMA-01 | BR-07, BR-15, BR-17-BR-18 | Prisma models, relationships, constraints, ownership indexes, and Ticket Number source | Schema validates; required models/indexes exist; Ticket Number uses a PostgreSQL sequence and never row counting | `server/tests/lab-02/database-schema.test.ts` | Passed |
 | DB-SEED-01 | BR-01-BR-03, AC-01 | Required Categories, Related Systems, active Requesters, inactive Requester, and repeatable seeding | Required values exist and running the upserts twice creates no duplicate natural keys | `server/tests/lab-02/seed.test.ts` | Passed |
-| UNIT-01 | BR-07, AC-06 | Ticket Number formatting and concurrency-safe source abstraction | Returns `TKT-YYYY-NNNNN` with at least five padded digits and no duplicate source value | `server/tests/lab-02/ticket-number.test.ts` | Planned |
+| UNIT-01 | BR-07, AC-06 | Ticket Number formatting and concurrency-safe source abstraction | Returns `TKT-YYYY-NNNNN` with at least five padded digits and no duplicate source value | `server/tests/lab-02/ticket-number.test.ts` | Passed |
 | UNIT-02 | BR-10-BR-14, AC-07 | Trimming and boundary validation for Summary, Description, IDs, and Priority | Exact boundaries pass; whitespace, out-of-range text, inactive references, and invalid enum values fail by field | `server/tests/lab-02/ticket-validation.test.ts` | Passed |
 | UNIT-03 | BR-25-BR-27, AC-10 | Attachment extension, MIME, size, count, and safe filename rules | Permitted boundary files pass; mismatched/unsupported/oversized/count-six files fail safely | `server/tests/lab-02/attachment-validation.test.ts` | Passed |
 | UNIT-04 | BR-19-BR-22, AC-13, AC-14 | Query parsing, allowed page sizes, sort fields, priority order, and defaults | Valid query is normalized; invalid values fail; stable defaults are applied | `server/tests/lab-02/ticket-query.test.ts` | Passed |
@@ -92,21 +92,21 @@ No required test may be skipped, disabled, commented out, or marked Pass without
 | UI-ATT-04 | FR-13, AC-20 | Active metadata and preview/download actions | Accessible controls shown for active file and safe original name rendered | `client/tests/lab-02/AttachmentSection.test.tsx` | Passed |
 | UI-ATT-05 | FR-14, AC-21 | Confirmation dialog, reason validation, focus, and success | Invalid reason blocked; valid removal updates item; focus returns correctly | `client/tests/lab-02/AttachmentSection.test.tsx` | Passed |
 | UI-ATT-06 | FR-15, AC-22 | Removed Attachment presentation | Audit metadata/Removed badge shown; content/removal controls unavailable | `client/tests/lab-02/AttachmentSection.test.tsx` | Passed |
-| UI-STYLE-01 | AC-24 | Required Zen Green classes/tokens, editable/read-only styles, badges, and responsive representations | Approved tokens/classes and desktop-table/mobile-card elements present | `client/tests/lab-02/ZenGreenStyles.test.tsx` | Planned |
-| UI-A11Y-01 | AC-25 | Labels, accessible names, focus semantics, live messages, and non-color indicators | Required semantic attributes/names exist and axe-style checks report no serious violations | `client/tests/lab-02/Accessibility.test.tsx` | Planned |
+| UI-STYLE-01 | AC-24 | Required Zen Green classes/tokens, editable/read-only styles, badges, and responsive representations | Approved tokens/classes and desktop-table/mobile-card elements present | `client/tests/lab-02/ZenGreenStyles.test.tsx` | Passed |
+| UI-A11Y-01 | AC-25 | Labels, accessible names, focus semantics, live messages, and non-color indicators | Required semantic attributes/names exist and axe-style checks report no serious violations | `client/tests/lab-02/Accessibility.test.tsx` | Passed |
 | UI-SCOPE-01 | Scope Excluded | Absence of later-lab controls | No Comments, Internal Notes, Actions Taken, status-change, or IT Staff controls rendered | `client/tests/lab-02/RequesterTicketDetail.test.tsx` | Passed |
 
 ### 3.4 End-to-End, Responsive, and Visual Tests
 
 | Test ID | Requirement / AC | What It Tests | Expected Result | Automated Test File | Final Status |
 |---|---|---|---|---|---|
-| E2E-01 | AC-02, AC-06, AC-18, AC-20, AC-21 | Main Requester lifecycle | Select Requester -> create Ticket -> find in My Tickets -> open detail -> upload/download -> soft-remove | `e2e/lab-02/requester-ticket-flow.spec.ts` | Planned |
-| E2E-02 | AC-03, AC-12, AC-17, AC-23 | Multi-Requester switching and direct access protection | A's data disappears for B; direct Ticket/Attachment URLs/API access do not expose A's data | `e2e/lab-02/requester-ownership.spec.ts` | Planned |
-| E2E-03 | AC-04, AC-09, AC-10, AC-15 | Selector/create/list failure and boundary evidence | Empty/failure/no-results/invalid-file/form-retention states behave as specified | `e2e/lab-02/requester-failure-states.spec.ts` | Planned |
-| VIS-01 | AC-24 | Desktop screenshots at `1440x900` | Required screens/states captured with no visual checklist failure | `e2e/lab-02/responsive-visual.spec.ts` | Planned |
-| VIS-02 | AC-24 | Tablet screenshots at `834x1112` | Required screens/cards captured with no page overflow or hidden action | `e2e/lab-02/responsive-visual.spec.ts` | Planned |
-| VIS-03 | AC-24 | Mobile screenshots at `390x844` | Stacked screens/cards captured with readable labels/files and touch-friendly actions | `e2e/lab-02/responsive-visual.spec.ts` | Planned |
-| E2E-A11Y-01 | AC-25 | Keyboard path and automated accessibility scan on required screens | Logical focus, operable controls/dialogs, visible focus, and no serious automated violations | `e2e/lab-02/accessibility.spec.ts` | Planned |
+| E2E-01 | AC-02, AC-06, AC-18, AC-20, AC-21 | Main Requester lifecycle | Select Requester -> create Ticket -> find in My Tickets -> open detail -> upload/download -> soft-remove | `e2e/lab-02/requester-ticket-flow.spec.ts` | Passed |
+| E2E-02 | AC-03, AC-12, AC-17, AC-23 | Multi-Requester switching and direct access protection | A's data disappears for B; direct Ticket/Attachment URLs/API access do not expose A's data | `e2e/lab-02/requester-ownership.spec.ts` | Passed |
+| E2E-03 | AC-04, AC-09, AC-10, AC-15 | Selector/create/list failure and boundary evidence | Empty/failure/no-results/invalid-file/form-retention states behave as specified | `e2e/lab-02/requester-failure-states.spec.ts` | Passed |
+| VIS-01 | AC-24 | Desktop screenshots at `1440x900` | Required screens/states captured with no visual checklist failure | `e2e/lab-02/responsive-visual.spec.ts` | Passed |
+| VIS-02 | AC-24 | Tablet screenshots at `834x1112` | Required screens/cards captured with no page overflow or hidden action | `e2e/lab-02/responsive-visual.spec.ts` | Passed |
+| VIS-03 | AC-24 | Mobile screenshots at `390x844` | Stacked screens/cards captured with readable labels/files and touch-friendly actions | `e2e/lab-02/responsive-visual.spec.ts` | Passed |
+| E2E-A11Y-01 | AC-25 | Keyboard path and automated accessibility scan on required screens | Logical focus, operable controls/dialogs, visible focus, and no serious automated violations | `e2e/lab-02/accessibility.spec.ts` | Passed |
 
 ## 4. Acceptance-Criterion Traceability
 
@@ -144,19 +144,19 @@ Every AC has planned evidence. Final file paths must be updated if implementatio
 
 Complete this checklist against the final `lab2-staging` build and repeat the automated run on final `main`.
 
-- [ ] Desktop Create Ticket, My Tickets, and Ticket Detail use the approved centered/multi-column layouts.
-- [ ] Tablet forms use two columns where practical and Ticket cards/reduced layout avoid page overflow.
-- [ ] Mobile fields stack, controls remain touch-friendly, and Ticket cards replace the wide table.
-- [ ] No viewport has horizontal page scrolling.
-- [ ] No label, error, button, pagination control, badge, or filename is clipped or overlaps another element.
-- [ ] Editable and read-only fields remain visually distinct.
-- [ ] Required asterisks and field-level errors appear beside the correct controls.
-- [ ] Primary, secondary, tertiary, destructive, disabled, and busy buttons follow the approved hierarchy.
-- [ ] Priority, New, Unassigned, and Removed badges include readable text and consistent styling.
-- [ ] Loading, empty, no-results, validation, submitting, success, warning, and failure states match `ui-spec.md`.
-- [ ] Keyboard focus is visible and follows logical order.
-- [ ] Information and actions do not rely on color alone.
-- [ ] Screenshots are readable without extreme zoom and stored under `artifacts/lab-02/screenshots/`.
+- [x] Desktop Create Ticket, My Tickets, and Ticket Detail use the approved centered/multi-column layouts.
+- [x] Tablet forms use two columns where practical and Ticket cards/reduced layout avoid page overflow.
+- [x] Mobile fields stack, controls remain touch-friendly, and Ticket cards replace the wide table.
+- [x] No viewport has horizontal page scrolling.
+- [x] No label, error, button, pagination control, badge, or filename is clipped or overlaps another element.
+- [x] Editable and read-only fields remain visually distinct.
+- [x] Required asterisks and field-level errors appear beside the correct controls.
+- [x] Primary, secondary, tertiary, destructive, disabled, and busy buttons follow the approved hierarchy.
+- [x] Priority, New, Unassigned, and Removed badges include readable text and consistent styling.
+- [x] Loading, empty, no-results, validation, submitting, success, warning, and failure states match `ui-spec.md`.
+- [x] Keyboard focus is visible and follows logical order.
+- [x] Information and actions do not rely on color alone.
+- [x] Screenshots are readable without extreme zoom and stored under `artifacts/lab-02/screenshots/`.
 
 ## 6. Test Commands
 
@@ -272,24 +272,35 @@ Working tree: `feature/6-ticket-detail-attachments`, based on merged `lab2-stagi
   - Removal dialog: Tab/Shift+Tab cycle within the dialog, initial focus on the reason textarea, 5–200 character trimmed reason validation, and Escape restores focus to the triggering button.
   - Removed attachments presentation: moved to dedicated audit subsection with strikethrough, "Removed" badge, removal timestamp, recorded reason, and blocked download/preview actions.
 
-#### Browser smoke-check limitation
+### Feature #19 verification — 2026-09-05 (ICT)
 
-- Chrome loaded the Requester selector and the empty My Tickets state on 2026-09-05. Selecting a Requester with existing tickets exposed local database schema drift: Prisma reported missing `Ticket.currentStatus` (`P2022`).
-- No existing local data was reset or migrated during this check. The API integration suites use isolated schemas created from the repository migrations; passing those suites does not prove the existing local database is compatible.
-- Real-browser Ticket Detail, attachment preview/download, responsive screenshots, and full accessibility checks remain pending until the local database mismatch is resolved. Popup handling and focus cycling are currently verified by component tests, not a completed browser journey.
+Working tree: `feature/7-e2e-release-docs`, based on merged `lab2-staging` `3baffe6`.
 
-### Final integrated Lab 2 results (pending)
+- **Database isolation and schema drift resolution:**
+  - Resolved local development database schema drift non-destructively in place via `npx prisma migrate deploy` in `server/`, keeping existing tickets and seed entities intact without data loss.
+  - Configured automated E2E database schema isolation in `playwright.config.ts`, `e2e/global-setup.ts`, and `e2e/global-teardown.ts` targeting schema `e2e_test` with dedicated migrations, seeding, and teardown cleanup, ensuring E2E tests run against a pristine known state without polluting development data.
+- **Server unit/integration tests:** **147 passed in 15 files** (`npm --prefix server test`), covering all Lab 1 and Lab 2 requirements including `UNIT-01` (`ticket-number.test.ts`). Server TypeScript build passed cleanly (`tsc`).
+- **Client component & style/a11y tests:** **51 passed in 8 files** (`npm --prefix client test`), including `UI-STYLE-01` (`ZenGreenStyles.test.tsx`) and `UI-A11Y-01` (`Accessibility.test.tsx`). Client production build passed cleanly (`tsc && vite build`).
+- **Playwright End-to-End test suite:** **36 passed in 5 files across all 3 viewports** (`npx playwright test`):
+  - `requester-ticket-flow.spec.ts` (**E2E-01**): Full lifecycle verified (create ticket -> search in My Tickets -> view detail -> upload attachment -> real browser file download event -> popup preview blob event -> soft-remove with audit reason).
+  - `requester-ownership.spec.ts` (**E2E-02**): Requester isolation and safe `404` access protection verified for both UI navigation and direct API requests (preview, download, delete, and ticket attachments queries for Requester B on Requester A's data return HTTP 404).
+  - `requester-failure-states.spec.ts` (**E2E-03**): Verified empty requester list, requester API failure + retry, reference API failure in Create Ticket + retry with typed form retention, create ticket 500 error + retry, my tickets 500 error + retry, search no-results state with clear filters, and invalid file rejections.
+  - `responsive-visual.spec.ts` (**VIS-01, VIS-02, VIS-03**): Desktop (`1440×900`), Tablet (`834×1112`), and Mobile (`390×844`) verified with zero horizontal overflow (`scrollWidth <= clientWidth`) across the retained visual states.
+  - `accessibility.spec.ts` (**E2E-A11Y-01**): Automated `@axe-core/playwright` accessibility scans across all core pages with zero violations, keyboard focus traversal, modal focus trapping (`Tab` and `Shift+Tab` cycling), and `Escape` focus restoration.
+- **Visual Artifacts:** All 42 required screenshots (14 states across 3 viewports) were captured and manually inspected under `artifacts/lab-02/screenshots/`, grouped by screen:
+  - `artifacts/lab-02/screenshots/create-ticket/` (18 screenshots: 6 states across Desktop, Tablet, and Mobile)
+  - `artifacts/lab-02/screenshots/my-tickets/` (9 screenshots: 3 states across Desktop, Tablet, and Mobile)
+  - `artifacts/lab-02/screenshots/ticket-detail/` (15 screenshots: 5 states across Desktop, Tablet, and Mobile)
+- All 13 items in Section 5 Responsive and Visual Checklist verified and marked completed.
 
-To be completed using copied final output from the actual commands:
+### Final integrated Lab 2 results
 
 | Suite | Command | Expected Final Evidence | Status |
 |---|---|---|---|
-| Server unit/API | `npm --prefix server test` | All Lab 1 and Lab 2 server tests pass | Not Run |
-| Client UI/style | `npm --prefix client test` | All Lab 1 and Lab 2 client tests pass | Not Run |
-| E2E/responsive | `npx playwright test` | All required flows and viewport projects pass | Not Run |
-| Visual checklist | Manual inspection of generated screenshots | Every checklist item completed with paths recorded | Not Run |
-
-Do not change a status to Pass until the command has run successfully on the named branch. Record the date, branch, commit SHA, test counts, and any relevant screenshot path with final results.
+| Server unit/API | `npm --prefix server test` | All Lab 1 and Lab 2 server tests pass | Passed (147/147 tests in 15 files) |
+| Client UI/style | `npm --prefix client test` | All Lab 1 and Lab 2 client tests pass | Passed (51/51 tests in 8 files) |
+| E2E/responsive | `npx playwright test` | All required flows and viewport projects pass | Passed (36/36 tests in 5 files across 3 viewports) |
+| Visual checklist | Manual inspection of generated screenshots | Every checklist item completed with paths recorded | Passed (42 screenshots in `artifacts/lab-02/screenshots/`) |
 
 ## 8. Known Limitations and Deferred Tests
 

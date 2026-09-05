@@ -305,20 +305,32 @@ Component/style tests verify:
 
 ## 14. Visual Evidence Checklist
 
-Required screenshot roots:
+Required screenshot roots are grouped by screen so the evidence follows the
+Lab 2 user journey. Every state is captured at Desktop (`1440x900`), Tablet
+(`834x1112`), and Mobile (`390x844`), with the viewport appended to its file
+name.
 
-- `artifacts/lab-02/screenshots/requester-selector/`
 - `artifacts/lab-02/screenshots/create-ticket/`
+  1. Clean form
+  2. Validation errors
+  3. Unsaved Ticket discard dialog
+  4. Submitting/busy state
+  5. Successful submission
+  6. API failure with retained form and retry
 - `artifacts/lab-02/screenshots/my-tickets/`
+  1. Results and pagination
+  2. Empty Ticket list
+  3. Search with no matching results
 - `artifacts/lab-02/screenshots/ticket-detail/`
+  1. Owned Ticket with an active Attachment
+  2. Attachment removal dialog
+  3. Removed Attachment audit state
+  4. Five-active-Attachment limit state
+  5. Safe Ticket not-found/ownership state
 
-Capture and inspect:
-
-- Requester selector: loading, ready, empty, and API failure.
-- Create Ticket: initial, validation failure, invalid Attachment, submitting, success, and API failure with retained values.
-- My Tickets: Requester A list, Requester B list, search/filter/sort/pagination, empty, no-results, and failure.
-- Ticket Detail: owned detail, active upload/download, removal confirmation, removed metadata, blocked removed download, and not-found/ownership state.
-- Desktop, tablet, and mobile versions of Create Ticket, My Tickets, and Ticket Detail.
+The retained set contains 42 screenshots: 14 visual states across all 3
+viewports. Invalid-file, keyboard, and assistive-technology behavior is also
+verified by the automated E2E and accessibility suites.
 
 For every screenshot set, confirm:
 

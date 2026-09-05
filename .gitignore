@@ -14,3 +14,6 @@ server/prisma/*.db
 .DS_Store
 .agents/
 server/uploads/
+server/uploads_e2e/
+test-results/
+playwright-report/

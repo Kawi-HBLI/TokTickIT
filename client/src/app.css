@@ -1,16 +1,16 @@
 :root {
-  color: #193229;
-  background: #f4f8f5;
+  color: #1a2e26;
+  background: #f5f7f6;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --zen-900: #103d2d;
-  --zen-700: #176b4b;
-  --zen-500: #2f9e6f;
-  --zen-100: #dff2e7;
+  --zen-900: #064e3b;
+  --zen-700: #006b3c;
+  --zen-500: #0b7a46;
+  --zen-100: #eaf6ef;
   --surface: #ffffff;
-  --border: #c9ddd2;
+  --border: #cbd5e1;
 }
 
-body { margin: 0; min-width: 320px; background: #f4f8f5; }
+body { margin: 0; min-width: 320px; background: #f5f7f6; line-height: 1.5; }
 button, select, a, input, textarea { min-height: 44px; }
 button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #81c9a8; outline-offset: 3px; }
 .app-page { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 48px; }
@@ -527,4 +527,176 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
 
 .not-found-state {
   border-color: #c9ddd2;
+}
+
+/* ==========================================================================
+   Lab-sheet presentation: compact service-desk shell and evidence layout
+   ========================================================================== */
+
+.app-page {
+  width: 100%;
+  margin: 0;
+  padding: 0 0 40px;
+}
+
+.app-shell {
+  width: 100%;
+  min-height: 72px;
+  box-sizing: border-box;
+  grid-template-columns: auto 1fr auto;
+  gap: 28px;
+  padding: 10px max(24px, calc((100vw - 1120px) / 2));
+  color: #fff;
+  background: var(--zen-700);
+  border: 0;
+  border-radius: 0;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.16);
+}
+
+.shell-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #fff;
+  font-size: 1.3rem;
+  letter-spacing: -0.02em;
+}
+
+.shell-brand::before {
+  content: "◷";
+  display: grid;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  place-items: center;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-radius: 50%;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.app-shell nav { gap: 2px; }
+.app-shell .nav-link {
+  min-height: 44px;
+  padding: 0 14px;
+  color: rgba(255, 255, 255, 0.88);
+  border-bottom-color: transparent;
+}
+.app-shell .nav-link:hover { color: #fff; background: rgba(255, 255, 255, 0.09); }
+.app-shell .nav-link.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border-bottom-color: #fff;
+}
+
+.app-shell .requester-identity span { color: rgba(255, 255, 255, 0.72); }
+.app-shell .requester-identity strong { color: #fff; }
+.app-shell .link-button { color: #fff; }
+.app-shell .link-button:hover { color: #eaf6ef; }
+
+.btn-primary {
+  background: var(--zen-700);
+  border-color: var(--zen-700);
+}
+.btn-primary:hover,
+.btn-primary:focus-visible {
+  background: var(--zen-900);
+  border-color: var(--zen-900);
+}
+
+.workspace-card,
+.ticket-page,
+.diagnostics {
+  width: min(1120px, calc(100% - 40px));
+  box-sizing: border-box;
+}
+
+.workspace-card,
+.ticket-detail-page,
+.success-card,
+.requester-card,
+.diagnostics {
+  border-color: #d6dee5;
+  border-radius: 8px;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.06);
+}
+
+.workspace-card,
+.ticket-page { margin: 30px auto 0; }
+.workspace-card { padding: clamp(22px, 3vw, 34px); }
+.ticket-page:not(.ticket-detail-page) { padding: 0; }
+.ticket-detail-page { padding: clamp(22px, 3vw, 34px); }
+
+.ticket-group {
+  margin: 20px 0;
+  padding: clamp(18px, 2.4vw, 24px);
+  border-color: #d6dee5;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+
+.ticket-group legend { font-size: 1.08rem; }
+.readonly-grid div,
+.readonly-value,
+.meta-dl-grid {
+  border: 1px solid #dce3e8;
+  border-radius: 5px;
+  background: #eef3f0;
+}
+.readonly-grid div { padding: 12px 14px; }
+.readonly-value { padding: 12px 14px; }
+.meta-dl-grid { gap: 14px 20px; padding: 18px 20px; }
+
+.filter-toolbar,
+.ticket-table-container,
+.mobile-ticket-card,
+.empty-state,
+.add-attachment-box,
+.attachment-item {
+  border-radius: 7px;
+}
+
+.filter-toolbar { padding: 18px; background: #fff; }
+.ticket-table th { background: #f1f5f3; }
+.ticket-table td { padding-block: 12px; }
+.create-ticket-cta { border-radius: 5px; }
+.view-details-btn,
+.pagination-btn,
+.ticket-group input:not([type="file"]),
+.ticket-group select,
+.ticket-group textarea,
+.filter-field .form-control,
+.filter-field .form-select {
+  border-radius: 5px;
+}
+
+.diagnostics {
+  grid-template-columns: 1fr auto;
+  margin-top: 26px;
+  padding: 16px 20px;
+  border-radius: 8px;
+}
+.diagnostics .section-kicker { margin: 0; }
+.diagnostics h2 { font-size: 1rem; }
+
+.confirm-dialog {
+  border: 1px solid #d6dee5;
+  border-radius: 8px;
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 14px 20px;
+  }
+  .app-shell nav { order: 3; width: 100%; overflow-x: auto; }
+  .app-shell .requester-identity { justify-items: start; margin: 4px 0; }
+  .workspace-card,
+  .ticket-page,
+  .diagnostics { width: min(100% - 20px, 1120px); }
+  .workspace-card,
+  .ticket-detail-page { padding: 18px 14px; }
+  .ticket-group { padding: 16px 14px; }
+  .diagnostics { grid-template-columns: 1fr; padding: 16px; }
 }
