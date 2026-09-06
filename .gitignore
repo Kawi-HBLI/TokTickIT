@@ -13,3 +13,7 @@ server/prisma/*.db
 *.log
 .DS_Store
 .agents/
+server/uploads/
+server/uploads_e2e/
+test-results/
+playwright-report/
