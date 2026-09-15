@@ -118,7 +118,7 @@ TokTickIT must now identify real users instead of trusting a client-selected Req
 - **BR-26:** Status changes use the Ticket's `updatedAt` as an optimistic concurrency version. A stale update returns `409 TICKET_VERSION_CONFLICT` and the client reloads current values.
 - **BR-27:** Formal transition to `RESOLVED`, `CLOSED`, `REOPENED`, or `CANCELLED` requires explicit UI confirmation and a fresh version.
 - **BR-28:** A Requester's Problem Appears Resolved action is allowed only while status is `NEW`, `OPEN`, `IN_PROGRESS`, or `WAITING_FOR_REQUESTER`; it records backend author/time, is idempotent while present, and never changes status. Eligibility is checked and written atomically against the current Ticket version so a concurrent formal status change cannot leave an indication on an ineligible status; a stale loser returns `409 TICKET_VERSION_CONFLICT` and reloads.
-- **BR-29:** Transition to `REOPENED` clears the active resolution-indication fields. Retaining a full indication history or providing an audit-history screen is outside Lab 3.
+- **BR-29:** Any formal transition into `RESOLVED`, `CLOSED`, `CANCELLED`, or `REOPENED` clears the active resolution-indication fields atomically with the status update. Retaining a full indication history or providing an audit-history screen is outside Lab 3.
 
 #### Approved status-transition matrix
 
@@ -259,7 +259,7 @@ Exact structures, modes, copy, responsive behavior, accessibility rules, and scr
 - **AC-08:** Given the migrated Lab 2 database, when migrations and seed run, then existing Ticket/Attachment identifiers, ownership, numbers, receipts, and files remain valid and seed reruns create no duplicates.
 - **AC-09:** Given an authenticated Requester, when Create Ticket, My Tickets, Ticket Detail, or an Attachment operation is used, then Lab 2 behavior continues under the authenticated identity.
 - **AC-10:** Given an owned Ticket, when a Requester adds a valid Public Comment, then trimmed plain text is stored once with backend author/time and becomes visible to permitted roles.
-- **AC-11:** Given an eligible owned Ticket and fresh version, when the Requester selects Problem Appears Resolved, then the backend records the indication without changing formal status; ineligible, stale/concurrently changed, or cross-owner actions are rejected safely without leaving an indication on an ineligible status.
+- **AC-11:** Given an eligible owned Ticket and fresh version, when the Requester selects Problem Appears Resolved, then the backend records the indication without changing formal status; ineligible, stale/concurrently changed, or cross-owner actions are rejected safely without leaving an indication on an ineligible status. A formal transition into `RESOLVED`, `CLOSED`, `CANCELLED`, or `REOPENED` clears any active indication atomically.
 - **AC-12:** Given IT Staff or Administrator, when Staff Queue is queried, then search, combined filters, approved stable sorting, and one-based pagination return accurate data/metadata; invalid queries return `400`.
 - **AC-13:** Given loading, no Tickets, no matching filters, forbidden access, or an API failure, when Staff Queue renders, then the matching distinct state and recovery action is shown responsively.
 - **AC-14:** Given an unassigned Ticket, when two permitted users claim it concurrently, then exactly one becomes Owner and the other receives a safe conflict.
@@ -281,6 +281,8 @@ Exact structures, modes, copy, responsive behavior, accessibility rules, and scr
 - **AC-30:** Given course delivery review, when the Lab 3 increment is submitted, then Issues, branch/PR history, peer approvals, comment responses, documentation, screenshots, and the nine-part PDF evidence are complete and point to final `main`.
 
 ## 11. Product Definition of Done
+
+Product completion is the software-quality gate for the increment. Course delivery is a separate evidence and workflow gate; delivery evidence does not replace implementation, test, security, or usability requirements.
 
 ### Product completion
 

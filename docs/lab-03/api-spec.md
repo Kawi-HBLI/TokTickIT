@@ -2,7 +2,7 @@
 
 ## 1. Purpose and Conventions
 
-This contract extends the existing unversioned `/api` Lab 2 API. JSON property names remain `camelCase`; timestamps are UTC ISO 8601 strings; identifiers are opaque strings. Authentication uses a server-side opaque session in an `HttpOnly` cookie. Success responses use a `data` envelope and optional `meta`; errors use the shared envelope below.
+This contract extends the existing unversioned `/api` Lab 2 API. JSON property names remain `camelCase`; timestamps are UTC ISO 8601 strings. Existing resource identifiers remain positive JSON integers for Lab 2 compatibility (`id`, `requesterId`, `categoryId`, `relatedSystemId`, `ownerId`, and `attachmentId`); clients must treat them as opaque values and must not infer meaning from their sequence. `ticketNumber` remains a string. Session, CSRF, and idempotency tokens are opaque strings and are not resource identifiers. Authentication uses a server-side opaque session in an `HttpOnly` cookie. Success responses use a `data` envelope and optional `meta`; errors use the shared envelope below.
 
 All endpoints except `GET /api/health` and `POST /api/auth/login` require an authenticated Session, subject to the idempotent absent/expired-session Logout behavior in section 4.4. `GET /api/categories` and `GET /api/related-systems` remain available to authenticated users after the mandatory-password-change gate and return active records only. The Lab 2 `GET /api/requesters` endpoint is removed.
 
@@ -105,7 +105,7 @@ Every other protected endpoint returns `403 PASSWORD_CHANGE_REQUIRED`.
 
 ```json
 {
-  "id": "user-id",
+  "id": 1,
   "name": "Alex Thompson",
   "email": "alex.thompson@toktickit.local",
   "role": "IT_STAFF",
@@ -131,10 +131,10 @@ Priority: LOW | MEDIUM | HIGH | CRITICAL
 
 ```json
 {
-  "id": "entry-id",
+  "id": 101,
   "content": "Plain text content",
   "author": {
-    "id": "user-id",
+    "id": 1,
     "name": "Alex Thompson",
     "role": "IT_STAFF"
   },
@@ -166,7 +166,7 @@ Success `200` sets the Session cookie:
 ```json
 {
   "data": {
-    "user": { "id": "user-id", "name": "Alex Thompson", "email": "alex.thompson@toktickit.local", "role": "IT_STAFF", "isActive": true, "mustChangePassword": false },
+    "user": { "id": 1, "name": "Alex Thompson", "email": "alex.thompson@toktickit.local", "role": "IT_STAFF", "isActive": true, "mustChangePassword": false },
     "csrfToken": "opaque-csrf-token"
   }
 }
@@ -252,13 +252,14 @@ Owning Requester only; CSRF-protected. The client submits the Ticket version it 
 - Allowed for `NEW`, `OPEN`, `IN_PROGRESS`, and `WAITING_FOR_REQUESTER`.
 - Eligibility, version comparison, and the first write are atomic. A concurrent formal status change or stale version returns `409 TICKET_VERSION_CONFLICT`; no indication may remain on an ineligible status.
 - First success records the authenticated Requester and server time; a repeated call with the current version returns the existing representation without changing status.
+- The indication is active-only. Any formal transition into `RESOLVED`, `CLOSED`, `CANCELLED`, or `REOPENED` clears the indication atomically; subsequent Ticket reads return null indication fields.
 - Success `200`:
 
 ```json
 {
   "data": {
     "indicatedAt": "2026-09-12T08:00:00.000Z",
-    "indicatedBy": { "id": "user-id", "name": "Requester Name" },
+    "indicatedBy": { "id": 1, "name": "Requester Name" },
     "currentStatus": "IN_PROGRESS"
   }
 }
@@ -307,7 +308,7 @@ CSRF-protected. Empty JSON body. Atomically sets Owner to the authenticated staf
 
 ```json
 {
-  "ownerId": "active-staff-user-id",
+  "ownerId": 3,
   "expectedUpdatedAt": "2026-09-12T08:00:00.000Z"
 }
 ```
@@ -334,7 +335,7 @@ Success `200` returns `requestedPriority`, `itPriority`, and updated `updatedAt`
 }
 ```
 
-Success `200` returns old/new status, current resolution indication, and updated `updatedAt`. The server applies the specification transition matrix. Entering `REOPENED` clears the active resolution indication. Errors: `400 VALIDATION_ERROR`, `404 TICKET_NOT_FOUND`, `409 INVALID_STATUS_TRANSITION`, `409 TICKET_VERSION_CONFLICT`, `500 TICKET_STATUS_UPDATE_FAILED`.
+Success `200` returns old/new status, current resolution indication, and updated `updatedAt`. The server applies the specification transition matrix. Entering `RESOLVED`, `CLOSED`, `CANCELLED`, or `REOPENED` clears the active resolution indication atomically; the returned indication is null after such a transition. Errors: `400 VALIDATION_ERROR`, `404 TICKET_NOT_FOUND`, `409 INVALID_STATUS_TRANSITION`, `409 TICKET_VERSION_CONFLICT`, `500 TICKET_STATUS_UPDATE_FAILED`.
 
 ### 7.8 Staff Attachment content
 

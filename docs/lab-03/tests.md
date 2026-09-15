@@ -60,7 +60,7 @@ All rows below are **Planned**.  Exact filenames are intended final paths; a mov
 | API-QUEUE-02 | FR-13, FR-28, BR-45, BR-47, AC-12, AC-13, AC-27 | Invalid query returns `400 INVALID_QUERY`; no results is valid empty data; forbidden and unexpected persistence failure have distinct safe/retryable UI/API states. | `server/tests/lab-03/staff-queue.api.test.ts` | Planned |
 | API-DETAIL-01 | FR-14, FR-18-FR-21, AC-16, AC-18, AC-19 | Authorized staff sees Ticket, assignment, both priorities, status, Attachment metadata/content, Public Comments and Internal Notes within matrix permissions. | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Planned |
 | API-OPS-01 | FR-15-FR-17, BR-20-BR-25, AC-14-AC-16 | Claim unassigned, assign/reassign active eligible owner, and update IT priority persist correctly; requester/inactive/non-staff owner and competing claims fail safely without partial update. | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Planned |
-| API-OPS-02 | FR-11, FR-18, BR-26-BR-29, AC-11, AC-17 | Every matrix transition with fresh `updatedAt` persists; stale/invalid/forbidden transition changes nothing; required confirmation is represented in request contract; resolution indication is eligible-only, idempotent, and not a status mutation; a concurrent indication/status race leaves no indication on an ineligible status and returns one safe conflict. | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Planned |
+| API-OPS-02 | FR-11, FR-18, BR-26-BR-29, AC-11, AC-17 | Every matrix transition with fresh `updatedAt` persists; stale/invalid/forbidden transition changes nothing; required confirmation is represented in request contract; resolution indication is eligible-only, idempotent, and not a status mutation; formal entry into `RESOLVED`, `CLOSED`, `CANCELLED`, or `REOPENED` clears any active indication; a concurrent indication/status race leaves no indication on an ineligible status and returns one safe conflict. | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Planned |
 | API-DISC-01 | FR-10, FR-19, BR-30-BR-33, AC-10, AC-18 | Authorized roles create/list 1-2,000-character trimmed plain-text Public Comments; backend records author/time; requester sees only public entries; empty/overlong/script-like body fails/safely renders. | `server/tests/lab-03/comments-notes.api.test.ts` | Planned |
 | API-DISC-02 | FR-20, BR-16, BR-30-BR-34, AC-19, AC-20, AC-27 | Staff/Admin create/list 1-4,000-character append-only Internal Notes; Requester gets no content/existence signal; update/delete routes reject/are absent. | `server/tests/lab-03/comments-notes.api.test.ts` | Planned |
 | API-USER-01 | FR-22-FR-24, BR-35-BR-38, BR-46, AC-21-AC-23 | Administrator can search/filter/list, create and update valid users; duplicate normalized email/invalid role validation causes no partial user; initial password is hashed and never returned. | `server/tests/lab-03/users-admin.api.test.ts` | Planned |
@@ -116,7 +116,7 @@ All rows below are **Planned**.  Exact filenames are intended final paths; a mov
 | AC-07 | API-AUTHZ-02; API-REQ-01; UI-REQ-01; E2E-REQ-01; E2E-SEC-01 |
 | AC-08 | DB-L3-01/02; REG-L2-01 |
 | AC-09 | API-AUTHZ-02; API-REQ-01/02; UI-REQ-01; E2E-REQ-01; REG-L2-01 |
-| AC-10 | UNIT-DISC-01; API-DISC-01; UI-REQ-01; E2E-REQ-01 |
+| AC-10 | UNIT-DISCUSSION-01; API-DISC-01; UI-REQ-01; E2E-REQ-01 |
 | AC-11 | UNIT-WORKFLOW-01; API-OPS-02; UI-REQ-01; E2E-REQ-01 |
 | AC-12 | UNIT-WORKFLOW-02; API-QUEUE-01/02; UI-QUEUE-01; E2E-STAFF-01 |
 | AC-13 | API-QUEUE-02; UI-QUEUE-01; VIS-01/02/03 |
@@ -125,7 +125,7 @@ All rows below are **Planned**.  Exact filenames are intended final paths; a mov
 | AC-16 | API-DETAIL-01; API-OPS-01; UI-DETAIL-01; E2E-STAFF-01 |
 | AC-17 | UNIT-WORKFLOW-01; API-OPS-02; UI-DETAIL-01; E2E-STAFF-01 |
 | AC-18 | API-DETAIL-01; API-DISC-01; API-REQ-02; UI-DISC-01; E2E-STAFF-01; REG-L2-01 |
-| AC-19 | UNIT-DISC-01; API-DETAIL-01; API-DISC-02; UI-DISC-01; E2E-STAFF-01; E2E-SEC-01 |
+| AC-19 | UNIT-DISCUSSION-01; API-DETAIL-01; API-DISC-02; UI-DISC-01; E2E-STAFF-01; E2E-SEC-01 |
 | AC-20 | API-DISC-02; UI-DISC-01; UI-A11Y-01; VIS-01/02/03 |
 | AC-21 | API-USER-01; UI-USER-01; E2E-ADMIN-01; E2E-SEC-01 |
 | AC-22 | UNIT-USER-01; API-USER-01; UI-USER-01; E2E-ADMIN-01 |
@@ -154,7 +154,7 @@ npx playwright test --config playwright.lab-03.config.ts
 
 ## 7. Responsive and visual checklist
 
-Complete manually against final `main`, alongside `VIS-01` to `VIS-03`; store readable screenshots by `authentication/`, `staff-queue/`, `staff-ticket-detail/`, and `user-management/` under `artifacts/lab-03/screenshots/`.
+Complete manually against final `main`, alongside `VIS-01` to `VIS-03`; store readable screenshots by `authentication/`, `requester/`, `staff-queue/`, `staff-ticket-detail/`, and `user-management/` under `artifacts/lab-03/screenshots/`.
 
 - [ ] Desktop/tablet/mobile show no horizontal page scrolling.
 - [ ] Login/change-password labels, errors, busy controls, success and safe failure states are readable and keyboard usable.
