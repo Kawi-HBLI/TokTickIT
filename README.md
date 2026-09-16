@@ -45,6 +45,13 @@ We use Docker to run the PostgreSQL database locally to ensure a consistent envi
    npm run dev
    ```
 
+For Lab 3 local development, the repeatable seed creates Requester, IT Staff,
+and Administrator accounts. Every newly seeded or migrated account starts with
+the local-only password `ChangeMe-2026!` and must change it at first login.
+Never reuse this course credential for a real account. Set `CLIENT_ORIGIN` when
+the frontend is served from a different origin; the default is
+`http://localhost:5173`.
+
 ### 3. Frontend Setup (`client/`)
 1. Navigate to the `client` directory: `cd client`
 2. Install dependencies: `npm install`

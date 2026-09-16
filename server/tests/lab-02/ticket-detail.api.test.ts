@@ -35,7 +35,7 @@ beforeAll(async () => {
   db = new PrismaClient({ datasources: { db: { url: url.toString() } } });
   await seedDatabase(db);
 
-  const activeRequesters = await db.requesterUser.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
+  const activeRequesters = await db.user.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
   requesterAId = activeRequesters[0].id;
   requesterBId = activeRequesters[1].id;
 
@@ -52,6 +52,7 @@ beforeAll(async () => {
       summary: "Laptop keyboard not responding",
       description: "Several keys (Enter, Space, Backspace) do not register keypresses.",
       requestedPriority: "HIGH",
+      itPriority: "HIGH",
       idempotencyKey: randomUUID(),
     },
   });
@@ -92,6 +93,7 @@ beforeAll(async () => {
       summary: "VPN access expired",
       description: "Cannot connect to campus VPN since this morning.",
       requestedPriority: "MEDIUM",
+      itPriority: "MEDIUM",
       idempotencyKey: randomUUID(),
     },
   });
@@ -127,7 +129,7 @@ describe("Ticket Detail API (API-DETAIL-01 to API-DETAIL-02)", () => {
     expect(t.summary).toBe("Laptop keyboard not responding");
     expect(t.description).toBe("Several keys (Enter, Space, Backspace) do not register keypresses.");
     expect(t.requestedPriority).toBe("HIGH");
-    expect(t.itPriority).toBeNull();
+    expect(t.itPriority).toBe("HIGH");
     expect(t.currentStatus).toBe("NEW");
     expect(t.ticketOwner).toBeNull();
     expect(t.requester.id).toBe(requesterAId);

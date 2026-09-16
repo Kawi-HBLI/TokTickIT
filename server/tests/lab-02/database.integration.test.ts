@@ -29,7 +29,7 @@ beforeAll(async () => {
   console.info(output);
   db = new PrismaClient({ datasources: { db: { url: url.toString() } } });
   await seedDatabase(db);
-  requesterId = (await db.requesterUser.findFirstOrThrow({ where: { isActive: true } })).id;
+  requesterId = (await db.user.findFirstOrThrow({ where: { isActive: true } })).id;
   categoryId = (await db.category.findFirstOrThrow()).id;
   relatedSystemId = (await db.relatedSystem.findFirstOrThrow()).id;
   const rows = await db.$queryRaw<{ year: string }[]>`SELECT to_char(CURRENT_DATE, 'YYYY') AS year`;
@@ -56,6 +56,7 @@ function createTicket(idempotencyKey = randomUUID()) {
       summary: "Database regression test",
       description: "Verify the database-generated ticket number.",
       requestedPriority: "MEDIUM",
+      itPriority: "MEDIUM",
     },
   });
 }
@@ -65,7 +66,7 @@ describe("Lab 2 database migrations and persistence", () => {
     const snapshot = async () => ({
       categories: await db!.category.findMany({ orderBy: { id: "asc" }, select: { id: true, name: true, isActive: true } }),
       systems: await db!.relatedSystem.findMany({ orderBy: { id: "asc" }, select: { id: true, name: true, isActive: true } }),
-      requesters: await db!.requesterUser.findMany({ orderBy: { id: "asc" }, select: { id: true, email: true, isActive: true } }),
+      requesters: await db!.user.findMany({ orderBy: { id: "asc" }, select: { id: true, email: true, isActive: true } }),
     });
     const first = await snapshot();
     await seedDatabase(db!);
@@ -87,7 +88,7 @@ describe("Lab 2 database migrations and persistence", () => {
     const ticket = await createTicket();
     expect(ticket.ticketNumber).toBe(`TKT-${year}-${suffix}`);
     expect(ticket.currentStatus).toBe("NEW");
-    expect(ticket.itPriority).toBeNull();
+    expect(ticket.itPriority).toBe("MEDIUM");
     expect(ticket.ticketOwner).toBeNull();
   });
 
@@ -104,6 +105,6 @@ describe("Lab 2 database migrations and persistence", () => {
     const key = randomUUID();
     await createTicket(key);
     await expect(createTicket(key)).rejects.toMatchObject({ code: "P2002" });
-    await expect(db!.requesterUser.delete({ where: { id: requesterId } })).rejects.toMatchObject({ code: "P2003" });
+    await expect(db!.user.delete({ where: { id: requesterId } })).rejects.toMatchObject({ code: "P2003" });
   });
 });

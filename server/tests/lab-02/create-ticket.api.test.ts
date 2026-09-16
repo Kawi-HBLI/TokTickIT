@@ -35,9 +35,9 @@ beforeAll(async () => {
   });
   db = new PrismaClient({ datasources: { db: { url: url.toString() } } });
   await seedDatabase(db);
-  const active = await db.requesterUser.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
+  const active = await db.user.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
   requesterId = active[0].id; otherId = active[1].id;
-  inactiveId = (await db.requesterUser.findFirstOrThrow({ where: { isActive: false } })).id;
+  inactiveId = (await db.user.findFirstOrThrow({ where: { isActive: false } })).id;
   categoryId = (await db.category.findFirstOrThrow()).id;
   relatedSystemId = (await db.relatedSystem.findFirstOrThrow()).id;
   inactiveCategory = (await db.category.create({ data: { id: 1001, name: "Inactive test category", isActive: false } })).id;
@@ -85,7 +85,7 @@ describe("Create Ticket API", () => {
     expect(response.body.data.currentStatus).toBe("NEW");
     expect(response.body.data.ticketNumber).toMatch(/^TKT-\d{4}-\d{5,}$/);
     expect(response.body.data.ticketDate).toBe(response.body.data.createdAt);
-    expect(response.body.data).toMatchObject({ requesterId, summary: "Cannot access email", itPriority: null, ticketOwner: null });
+    expect(response.body.data).toMatchObject({ requesterId, summary: "Cannot access email", itPriority: "MEDIUM", ticketOwner: null });
     expect(await db.ticket.count({ where: { requesterId, idempotencyKey: key } })).toBe(1);
     expect(JSON.stringify(response.body)).not.toMatch(/creationFingerprint|creationResponse|idempotencyKey|storedName/);
   });

@@ -44,7 +44,7 @@ beforeAll(async () => {
   db = new PrismaClient({ datasources: { db: { url: url.toString() } } });
   await seedDatabase(db);
 
-  const activeRequesters = await db.requesterUser.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
+  const activeRequesters = await db.user.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
   requesterAId = activeRequesters[0].id;
   requesterBId = activeRequesters[1].id;
 
@@ -61,6 +61,7 @@ beforeAll(async () => {
       summary: "Printer toner leaking",
       description: "Toner is leaking all over tray 2 in building B.",
       requestedPriority: "MEDIUM",
+      itPriority: "MEDIUM",
       idempotencyKey: randomUUID(),
     },
   });
@@ -75,6 +76,7 @@ beforeAll(async () => {
       summary: "Email sync error",
       description: "Outlook mobile client not receiving incoming mail.",
       requestedPriority: "LOW",
+      itPriority: "LOW",
       idempotencyKey: randomUUID(),
     },
   });

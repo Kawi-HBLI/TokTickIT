@@ -36,10 +36,10 @@ beforeAll(async () => {
   db = new PrismaClient({ datasources: { db: { url: url.toString() } } });
   await seedDatabase(db);
 
-  const activeRequesters = await db.requesterUser.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
+  const activeRequesters = await db.user.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
   requesterAId = activeRequesters[0].id;
   requesterBId = activeRequesters[1].id;
-  inactiveRequesterId = (await db.requesterUser.findFirstOrThrow({ where: { isActive: false } })).id;
+  inactiveRequesterId = (await db.user.findFirstOrThrow({ where: { isActive: false } })).id;
 
   const categories = await db.category.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
   category1Id = categories[0].id;
@@ -57,6 +57,7 @@ beforeAll(async () => {
       summary: "Network VPN disconnects constantly",
       description: "VPN drops every 5 minutes when connecting from home.",
       requestedPriority: "HIGH",
+      itPriority: "HIGH",
       idempotencyKey: randomUUID(),
       createdAt: new Date("2026-09-01T10:00:00Z"),
       updatedAt: new Date("2026-09-01T10:00:00Z"),
@@ -71,6 +72,7 @@ beforeAll(async () => {
       summary: "Monitor screen flickering issue",
       description: "The second display flickers intermittently.",
       requestedPriority: "LOW",
+      itPriority: "LOW",
       idempotencyKey: randomUUID(),
       createdAt: new Date("2026-09-02T10:00:00Z"),
       updatedAt: new Date("2026-09-02T12:00:00Z"),
@@ -85,6 +87,7 @@ beforeAll(async () => {
       summary: "Server access token expired",
       description: "Cannot access development server with current token.",
       requestedPriority: "CRITICAL",
+      itPriority: "CRITICAL",
       idempotencyKey: randomUUID(),
       createdAt: new Date("2026-09-03T08:00:00Z"),
       updatedAt: new Date("2026-09-03T15:00:00Z"),
@@ -125,6 +128,7 @@ beforeAll(async () => {
       summary: "Requester B confidential ticket",
       description: "This should never be visible to Requester A.",
       requestedPriority: "MEDIUM",
+      itPriority: "MEDIUM",
       idempotencyKey: randomUUID(),
       createdAt: new Date("2026-09-04T09:00:00Z"),
       updatedAt: new Date("2026-09-04T09:00:00Z"),
@@ -318,7 +322,7 @@ describe("GET /api/tickets - My Tickets API", () => {
 
   describe("API-LIST-04: Empty state vs no search results", () => {
     it("returns 200 with empty data when Requester owns 0 tickets", async () => {
-      const activeRequesters = await db.requesterUser.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
+      const activeRequesters = await db.user.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
       const requesterC = activeRequesters[2]; // owns 0 tickets
 
       const res = await request(app)

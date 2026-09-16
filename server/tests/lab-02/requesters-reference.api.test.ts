@@ -22,7 +22,7 @@ describe("Development Requester API", () => {
 
   it("returns a safe retryable error when reference data fails", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.spyOn(getPrisma().requesterUser, "findMany").mockRejectedValueOnce(new Error("private DB detail"));
+    vi.spyOn(getPrisma().user, "findMany").mockRejectedValueOnce(new Error("private DB detail"));
     const response = await request(app).get("/api/requesters");
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: {
@@ -34,7 +34,7 @@ describe("Development Requester API", () => {
   });
 
   it("returns an empty data array when no active Requesters exist", async () => {
-    vi.spyOn(getPrisma().requesterUser, "findMany").mockResolvedValueOnce([]);
+    vi.spyOn(getPrisma().user, "findMany").mockResolvedValueOnce([]);
 
     const response = await request(app).get("/api/requesters");
 

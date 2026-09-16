@@ -31,7 +31,7 @@ describe("Development Requester context", () => {
   );
 
   it("accepts an active requester and exposes the verified record downstream", async () => {
-    const active = await getPrisma().requesterUser.findFirstOrThrow({ where: { isActive: true } });
+    const active = await getPrisma().user.findFirstOrThrow({ where: { isActive: true } });
 
     const response = await request(createProbe())
       .post("/probe")
@@ -46,7 +46,7 @@ describe("Development Requester context", () => {
   });
 
   it("rejects unknown and inactive requester IDs", async () => {
-    const inactive = await getPrisma().requesterUser.findFirstOrThrow({ where: { isActive: false } });
+    const inactive = await getPrisma().user.findFirstOrThrow({ where: { isActive: false } });
 
     for (const id of [inactive.id, 2_147_483_647]) {
       const response = await request(createProbe())
@@ -60,7 +60,7 @@ describe("Development Requester context", () => {
 
   it("returns a safe retryable error when context verification fails", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.spyOn(getPrisma().requesterUser, "findFirst").mockRejectedValueOnce(
+    vi.spyOn(getPrisma().user, "findFirst").mockRejectedValueOnce(
       new Error("private DB detail"),
     );
 
