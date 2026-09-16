@@ -1,7 +1,7 @@
 import { Router, ErrorRequestHandler } from "express";
 import { createReadStream } from "node:fs";
 import { getPrisma } from "./prisma.js";
-import { requireRequester } from "./requester-context.js";
+import { requireRequester, requireRequesterWrite } from "./requester-context.js";
 import { TicketError, positiveId } from "./ticket-validation.js";
 import { attachmentStorage, contentDispositionHeader, safeFilename } from "./attachment-storage.js";
 
@@ -15,12 +15,11 @@ attachmentsRouter.get("/:id/preview", requireRequester, async (req, res, next) =
       throw new TicketError(400, "VALIDATION_ERROR", "Invalid attachment ID.");
     }
 
-    const attachment = await getPrisma().attachment.findUnique({
-      where: { id },
-      include: { ticket: { select: { requesterId: true } } },
+    const attachment = await getPrisma().attachment.findFirst({
+      where: { id, ticket: { requesterId: req.requester!.id } },
     });
 
-    if (!attachment || attachment.ticket.requesterId !== req.requester!.id) {
+    if (!attachment) {
       throw new TicketError(404, "ATTACHMENT_NOT_FOUND", "Attachment not found.");
     }
 
@@ -53,12 +52,11 @@ attachmentsRouter.get("/:id/download", requireRequester, async (req, res, next) 
       throw new TicketError(400, "VALIDATION_ERROR", "Invalid attachment ID.");
     }
 
-    const attachment = await getPrisma().attachment.findUnique({
-      where: { id },
-      include: { ticket: { select: { requesterId: true } } },
+    const attachment = await getPrisma().attachment.findFirst({
+      where: { id, ticket: { requesterId: req.requester!.id } },
     });
 
-    if (!attachment || attachment.ticket.requesterId !== req.requester!.id) {
+    if (!attachment) {
       throw new TicketError(404, "ATTACHMENT_NOT_FOUND", "Attachment not found.");
     }
 
@@ -84,7 +82,7 @@ attachmentsRouter.get("/:id/download", requireRequester, async (req, res, next) 
 });
 
 // DELETE /api/attachments/:id
-attachmentsRouter.delete("/:id", requireRequester, async (req, res, next) => {
+attachmentsRouter.delete("/:id", requireRequesterWrite, async (req, res, next) => {
   try {
     const id = positiveId(req.params.id);
     if (!id) {
@@ -120,12 +118,11 @@ attachmentsRouter.delete("/:id", requireRequester, async (req, res, next) => {
     });
 
     if (updateResult.count === 0) {
-      const existing = await db.attachment.findUnique({
-        where: { id },
-        include: { ticket: { select: { requesterId: true } } },
+      const existing = await db.attachment.findFirst({
+        where: { id, ticket: { requesterId: req.requester!.id } },
       });
 
-      if (!existing || existing.ticket.requesterId !== req.requester!.id) {
+      if (!existing) {
         throw new TicketError(404, "ATTACHMENT_NOT_FOUND", "Attachment not found.");
       }
 

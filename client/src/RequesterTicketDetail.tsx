@@ -40,7 +40,7 @@ export default function RequesterTicketDetail({
     setLoading(true);
     setError(null);
 
-    getTicketDetail(currentRequester.id, ticketId)
+    getTicketDetail(ticketId)
       .then((data) => {
         if (!active) return;
         setTicket(data);

@@ -2,8 +2,6 @@ import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useRef, useState } fr
 import {
   AttachmentItem,
   downloadAttachmentFile,
-  getAttachmentDownloadUrl,
-  getAttachmentPreviewUrl,
   getTicketAttachments,
   previewAttachmentFile,
   removeAttachment,
@@ -136,7 +134,7 @@ export default function AttachmentSection({
 
     setUploading(true);
     try {
-      await uploadAttachmentsToTicket(currentRequester.id, ticketId, files);
+      await uploadAttachmentsToTicket(ticketId, files);
       setStatusMessage(`Uploaded ${files.length} file(s) successfully.`);
     } catch (err: any) {
       setUploadError(err.message || "Failed to upload attachments.");
@@ -145,7 +143,7 @@ export default function AttachmentSection({
     }
 
     try {
-      const refreshed = await getTicketAttachments(currentRequester.id, ticketId);
+      const refreshed = await getTicketAttachments(ticketId);
       setAttachments(refreshed.data);
       setRefreshError(null);
     } catch {
@@ -176,7 +174,7 @@ export default function AttachmentSection({
     }
 
     try {
-      const { blob } = await previewAttachmentFile(currentRequester.id, att.id);
+      const { blob } = await previewAttachmentFile(att.id);
       const url = URL.createObjectURL(blob);
       if (previewWindow && !previewWindow.closed) {
         previewWindow.location.href = url;
@@ -206,7 +204,7 @@ export default function AttachmentSection({
     setUploadError(null);
     setDownloadingId(att.id);
     try {
-      const { blob } = await downloadAttachmentFile(currentRequester.id, att.id);
+      const { blob } = await downloadAttachmentFile(att.id);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -225,7 +223,7 @@ export default function AttachmentSection({
   async function handleRetryRefresh() {
     if (!currentRequester) return;
     try {
-      const refreshed = await getTicketAttachments(currentRequester.id, ticketId);
+      const refreshed = await getTicketAttachments(ticketId);
       setAttachments(refreshed.data);
       setRefreshError(null);
     } catch (err: any) {
@@ -295,7 +293,7 @@ export default function AttachmentSection({
     const targetId = removingAttachment.id;
 
     try {
-      const res = await removeAttachment(currentRequester.id, targetId, trimmed);
+      const res = await removeAttachment(targetId, trimmed);
       // Immediately update local state using the DELETE response data so file is marked removed
       setAttachments((prev) =>
         prev.map((att) => (att.id === targetId ? res.data : att))
@@ -309,7 +307,7 @@ export default function AttachmentSection({
     }
 
     try {
-      const refreshed = await getTicketAttachments(currentRequester.id, ticketId);
+      const refreshed = await getTicketAttachments(ticketId);
       setAttachments(refreshed.data);
       setRefreshError(null);
     } catch {

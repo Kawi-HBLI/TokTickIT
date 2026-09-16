@@ -3,7 +3,7 @@ import multer from "multer";
 import { randomUUID, createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { getPrisma } from "./prisma.js";
-import { requireRequester } from "./requester-context.js";
+import { requireRequester, requireRequesterWrite } from "./requester-context.js";
 import { TicketError, validateTicket, positiveId } from "./ticket-validation.js";
 import { validateTicketQuery } from "./ticket-query.js";
 import { attachmentStorage, MAX_FILE_BYTES, validateFiles } from "./attachment-storage.js";
@@ -125,7 +125,7 @@ createTicketRouter.get("/", requireRequester, async (req, res, next) => {
     next(error);
   }
 });
-createTicketRouter.post("/", requireRequester, (req, _res, next) => {
+createTicketRouter.post("/", requireRequesterWrite, (req, _res, next) => {
   const key = req.header("Idempotency-Key");
   if (!key || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key))
     return next(new TicketError(400, "IDEMPOTENCY_KEY_REQUIRED", "A valid UUID Idempotency-Key is required."));
@@ -216,12 +216,12 @@ createTicketRouter.get("/:ticketId/attachments", requireRequester, async (req, r
       throw new TicketError(400, "VALIDATION_ERROR", "Invalid ticket ID.");
     }
 
-    const ticket = await getPrisma().ticket.findUnique({
-      where: { id: ticketId },
-      select: { id: true, requesterId: true },
+    const ticket = await getPrisma().ticket.findFirst({
+      where: { id: ticketId, requesterId: req.requester!.id },
+      select: { id: true },
     });
 
-    if (!ticket || ticket.requesterId !== req.requester!.id) {
+    if (!ticket) {
       throw new TicketError(404, "TICKET_NOT_FOUND", "Ticket not found.");
     }
 
@@ -264,7 +264,7 @@ createTicketRouter.get("/:ticketId/attachments", requireRequester, async (req, r
 // POST /api/tickets/:ticketId/attachments
 createTicketRouter.post(
   "/:ticketId/attachments",
-  requireRequester,
+  requireRequesterWrite,
   (req, res, next) => {
     upload.array("attachments", 5)(req, res, (error) => {
       if (
@@ -285,12 +285,12 @@ createTicketRouter.post(
         throw new TicketError(400, "VALIDATION_ERROR", "Invalid ticket ID.");
       }
 
-      const ticket = await getPrisma().ticket.findUnique({
-        where: { id: ticketId },
-        select: { id: true, requesterId: true },
+      const ticket = await getPrisma().ticket.findFirst({
+        where: { id: ticketId, requesterId: req.requester!.id },
+        select: { id: true },
       });
 
-      if (!ticket || ticket.requesterId !== req.requester!.id) {
+      if (!ticket) {
         throw new TicketError(404, "TICKET_NOT_FOUND", "Ticket not found.");
       }
 
@@ -376,8 +376,8 @@ createTicketRouter.get("/:ticketId", requireRequester, async (req, res, next) =>
       throw new TicketError(400, "VALIDATION_ERROR", "Invalid ticket ID.");
     }
 
-    const ticket = await getPrisma().ticket.findUnique({
-      where: { id: ticketId },
+    const ticket = await getPrisma().ticket.findFirst({
+      where: { id: ticketId, requesterId: req.requester!.id },
       select: {
         id: true,
         ticketNumber: true,
@@ -417,7 +417,7 @@ createTicketRouter.get("/:ticketId", requireRequester, async (req, res, next) =>
       },
     });
 
-    if (!ticket || ticket.requesterId !== req.requester!.id) {
+    if (!ticket) {
       throw new TicketError(404, "TICKET_NOT_FOUND", "Ticket not found.");
     }
 

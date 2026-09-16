@@ -2,7 +2,6 @@ import { KeyboardEvent, useEffect, useRef, useState } from "react";
 import { checkSystem, Category } from "./api.js";
 import CreateTicket from "./CreateTicket.js";
 import MyTickets from "./MyTickets.js";
-import RequesterSelector from "./RequesterSelector.js";
 import { RequesterProvider, useRequester } from "./RequesterContext.js";
 
 import RequesterTicketDetail from "./RequesterTicketDetail.js";
@@ -60,8 +59,7 @@ function SystemDiagnostics() {
 }
 
 function AppContent() {
-  const { currentRequester } = useRequester();
-  const [isChanging, setIsChanging] = useState(false);
+  const { currentRequester, loadState, retry } = useRequester();
   const [route, setRoute] = useState<string>(() => {
     const path = window.location.pathname;
     if (path === "/tickets/new") return "/tickets/new";
@@ -70,7 +68,7 @@ function AppContent() {
   });
   const [isDirty, setIsDirty] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
-  const [confirmation, setConfirmation] = useState<"switch" | "cancel" | null>(null);
+  const [confirmation, setConfirmation] = useState<"cancel" | null>(null);
   const keepEditingButton = useRef<HTMLButtonElement>(null);
   const confirmButton = useRef<HTMLButtonElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -97,7 +95,7 @@ function AppContent() {
     if (!confirmation) previousFocus.current?.focus();
   }, [confirmation]);
 
-  function openConfirmation(kind: "switch" | "cancel") {
+  function openConfirmation(kind: "cancel") {
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setConfirmation(kind);
   }
@@ -110,16 +108,10 @@ function AppContent() {
     window.history.pushState({}, "", next);
     setRoute(next);
   }
-  function beginChangeRequester() {
-    if (isBusy) return;
-    if (route === "/tickets/new" && isDirty) { openConfirmation("switch"); return; }
-    setIsChanging(true);
-  }
   function confirmDiscard() {
     const action = confirmation;
     setConfirmation(null);
     setIsDirty(false);
-    if (action === "switch") setIsChanging(true);
     if (action === "cancel") { window.history.pushState({}, "", "/tickets"); setRoute("/tickets"); }
   }
   function handleDialogKeyDown(event: KeyboardEvent<HTMLElement>) {
@@ -138,7 +130,7 @@ function AppContent() {
   return (
     <main className="app-page" id="top">
       <div ref={contentRef}>
-      {currentRequester && !isChanging ? (
+      {currentRequester && currentRequester.role === "REQUESTER" ? (
         <>
           <header className="app-shell">
               <a className="shell-brand" href="#top" aria-label="TokTickIT home">TokTickIT</a>
@@ -147,11 +139,8 @@ function AppContent() {
               <button type="button" className={route === "/tickets/new" ? "nav-link active" : "nav-link"} aria-current={route === "/tickets/new" ? "page" : undefined} disabled={isBusy} onClick={() => navigate("/tickets/new")}>Create Ticket</button>
             </nav>
             <div className="requester-identity">
-              <span>Development Requester</span>
+              <span>{currentRequester.role === "REQUESTER" ? "Requester" : currentRequester.role}</span>
               <strong>{currentRequester.name}</strong>
-              <button className="link-button" type="button" onClick={beginChangeRequester} disabled={isBusy}>
-                Change Requester
-              </button>
             </div>
           </header>
           {route === "/tickets/new" ? (
@@ -162,9 +151,14 @@ function AppContent() {
             <MyTickets onNavigate={navigate} />
           )}
         </>
+      ) : currentRequester ? (
+        <section className="requester-card" aria-labelledby="auth-forbidden-title"><h1 id="auth-forbidden-title">Requester workspace unavailable</h1><p className="state-message" role="alert">Your account does not have permission to use Requester ticket screens.</p></section>
+      ) : loadState === "loading" ? (
+        <section className="requester-card" aria-labelledby="auth-loading-title"><h1 id="auth-loading-title">Loading TokTickIT…</h1><p className="state-message" role="status" aria-live="polite">Restoring your secure session.</p></section>
+      ) : loadState === "unauthenticated" ? (
+        <section className="requester-card" aria-labelledby="auth-required-title"><h1 id="auth-required-title">Sign in required</h1><p className="state-message">Your TokTickIT session is not available.</p><a className="btn btn-success" href="/login">Go to Sign in</a></section>
       ) : (
-        <RequesterSelector isChanging={isChanging} onCancel={() => setIsChanging(false)}
-          onContinue={() => setIsChanging(false)} />
+        <section className="requester-card" aria-labelledby="auth-error-title"><h1 id="auth-error-title">We could not restore your session</h1><p className="state-message state-message-error" role="alert">Please try again.</p><button className="btn btn-outline-success" type="button" onClick={() => void retry()}>Retry</button></section>
       )}
       <SystemDiagnostics />
       </div>
