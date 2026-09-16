@@ -56,6 +56,7 @@ function createTicket(idempotencyKey = randomUUID()) {
       summary: "Database regression test",
       description: "Verify the database-generated ticket number.",
       requestedPriority: "MEDIUM",
+      itPriority: "MEDIUM",
     },
   });
 }
@@ -87,7 +88,7 @@ describe("Lab 2 database migrations and persistence", () => {
     const ticket = await createTicket();
     expect(ticket.ticketNumber).toBe(`TKT-${year}-${suffix}`);
     expect(ticket.currentStatus).toBe("NEW");
-    expect(ticket.itPriority).toBeNull();
+    expect(ticket.itPriority).toBe("MEDIUM");
     expect(ticket.ticketOwner).toBeNull();
   });
 

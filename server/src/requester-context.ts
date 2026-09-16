@@ -43,7 +43,7 @@ export async function requireRequester(req: Request, res: Response, next: NextFu
 
   try {
     const requester = await getPrisma().user.findFirst({
-      where: { id: requesterId, isActive: true },
+      where: { id: requesterId, isActive: true, role: "REQUESTER" },
     });
     if (!requester) {
       contextError(

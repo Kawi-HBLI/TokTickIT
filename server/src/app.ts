@@ -14,7 +14,7 @@ app.use(cors({
   origin: process.env.CLIENT_ORIGIN ?? "http://localhost:5173",
   credentials: true,
   methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Idempotency-Key", "X-CSRF-Token"],
+  allowedHeaders: ["Content-Type", "Idempotency-Key", "X-CSRF-Token", "X-Requester-Id"],
   exposedHeaders: ["Idempotency-Replayed"],
 }));
 app.use(express.json());
@@ -50,7 +50,7 @@ app.get("/api/categories", async (_req: Request, res: Response) => {
 app.get("/api/requesters", async (_req: Request, res: Response) => {
   try {
     const requesters = await getPrisma().user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, role: "REQUESTER" },
       select: { id: true, name: true, email: true, department: true, isActive: true },
       orderBy: [{ name: "asc" }, { id: "asc" }],
     });

@@ -19,6 +19,13 @@ enum TicketPriority {
 
 enum TicketStatus {
   NEW
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_REQUESTER
+  RESOLVED
+  CLOSED
+  REOPENED
+  CANCELLED
 }
 
 enum UserRole {
@@ -44,6 +51,9 @@ model User {
   ownedTickets       Ticket[]     @relation("TicketOwner")
   removedAttachments Attachment[] @relation("AttachmentRemovedBy")
   sessions           Session[]
+  publicComments     PublicComment[] @relation("PublicCommentAuthor")
+  internalNotes      InternalNote[] @relation("InternalNoteAuthor")
+  resolutionIndications Ticket[] @relation("ResolutionIndicatedBy")
 }
 
 model Session {
@@ -91,23 +101,55 @@ model Ticket {
   summary             String
   description         String
   requestedPriority   TicketPriority
-  itPriority          TicketPriority?
+  itPriority          TicketPriority
   currentStatus       TicketStatus    @default(NEW)
   ticketOwner         String?
   ownerId             Int?
+  requesterResolutionIndicatedAt   DateTime?
+  requesterResolutionIndicatedById Int?
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
   requester           User            @relation("TicketRequester", fields: [requesterId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   owner               User?           @relation("TicketOwner", fields: [ownerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  requesterResolutionIndicatedBy User? @relation("ResolutionIndicatedBy", fields: [requesterResolutionIndicatedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
   category            Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   relatedSystem       RelatedSystem   @relation(fields: [relatedSystemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   attachments         Attachment[]
+  publicComments      PublicComment[]
+  internalNotes       InternalNote[]
 
   @@unique([requesterId, idempotencyKey])
   @@index([requesterId, updatedAt])
   @@index([requesterId, categoryId])
   @@index([requesterId, requestedPriority])
   @@index([ownerId])
+  @@index([currentStatus, updatedAt])
+  @@index([itPriority, updatedAt])
+  @@index([requesterResolutionIndicatedById])
+}
+
+model PublicComment {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  authorId  Int
+  content   String
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  author    User     @relation("PublicCommentAuthor", fields: [authorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([ticketId, createdAt])
+}
+
+model InternalNote {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  authorId  Int
+  content   String
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  author    User     @relation("InternalNoteAuthor", fields: [authorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([ticketId, createdAt])
 }
 
 model Attachment {

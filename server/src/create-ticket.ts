@@ -166,7 +166,15 @@ createTicketRouter.post("/", requireRequester, (req, _res, next) => {
       if (!await tx.relatedSystem.findFirst({ where: { id: payload.relatedSystemId, isActive: true } }))
         fields.push({ field: "relatedSystemId", message: "Choose an active Related System." });
       if (fields.length) throw new TicketError(400, "VALIDATION_ERROR", "Some values are invalid.", fields);
-      const ticket = await tx.ticket.create({ data: { ...payload, requesterId, idempotencyKey: key, creationFingerprint: fingerprint } });
+      const ticket = await tx.ticket.create({
+        data: {
+          ...payload,
+          requesterId,
+          idempotencyKey: key,
+          creationFingerprint: fingerprint,
+          itPriority: payload.requestedPriority,
+        },
+      });
       const warnings: { code: string; filename: string; message: string }[] = [];
       for (const { file, originalName, extension } of files) {
         const storedName = `${randomUUID()}${extension}`;
