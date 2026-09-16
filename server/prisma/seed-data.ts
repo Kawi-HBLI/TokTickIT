@@ -22,3 +22,14 @@ export const requesterUsers = [
   { name: "Diego Santos", email: "diego.santos@toktickit.local", department: "Student Services", isActive: true },
   { name: "Inactive Requester", email: "inactive.requester@toktickit.local", department: "Former Staff", isActive: false },
 ] as const;
+
+export const staffUsers = [
+  { name: "Ethan Brooks", email: "ethan.brooks@toktickit.local", department: "IT Operations", isActive: true },
+  { name: "Farah Malik", email: "farah.malik@toktickit.local", department: "IT Operations", isActive: true },
+  { name: "Gavin Lee", email: "gavin.lee@toktickit.local", department: "IT Operations", isActive: true },
+  { name: "Inactive IT Staff", email: "inactive.staff@toktickit.local", department: "IT Operations", isActive: false },
+] as const;
+
+export const administratorUsers = [
+  { name: "Harper Morgan", email: "harper.morgan@toktickit.local", department: "IT Governance", isActive: true },
+] as const;

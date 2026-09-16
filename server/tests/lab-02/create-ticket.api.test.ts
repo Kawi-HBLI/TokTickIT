@@ -35,9 +35,9 @@ beforeAll(async () => {
   });
   db = new PrismaClient({ datasources: { db: { url: url.toString() } } });
   await seedDatabase(db);
-  const active = await db.requesterUser.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
+  const active = await db.user.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
   requesterId = active[0].id; otherId = active[1].id;
-  inactiveId = (await db.requesterUser.findFirstOrThrow({ where: { isActive: false } })).id;
+  inactiveId = (await db.user.findFirstOrThrow({ where: { isActive: false } })).id;
   categoryId = (await db.category.findFirstOrThrow()).id;
   relatedSystemId = (await db.relatedSystem.findFirstOrThrow()).id;
   inactiveCategory = (await db.category.create({ data: { id: 1001, name: "Inactive test category", isActive: false } })).id;

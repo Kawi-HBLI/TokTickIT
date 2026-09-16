@@ -3,13 +3,20 @@ import cors from "cors";
 import { getPrisma } from "./prisma.js";
 import { createTicketRouter } from "./create-ticket.js";
 import { attachmentsRouter } from "./attachments-router.js";
+import { authRouter } from "./auth.js";
 
 
 // The Express app is exported separately from app.listen() (see index.ts) so
 // Supertest can import `app` without opening a port. Do not merge these files.
 export const app = express();
 
-app.use(cors({ exposedHeaders: ["Idempotency-Replayed"] }));
+app.use(cors({
+  origin: process.env.CLIENT_ORIGIN ?? "http://localhost:5173",
+  credentials: true,
+  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Idempotency-Key", "X-CSRF-Token"],
+  exposedHeaders: ["Idempotency-Replayed"],
+}));
 app.use(express.json());
 
 // ---------------------------------------------------------------------------
@@ -20,6 +27,8 @@ app.use(express.json());
 app.get("/api/health", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok", service: "TokTickIT API" });
 });
+
+app.use("/api/auth", authRouter);
 
 // ---------------------------------------------------------------------------
 // Issue 4 — Category list
@@ -40,7 +49,7 @@ app.get("/api/categories", async (_req: Request, res: Response) => {
 
 app.get("/api/requesters", async (_req: Request, res: Response) => {
   try {
-    const requesters = await getPrisma().requesterUser.findMany({
+    const requesters = await getPrisma().user.findMany({
       where: { isActive: true },
       select: { id: true, name: true, email: true, department: true, isActive: true },
       orderBy: [{ name: "asc" }, { id: "asc" }],

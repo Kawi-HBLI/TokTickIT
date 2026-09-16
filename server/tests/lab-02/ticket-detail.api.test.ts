@@ -35,7 +35,7 @@ beforeAll(async () => {
   db = new PrismaClient({ datasources: { db: { url: url.toString() } } });
   await seedDatabase(db);
 
-  const activeRequesters = await db.requesterUser.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
+  const activeRequesters = await db.user.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
   requesterAId = activeRequesters[0].id;
   requesterBId = activeRequesters[1].id;
 
