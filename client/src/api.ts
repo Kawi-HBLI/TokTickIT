@@ -488,3 +488,94 @@ export async function previewAttachmentFile(first: number, second?: number): Pro
   const contentType = response.headers.get("Content-Type") || "application/octet-stream";
   return { blob, contentType };
 }
+
+export type StaffSortBy = "updatedAt" | "createdAt" | "requestedPriority" | "itPriority" | "status";
+export type StaffSortDirection = "asc" | "desc";
+
+export interface StaffQueueItem {
+  id: number;
+  ticketNumber: string;
+  createdAt: string;
+  updatedAt: string;
+  summary: string;
+  category: { id: number; name: string };
+  requester: { id: number; name: string; email: string };
+  requestedPriority: RequestedPriority;
+  itPriority: RequestedPriority;
+  currentStatus: string;
+  owner: { id: number; name: string; email: string } | null;
+  requesterResolutionIndicatedAt: string | null;
+}
+
+export interface StaffQueueQuery {
+  q?: string;
+  status?: string | null;
+  requestedPriority?: string | null;
+  itPriority?: string | null;
+  categoryId?: number | null;
+  owner?: string | null;
+  sortBy?: StaffSortBy;
+  sortDirection?: StaffSortDirection;
+  page?: number;
+  pageSize?: 10 | 20 | 50;
+}
+
+export interface StaffQueueResponse {
+  data: StaffQueueItem[];
+  pagination: PaginationMeta;
+  query: {
+    q: string;
+    status: string | null;
+    requestedPriority: string | null;
+    itPriority: string | null;
+    categoryId: number | null;
+    owner: string | null;
+    sortBy: StaffSortBy;
+    sortDirection: StaffSortDirection;
+  };
+}
+
+export interface StaffAssignee {
+  id: number;
+  name: string;
+  email: string;
+  role: "IT_STAFF" | "ADMINISTRATOR";
+}
+
+export async function fetchStaffTickets(query?: StaffQueueQuery): Promise<StaffQueueResponse> {
+  const params = new URLSearchParams();
+  if (query?.q) params.set("q", query.q);
+  if (query?.status) params.set("status", query.status);
+  if (query?.requestedPriority) params.set("requestedPriority", query.requestedPriority);
+  if (query?.itPriority) params.set("itPriority", query.itPriority);
+  if (query?.categoryId) params.set("categoryId", String(query.categoryId));
+  if (query?.owner) params.set("owner", query.owner);
+  if (query?.sortBy) params.set("sortBy", query.sortBy);
+  if (query?.sortDirection) params.set("sortDirection", query.sortDirection);
+  if (query?.page) params.set("page", String(query.page));
+  if (query?.pageSize) params.set("pageSize", String(query.pageSize));
+
+  const qs = params.toString();
+  const url = `${API_URL}/api/staff/tickets${qs ? `?${qs}` : ""}`;
+  const response = await fetch(url, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    return readError(response, "Staff ticket queue could not be loaded.");
+  }
+
+  return response.json();
+}
+
+export async function fetchStaffAssignees(): Promise<{ data: StaffAssignee[] }> {
+  const response = await fetch(`${API_URL}/api/staff/assignees`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    return readError(response, "Assignees could not be loaded.");
+  }
+
+  return response.json();
+}
