@@ -4,9 +4,21 @@ import userEvent from "@testing-library/user-event";
 import App from "../../src/App.js";
 import * as api from "../../src/api.js";
 
+const requester = { id: 1, name: "Amina Rahman", email: "amina.rahman@toktickit.local", role: "REQUESTER" as const, isActive: true, mustChangePassword: false, createdAt: "2026-09-17T00:00:00.000Z", updatedAt: "2026-09-17T00:00:00.000Z" };
+
 describe("App", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/api/auth/me")) {
+        return new Response(JSON.stringify({ data: { user: requester, csrfToken: "csrf-test" } }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.includes("/api/tickets")) {
+        return new Response(JSON.stringify({ data: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ data: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
   });
 
   // WORKED EXAMPLE — provided for you.
@@ -29,7 +41,7 @@ describe("App", () => {
 
     render(<App />);
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /check system/i }));
+    await user.click(await screen.findByRole("button", { name: /check system/i }));
 
     expect(await screen.findByText(/online/i)).toBeInTheDocument();
     expect(screen.getByText("Account and Access")).toBeInTheDocument();
@@ -44,7 +56,7 @@ describe("App", () => {
 
     render(<App />);
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /check system/i }));
+    await user.click(await screen.findByRole("button", { name: /check system/i }));
 
     expect(await screen.findByText(/offline/i)).toBeInTheDocument();
     expect(screen.getByText(/backend api is currently unavailable/i)).toBeInTheDocument();

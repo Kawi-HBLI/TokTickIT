@@ -103,7 +103,7 @@ export default function MyTickets({ onNavigate }: MyTicketsProps) {
       pageSize,
     };
 
-    getMyTickets(currentRequester.id, query)
+    getMyTickets(query)
       .then((res) => {
         if (!current) return;
         setTickets(res.data);

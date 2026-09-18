@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import type { User } from "@prisma/client";
-import { getPrisma } from "./prisma.js";
+import { requireAuth, requireCsrf } from "./auth.js";
 
 declare global {
   namespace Express {
@@ -10,59 +10,32 @@ declare global {
   }
 }
 
-function contextError(
-  res: Response,
-  code: "REQUESTER_CONTEXT_REQUIRED" | "INVALID_REQUESTER_CONTEXT",
-  message: string,
-) {
-  return res.status(400).json({
-    error: { code, message, retryable: false },
+function roleError(res: Response) {
+  return res.status(403).json({
+    error: {
+      code: "FORBIDDEN",
+      message: "This operation is available to Requester accounts only.",
+      retryable: false,
+    },
   });
 }
 
 export async function requireRequester(req: Request, res: Response, next: NextFunction) {
-  const raw = req.header("x-requester-id");
-  if (!raw || !/^[1-9]\d*$/.test(raw)) {
-    contextError(
-      res,
-      "REQUESTER_CONTEXT_REQUIRED",
-      "A valid Development Requester header is required.",
-    );
-    return;
-  }
-
-  const requesterId = Number(raw);
-  if (!Number.isSafeInteger(requesterId) || requesterId > 2_147_483_647) {
-    contextError(
-      res,
-      "REQUESTER_CONTEXT_REQUIRED",
-      "A valid Development Requester header is required.",
-    );
-    return;
-  }
-
-  try {
-    const requester = await getPrisma().user.findFirst({
-      where: { id: requesterId, isActive: true, role: "REQUESTER" },
-    });
-    if (!requester) {
-      contextError(
-        res,
-        "INVALID_REQUESTER_CONTEXT",
-        "The Development Requester is unknown or inactive.",
-      );
+  requireAuth(req, res, () => {
+    if (req.auth?.user.role !== "REQUESTER") {
+      roleError(res);
       return;
     }
-    req.requester = requester;
+
+    // The only source of Requester identity is the verified server-side
+    // session. Keep the request property temporarily as a migration seam for
+    // the Lab 2 handlers; no client-controlled header/body value is read.
+    req.requester = req.auth.user;
     next();
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      error: {
-        code: "REQUESTER_CONTEXT_UNAVAILABLE",
-        message: "The Requester context could not be verified.",
-        retryable: true,
-      },
-    });
-  }
+  });
+}
+
+/** Requester-owned writes require both the authenticated role and CSRF. */
+export function requireRequesterWrite(req: Request, res: Response, next: NextFunction) {
+  requireRequester(req, res, () => requireCsrf(req, res, next));
 }

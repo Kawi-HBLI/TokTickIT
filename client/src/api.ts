@@ -140,6 +140,7 @@ export class ApiError extends Error {
     public readonly code?: string,
     public readonly fields: ApiFieldError[] = [],
     public readonly retryable = status !== undefined && status >= 500,
+    public readonly retryAfterSeconds?: number,
   ) {
     super(message);
   }
@@ -158,34 +159,112 @@ export interface Requester {
   isActive: true;
 }
 
-interface RequesterListResponse {
-  data: Requester[];
+export type UserRole = "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR";
+
+export interface CurrentUser {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRole;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export async function getRequesters(): Promise<Requester[]> {
-  const response = await fetch(`${API_URL}/api/requesters`);
-  if (!response.ok) throw new Error("Development Requesters are unavailable");
+export interface AuthenticationResult {
+  user: CurrentUser;
+  csrfToken: string;
+}
 
-  const payload = await response.json() as RequesterListResponse;
-  if (!payload || !Array.isArray(payload.data)) {
-    throw new Error("Invalid Development Requester response");
+let csrfToken: string | null = null;
+
+export function setCsrfToken(token: string | null): void {
+  csrfToken = token;
+}
+
+function csrfHeaders(): HeadersInit {
+  return csrfToken ? { "X-CSRF-Token": csrfToken } : {};
+}
+
+function requestHeaders(headers?: HeadersInit, unsafe = false): HeadersInit {
+  return {
+    ...(unsafe ? csrfHeaders() : {}),
+    ...(headers ?? {}),
+  };
+}
+
+function signalAuthenticationRecovery(code?: string): void {
+  if (typeof window === "undefined") return;
+  if (code === "AUTHENTICATION_REQUIRED" || code === "PASSWORD_CHANGE_REQUIRED") {
+    window.dispatchEvent(new CustomEvent("toktickit:auth-recovery"));
   }
-  return payload.data;
 }
 
-export function requesterHeaders(requesterId: number): HeadersInit {
-  return { "x-requester-id": String(requesterId) };
+function readAuthenticationResult(payload: unknown, status?: number): AuthenticationResult {
+  const data = (payload as { data?: { user?: CurrentUser; csrfToken?: string } } | null)?.data;
+  if (!data?.user || !data.csrfToken) {
+    throw new ApiError("Invalid authentication response.", status, "INVALID_RESPONSE");
+  }
+  setCsrfToken(data.csrfToken);
+  return { user: data.user, csrfToken: data.csrfToken };
 }
 
-async function readError(response: Response, fallback: string): Promise<never> {
-  let payload: { error?: { code?: string; message?: string; fields?: ApiFieldError[]; retryable?: boolean } } | null = null;
-  try { payload = await response.json() as { error?: { code?: string; message?: string; fields?: ApiFieldError[]; retryable?: boolean } }; } catch { /* safe fallback */ }
+export async function getCurrentUser(): Promise<AuthenticationResult> {
+  const response = await fetch(`${API_URL}/api/auth/me`, { credentials: "include" });
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) setCsrfToken(null);
+    return readError(response, "Your session could not be restored.", false);
+  }
+  return readAuthenticationResult(await response.json(), response.status);
+}
+
+export async function login(email: string, password: string): Promise<AuthenticationResult> {
+  const response = await fetch(`${API_URL}/api/auth/login`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.trim(), password }),
+  });
+  if (!response.ok) return readError(response, "We could not sign you in right now. Try again.");
+  return readAuthenticationResult(await response.json(), response.status);
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<AuthenticationResult> {
+  const response = await fetch(`${API_URL}/api/auth/change-password`, {
+    method: "POST",
+    credentials: "include",
+    headers: requestHeaders({ "Content-Type": "application/json" }, true),
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (!response.ok) return readError(response, "We could not change your password right now. Try again.");
+  return readAuthenticationResult(await response.json(), response.status);
+}
+
+export async function logout(): Promise<void> {
+  const response = await fetch(`${API_URL}/api/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+    headers: requestHeaders(undefined, true),
+  });
+  if (!response.ok) return readError(response, "We could not sign you out right now. Try again.");
+  setCsrfToken(null);
+}
+
+async function readError(response: Response, fallback: string, triggerAuthenticationRecovery = true): Promise<never> {
+  let payload: { error?: { code?: string; message?: string; fields?: ApiFieldError[] | Record<string, string>; retryable?: boolean } } | null = null;
+  try { payload = await response.json() as { error?: { code?: string; message?: string; fields?: ApiFieldError[] | Record<string, string>; retryable?: boolean } }; } catch { /* safe fallback */ }
   const error = payload?.error;
-  throw new ApiError(error?.message ?? fallback, response.status, error?.code, error?.fields ?? [], error?.retryable ?? response.status >= 500);
+  const fields = Array.isArray(error?.fields)
+    ? error.fields
+    : Object.entries(error?.fields ?? {}).map(([field, message]) => ({ field, message }));
+  const retryAfter = Number(response.headers.get("Retry-After"));
+  if (triggerAuthenticationRecovery) signalAuthenticationRecovery(error?.code);
+  throw new ApiError(error?.message ?? fallback, response.status, error?.code, fields, error?.retryable ?? response.status >= 500, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined);
 }
 
 export async function getCategories(): Promise<Category[]> {
-  const response = await fetch(`${API_URL}/api/categories`);
+  const response = await fetch(`${API_URL}/api/categories`, { credentials: "include" });
   if (!response.ok) return readError(response, "Categories are unavailable.");
   const payload = await response.json() as { data?: Category[] };
   if (!Array.isArray(payload?.data)) throw new ApiError("Invalid Categories response.");
@@ -193,18 +272,23 @@ export async function getCategories(): Promise<Category[]> {
 }
 
 export async function getRelatedSystems(): Promise<RelatedSystem[]> {
-  const response = await fetch(`${API_URL}/api/related-systems`);
+  const response = await fetch(`${API_URL}/api/related-systems`, { credentials: "include" });
   if (!response.ok) return readError(response, "Related Systems are unavailable.");
   const payload = await response.json() as { data?: RelatedSystem[] };
   if (!Array.isArray(payload?.data)) throw new ApiError("Invalid Related Systems response.");
   return payload.data;
 }
 
+export function createTicket(idempotencyKey: string, input: CreateTicketInput): Promise<CreateTicketResult>;
+/** @deprecated requesterId is ignored; identity comes from the authenticated session. */
+export function createTicket(requesterId: number, idempotencyKey: string, input: CreateTicketInput): Promise<CreateTicketResult>;
 export async function createTicket(
-  requesterId: number,
-  idempotencyKey: string,
-  input: CreateTicketInput,
+  first: string | number,
+  second: string | CreateTicketInput,
+  third?: CreateTicketInput,
 ): Promise<CreateTicketResult> {
+  const idempotencyKey = typeof first === "number" ? second as string : first;
+  const input = (typeof first === "number" ? third : second) as CreateTicketInput;
   const form = new FormData();
   form.set("categoryId", String(input.categoryId));
   form.set("relatedSystemId", String(input.relatedSystemId));
@@ -215,7 +299,8 @@ export async function createTicket(
 
   const response = await fetch(`${API_URL}/api/tickets`, {
     method: "POST",
-    headers: { ...requesterHeaders(requesterId), "Idempotency-Key": idempotencyKey },
+    credentials: "include",
+    headers: requestHeaders({ "Idempotency-Key": idempotencyKey }, true),
     body: form,
   });
   if (!response.ok) return readError(response, "Ticket could not be created. Please try again.");
@@ -224,10 +309,14 @@ export async function createTicket(
   return { data: payload.data, warnings: payload.warnings ?? [], replayed: response.headers.get("Idempotency-Replayed") === "true" };
 }
 
+/** @deprecated requesterId is ignored; identity comes from the authenticated session. */
+export function getMyTickets(query?: TicketQueryState): Promise<MyTicketsResponse>;
+export function getMyTickets(requesterId: number, query?: TicketQueryState): Promise<MyTicketsResponse>;
 export async function getMyTickets(
-  requesterId: number,
-  query?: TicketQueryState,
+  first?: number | TicketQueryState,
+  legacyQuery?: TicketQueryState,
 ): Promise<MyTicketsResponse> {
+  const query = typeof first === "number" ? legacyQuery : first;
   const params = new URLSearchParams();
   if (query?.search?.trim()) params.set("search", query.search.trim());
   if (query?.categoryId) params.set("categoryId", String(query.categoryId));
@@ -239,7 +328,7 @@ export async function getMyTickets(
 
   const url = `${API_URL}/api/tickets${params.toString() ? `?${params.toString()}` : ""}`;
   const response = await fetch(url, {
-    headers: requesterHeaders(requesterId),
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -260,11 +349,11 @@ export async function getMyTickets(
 //        return { online: true, categories }.
 // Throwing on failure lets the UI show a single Offline/error state.
 export async function checkSystem(): Promise<SystemStatus> {
-  const res = await fetch(`${API_URL}/api/health`);
+  const res = await fetch(`${API_URL}/api/health`, { credentials: "include" });
   if (!res.ok) {
     throw new Error("Backend is unavailable");
   }
-  const catRes = await fetch(`${API_URL}/api/categories`);
+  const catRes = await fetch(`${API_URL}/api/categories`, { credentials: "include" });
   if (!catRes.ok) {
     throw new Error("Failed to fetch categories");
   }
@@ -273,12 +362,13 @@ export async function checkSystem(): Promise<SystemStatus> {
   return { online: true, categories };
 }
 
-export async function getTicketDetail(
-  requesterId: number,
-  ticketId: number,
-): Promise<TicketDetail> {
+export function getTicketDetail(ticketId: number): Promise<TicketDetail>;
+/** @deprecated requesterId is ignored; identity comes from the authenticated session. */
+export function getTicketDetail(requesterId: number, ticketId: number): Promise<TicketDetail>;
+export async function getTicketDetail(first: number, second?: number): Promise<TicketDetail> {
+  const ticketId = second ?? first;
   const response = await fetch(`${API_URL}/api/tickets/${ticketId}`, {
-    headers: requesterHeaders(requesterId),
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -293,12 +383,13 @@ export async function getTicketDetail(
   return payload.data;
 }
 
-export async function getTicketAttachments(
-  requesterId: number,
-  ticketId: number,
-): Promise<AttachmentListResponse> {
+export function getTicketAttachments(ticketId: number): Promise<AttachmentListResponse>;
+/** @deprecated requesterId is ignored; identity comes from the authenticated session. */
+export function getTicketAttachments(requesterId: number, ticketId: number): Promise<AttachmentListResponse>;
+export async function getTicketAttachments(first: number, second?: number): Promise<AttachmentListResponse> {
+  const ticketId = second ?? first;
   const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments`, {
-    headers: requesterHeaders(requesterId),
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -308,17 +399,19 @@ export async function getTicketAttachments(
   return response.json();
 }
 
-export async function uploadAttachmentsToTicket(
-  requesterId: number,
-  ticketId: number,
-  files: File[],
-): Promise<AttachmentListResponse> {
+export function uploadAttachmentsToTicket(ticketId: number, files: File[]): Promise<AttachmentListResponse>;
+/** @deprecated requesterId is ignored; identity comes from the authenticated session. */
+export function uploadAttachmentsToTicket(requesterId: number, ticketId: number, files: File[]): Promise<AttachmentListResponse>;
+export async function uploadAttachmentsToTicket(first: number, second: number | File[], third?: File[]): Promise<AttachmentListResponse> {
+  const ticketId = third ? second as number : first;
+  const files = (third ?? second) as File[];
   const formData = new FormData();
   files.forEach((file) => formData.append("attachments", file));
 
   const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments`, {
     method: "POST",
-    headers: requesterHeaders(requesterId),
+    credentials: "include",
+    headers: requestHeaders(undefined, true),
     body: formData,
   });
 
@@ -329,15 +422,17 @@ export async function uploadAttachmentsToTicket(
   return response.json();
 }
 
-export async function removeAttachment(
-  requesterId: number,
-  attachmentId: number,
-  reason: string,
-): Promise<{ data: AttachmentItem }> {
+export function removeAttachment(attachmentId: number, reason: string): Promise<{ data: AttachmentItem }>;
+/** @deprecated requesterId is ignored; identity comes from the authenticated session. */
+export function removeAttachment(requesterId: number, attachmentId: number, reason: string): Promise<{ data: AttachmentItem }>;
+export async function removeAttachment(first: number, second: number | string, third?: string): Promise<{ data: AttachmentItem }> {
+  const attachmentId = third === undefined ? first : second as number;
+  const reason = third ?? second as string;
   const response = await fetch(`${API_URL}/api/attachments/${attachmentId}`, {
     method: "DELETE",
+    credentials: "include",
     headers: {
-      ...requesterHeaders(requesterId),
+      ...requestHeaders(undefined, true),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ reason }),
@@ -358,12 +453,13 @@ export function getAttachmentDownloadUrl(attachmentId: number): string {
   return `${API_URL}/api/attachments/${attachmentId}/download`;
 }
 
-export async function downloadAttachmentFile(
-  requesterId: number,
-  attachmentId: number,
-): Promise<{ blob: Blob; contentType: string }> {
+export function downloadAttachmentFile(attachmentId: number): Promise<{ blob: Blob; contentType: string }>;
+/** @deprecated requesterId is ignored; identity comes from the authenticated session. */
+export function downloadAttachmentFile(requesterId: number, attachmentId: number): Promise<{ blob: Blob; contentType: string }>;
+export async function downloadAttachmentFile(first: number, second?: number): Promise<{ blob: Blob; contentType: string }> {
+  const attachmentId = second ?? first;
   const response = await fetch(`${API_URL}/api/attachments/${attachmentId}/download`, {
-    headers: requesterHeaders(requesterId),
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -375,12 +471,13 @@ export async function downloadAttachmentFile(
   return { blob, contentType };
 }
 
-export async function previewAttachmentFile(
-  requesterId: number,
-  attachmentId: number,
-): Promise<{ blob: Blob; contentType: string }> {
+export function previewAttachmentFile(attachmentId: number): Promise<{ blob: Blob; contentType: string }>;
+/** @deprecated requesterId is ignored; identity comes from the authenticated session. */
+export function previewAttachmentFile(requesterId: number, attachmentId: number): Promise<{ blob: Blob; contentType: string }>;
+export async function previewAttachmentFile(first: number, second?: number): Promise<{ blob: Blob; contentType: string }> {
+  const attachmentId = second ?? first;
   const response = await fetch(`${API_URL}/api/attachments/${attachmentId}/preview`, {
-    headers: requesterHeaders(requesterId),
+    credentials: "include",
   });
 
   if (!response.ok) {

@@ -4,7 +4,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import RequesterTicketDetail from "../../src/RequesterTicketDetail.js";
 import MyTickets from "../../src/MyTickets.js";
 import * as api from "../../src/api.js";
-import { RequesterProvider, REQUESTER_STORAGE_KEY } from "../../src/RequesterContext.js";
+import { RequesterProvider } from "../../src/RequesterContext.js";
 
 const requester: api.Requester = {
   id: 1,
@@ -13,6 +13,7 @@ const requester: api.Requester = {
   department: "Academic Affairs",
   isActive: true,
 };
+const authenticatedRequester = { id: 1, name: requester.name, email: requester.email, role: "REQUESTER" as const, isActive: true, mustChangePassword: false, createdAt: "2026-09-17T00:00:00.000Z", updatedAt: "2026-09-17T00:00:00.000Z" };
 
 const sampleTicket: api.TicketDetail = {
   id: 1,
@@ -58,10 +59,8 @@ const sampleTicket: api.TicketDetail = {
 
 describe("UI-STYLE-01: Zen Green Styles and Responsive Design Tokens", () => {
   beforeEach(() => {
-    sessionStorage.clear();
-    sessionStorage.setItem(REQUESTER_STORAGE_KEY, "1");
     vi.restoreAllMocks();
-    vi.spyOn(api, "getRequesters").mockResolvedValue([requester]);
+    vi.spyOn(api, "getCurrentUser").mockResolvedValue({ user: authenticatedRequester, csrfToken: "csrf-test" });
     vi.spyOn(api, "getTicketDetail").mockResolvedValue(sampleTicket);
     vi.spyOn(api, "getCategories").mockResolvedValue([{ id: 1, name: "Account and Access" }]);
     vi.spyOn(api, "getMyTickets").mockResolvedValue({
