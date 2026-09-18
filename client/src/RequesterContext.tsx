@@ -1,16 +1,23 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
-import { CurrentUser, Requester, getCurrentUser } from "./api.js";
-export const REQUESTER_STORAGE_KEY = "toktickit.requesterId";
-type LoadState = "loading" | "ready" | "empty" | "unauthenticated" | "error";
+import {
+  AuthenticationResult,
+  CurrentUser,
+  changePassword as changePasswordRequest,
+  getCurrentUser,
+  login as loginRequest,
+  logout as logoutRequest,
+  setCsrfToken,
+} from "./api.js";
+export type LoadState = "loading" | "ready" | "unauthenticated" | "error";
 
 interface RequesterContextValue {
-  /** Legacy property name retained while identity now comes from the session. */
   currentRequester: CurrentUser | null;
+  currentUser: CurrentUser | null;
   loadState: LoadState;
-  /** Deprecated compatibility no-op; identity is never selected client-side. */
-  selectRequester: (_id: number) => boolean;
   retry: () => Promise<void>;
-  requesters: Requester[];
+  login: (email: string, password: string) => Promise<AuthenticationResult>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<AuthenticationResult>;
+  logout: () => Promise<void>;
 }
 
 const RequesterContext = createContext<RequesterContextValue | null>(null);
@@ -18,6 +25,12 @@ const RequesterContext = createContext<RequesterContextValue | null>(null);
 export function RequesterProvider({ children }: { children: ReactNode }) {
   const [currentRequester, setCurrentRequester] = useState<CurrentUser | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
+
+  function applyAuthentication(result: AuthenticationResult): AuthenticationResult {
+    setCurrentRequester(result.user);
+    setLoadState("ready");
+    return result;
+  }
 
   async function load() {
     setLoadState("loading");
@@ -32,10 +45,38 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function login(email: string, password: string) {
+    return applyAuthentication(await loginRequest(email, password));
+  }
+
+  async function changePassword(currentPassword: string, newPassword: string) {
+    return applyAuthentication(await changePasswordRequest(currentPassword, newPassword));
+  }
+
+  async function logout() {
+    await logoutRequest();
+    setCsrfToken(null);
+    setCurrentRequester(null);
+    setLoadState("unauthenticated");
+  }
+
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    const recover = () => { void load(); };
+    window.addEventListener("toktickit:auth-recovery", recover);
+    return () => window.removeEventListener("toktickit:auth-recovery", recover);
+  }, []);
 
   return (
-    <RequesterContext.Provider value={{ requesters: [], currentRequester, loadState, selectRequester: () => false, retry: load }}>
+    <RequesterContext.Provider value={{
+      currentRequester,
+      currentUser: currentRequester,
+      loadState,
+      retry: load,
+      login,
+      changePassword,
+      logout,
+    }}>
       {children}
     </RequesterContext.Provider>
   );

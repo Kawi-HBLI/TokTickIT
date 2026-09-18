@@ -3,7 +3,6 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import App from "../../src/App.js";
 import * as api from "../../src/api.js";
-import { REQUESTER_STORAGE_KEY } from "../../src/RequesterContext.js";
 
 const requesterA: api.Requester = {
   id: 1,
@@ -20,6 +19,7 @@ const requesterB: api.Requester = {
   department: "Finance",
   isActive: true,
 };
+const authenticatedRequester = { id: 1, name: requesterA.name, email: requesterA.email, role: "REQUESTER" as const, isActive: true, mustChangePassword: false, createdAt: "2026-09-17T00:00:00.000Z", updatedAt: "2026-09-17T00:00:00.000Z" };
 
 const categories: api.Category[] = [
   { id: 1, name: "Hardware" },
@@ -90,14 +90,12 @@ function makeResponse(tickets: api.TicketListItem[], page = 1, pageSize = 10, to
 describe("My Tickets workflow (UI-LIST-01 to UI-LIST-04)", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    sessionStorage.clear();
     window.history.replaceState({}, "", "/tickets");
-    vi.spyOn(api, "getRequesters").mockResolvedValue([requesterA, requesterB]);
+    vi.spyOn(api, "getCurrentUser").mockResolvedValue({ user: authenticatedRequester, csrfToken: "csrf-test" });
     vi.spyOn(api, "getCategories").mockResolvedValue(categories);
   });
 
   it.each(["success", "failure"])("ignores a stale search %s after a newer result", async (outcome) => {
-    sessionStorage.setItem(REQUESTER_STORAGE_KEY, "1");
     const pending: { resolve: (value: api.MyTicketsResponse) => void; reject: (reason: Error) => void }[] = [];
     vi.spyOn(api, "getMyTickets").mockResolvedValueOnce(makeResponse([ticketA1]))
       .mockImplementation(() => new Promise((resolve, reject) => pending.push({ resolve, reject })));
@@ -118,7 +116,6 @@ describe("My Tickets workflow (UI-LIST-01 to UI-LIST-04)", () => {
   });
 
   it("keeps the current request loading when an older request finishes first", async () => {
-    sessionStorage.setItem(REQUESTER_STORAGE_KEY, "1");
     const pending: ((value: api.MyTicketsResponse) => void)[] = [];
     vi.spyOn(api, "getMyTickets").mockResolvedValueOnce(makeResponse([ticketA1]))
       .mockImplementation(() => new Promise(resolve => pending.push(resolve)));
@@ -133,7 +130,6 @@ describe("My Tickets workflow (UI-LIST-01 to UI-LIST-04)", () => {
   });
 
   it("shows Category loading/failure and retries without clearing other filters", async () => {
-    sessionStorage.setItem(REQUESTER_STORAGE_KEY, "1");
     let rejectCategories!: (error: Error) => void;
     vi.spyOn(api, "getCategories").mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectCategories = reject; }))
       .mockResolvedValueOnce(categories);
@@ -152,19 +148,14 @@ describe("My Tickets workflow (UI-LIST-01 to UI-LIST-04)", () => {
     await waitFor(() => expect(category).toBeEnabled());
     await user.selectOptions(category, "1");
     expect(screen.getByRole("searchbox")).toHaveValue("keyboard");
-    expect(list).toHaveBeenLastCalledWith(1, expect.objectContaining({ search: "keyboard", categoryId: 1, page: 1 }));
+    expect(list).toHaveBeenLastCalledWith(expect.objectContaining({ search: "keyboard", categoryId: 1, page: 1 }));
   });
 
-  describe("UI-LIST-01: Requester-owned list and switching behavior", () => {
-    it("displays requester A's tickets and switches to requester B's tickets when persona changes", async () => {
-      sessionStorage.setItem(REQUESTER_STORAGE_KEY, "1");
+  describe("UI-LIST-01: Requester-owned list", () => {
+    it("displays only the authenticated Requester's tickets", async () => {
       const user = userEvent.setup();
 
-      const getTicketsMock = vi.spyOn(api, "getMyTickets").mockImplementation(async (reqId) => {
-        if (reqId === 1) return makeResponse([ticketA1, ticketA2]);
-        if (reqId === 2) return makeResponse([ticketB1]);
-        return makeResponse([]);
-      });
+      const getTicketsMock = vi.spyOn(api, "getMyTickets").mockResolvedValue(makeResponse([ticketA1, ticketA2]));
 
       render(<App />);
 
@@ -174,23 +165,12 @@ describe("My Tickets workflow (UI-LIST-01 to UI-LIST-04)", () => {
       expect(screen.getAllByText("VPN connection drops frequently").length).toBeGreaterThan(0);
       expect(screen.queryByText("Payroll software calculation error")).not.toBeInTheDocument();
 
-      // Switch to Requester B
-      await user.click(screen.getByRole("button", { name: "Change Requester" }));
-      const requesterSelect = await screen.findByRole("combobox", { name: "Development Requester" });
-      await user.selectOptions(requesterSelect, "2");
-      await user.click(screen.getByRole("button", { name: "Continue" }));
-
-      // Verify Requester B's ticket appears and A's disappear
-      expect((await screen.findAllByText("TKT-2026-00201")).length).toBeGreaterThan(0);
-      expect(screen.getAllByText("Payroll software calculation error").length).toBeGreaterThan(0);
-      expect(screen.queryByText("TKT-2026-00101")).not.toBeInTheDocument();
-      expect(getTicketsMock).toHaveBeenCalledWith(2, expect.anything());
+      expect(getTicketsMock).toHaveBeenCalledWith(expect.objectContaining({ page: 1 }));
     });
   });
 
   describe("UI-LIST-02: Search, combined filters, clear filters, and page reset", () => {
     it("sends updated search and filter parameters and resets page to 1", async () => {
-      sessionStorage.setItem(REQUESTER_STORAGE_KEY, "1");
       const user = userEvent.setup();
 
       const getTicketsMock = vi.spyOn(api, "getMyTickets").mockResolvedValue(makeResponse([ticketA1, ticketA2]));
@@ -202,14 +182,13 @@ describe("My Tickets workflow (UI-LIST-01 to UI-LIST-04)", () => {
       const searchInput = screen.getByRole("searchbox", { name: /search by ticket number or summary/i });
       await user.type(searchInput, "keyboard");
 
-      expect(getTicketsMock).toHaveBeenLastCalledWith(1, expect.objectContaining({ search: "keyboard", page: 1 }));
+      expect(getTicketsMock).toHaveBeenLastCalledWith(expect.objectContaining({ search: "keyboard", page: 1 }));
 
       // Priority filter
       const prioritySelect = screen.getByRole("combobox", { name: /requested priority/i });
       await user.selectOptions(prioritySelect, "HIGH");
 
       expect(getTicketsMock).toHaveBeenLastCalledWith(
-        1,
         expect.objectContaining({ requestedPriority: "HIGH", page: 1 }),
       );
 
@@ -220,7 +199,6 @@ describe("My Tickets workflow (UI-LIST-01 to UI-LIST-04)", () => {
       expect(searchInput).toHaveValue("");
       expect(prioritySelect).toHaveValue("");
       expect(getTicketsMock).toHaveBeenLastCalledWith(
-        1,
         expect.objectContaining({ search: undefined, requestedPriority: null, page: 1 }),
       );
     });
@@ -228,7 +206,6 @@ describe("My Tickets workflow (UI-LIST-01 to UI-LIST-04)", () => {
 
   describe("UI-LIST-03: Sort, page size, pagination controls, and safe error handling", () => {
     it("controls sort, page size, next/previous pagination, and handles errors with retry", async () => {
-      sessionStorage.setItem(REQUESTER_STORAGE_KEY, "1");
       const user = userEvent.setup();
 
       // Page 1 of 2
@@ -245,12 +222,12 @@ describe("My Tickets workflow (UI-LIST-01 to UI-LIST-04)", () => {
 
       // Click next page
       await user.click(nextBtn);
-      expect(getTicketsMock).toHaveBeenLastCalledWith(1, expect.objectContaining({ page: 2 }));
+      expect(getTicketsMock).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }));
 
       // Sort change
       const sortSelect = screen.getByRole("combobox", { name: /sort by/i });
       await user.selectOptions(sortSelect, "createdAt");
-      expect(getTicketsMock).toHaveBeenLastCalledWith(1, expect.objectContaining({ sortBy: "createdAt", page: 1 }));
+      expect(getTicketsMock).toHaveBeenLastCalledWith(expect.objectContaining({ sortBy: "createdAt", page: 1 }));
 
       // API failure error handling and retry
       getTicketsMock.mockRejectedValueOnce(new Error("Network connection error"));
@@ -269,7 +246,6 @@ describe("My Tickets workflow (UI-LIST-01 to UI-LIST-04)", () => {
 
   describe("UI-LIST-04: Empty state vs no search results", () => {
     it("displays empty state with Create Ticket CTA when requester has no tickets", async () => {
-      sessionStorage.setItem(REQUESTER_STORAGE_KEY, "1");
       const user = userEvent.setup();
 
       vi.spyOn(api, "getMyTickets").mockResolvedValue(makeResponse([]));
@@ -287,7 +263,6 @@ describe("My Tickets workflow (UI-LIST-01 to UI-LIST-04)", () => {
     });
 
     it("displays no-results state with Clear Filters CTA when search returns no matches", async () => {
-      sessionStorage.setItem(REQUESTER_STORAGE_KEY, "1");
       const user = userEvent.setup();
 
       vi.spyOn(api, "getMyTickets").mockResolvedValue(makeResponse([]));

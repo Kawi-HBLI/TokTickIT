@@ -15,7 +15,7 @@ app.use(cors({
   credentials: true,
   methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Idempotency-Key", "X-CSRF-Token"],
-  exposedHeaders: ["Idempotency-Replayed"],
+  exposedHeaders: ["Idempotency-Replayed", "Retry-After"],
 }));
 app.use(express.json());
 

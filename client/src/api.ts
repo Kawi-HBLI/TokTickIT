@@ -140,6 +140,7 @@ export class ApiError extends Error {
     public readonly code?: string,
     public readonly fields: ApiFieldError[] = [],
     public readonly retryable = status !== undefined && status >= 500,
+    public readonly retryAfterSeconds?: number,
   ) {
     super(message);
   }
@@ -171,6 +172,11 @@ export interface CurrentUser {
   updatedAt: string;
 }
 
+export interface AuthenticationResult {
+  user: CurrentUser;
+  csrfToken: string;
+}
+
 let csrfToken: string | null = null;
 
 export function setCsrfToken(token: string | null): void {
@@ -188,38 +194,73 @@ function requestHeaders(headers?: HeadersInit, unsafe = false): HeadersInit {
   };
 }
 
-export async function getCurrentUser(): Promise<{ user: CurrentUser; csrfToken: string }> {
+function signalAuthenticationRecovery(code?: string): void {
+  if (typeof window === "undefined") return;
+  if (code === "AUTHENTICATION_REQUIRED" || code === "PASSWORD_CHANGE_REQUIRED") {
+    window.dispatchEvent(new CustomEvent("toktickit:auth-recovery"));
+  }
+}
+
+function readAuthenticationResult(payload: unknown, status?: number): AuthenticationResult {
+  const data = (payload as { data?: { user?: CurrentUser; csrfToken?: string } } | null)?.data;
+  if (!data?.user || !data.csrfToken) {
+    throw new ApiError("Invalid authentication response.", status, "INVALID_RESPONSE");
+  }
+  setCsrfToken(data.csrfToken);
+  return { user: data.user, csrfToken: data.csrfToken };
+}
+
+export async function getCurrentUser(): Promise<AuthenticationResult> {
   const response = await fetch(`${API_URL}/api/auth/me`, { credentials: "include" });
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) setCsrfToken(null);
-    return readError(response, "Your session could not be restored.");
+    return readError(response, "Your session could not be restored.", false);
   }
-  const payload = await response.json() as { data?: { user?: CurrentUser; csrfToken?: string } };
-  if (!payload.data?.user || !payload.data.csrfToken) throw new ApiError("Invalid current-user response.", response.status, "INVALID_RESPONSE");
-  setCsrfToken(payload.data.csrfToken);
-  return { user: payload.data.user, csrfToken: payload.data.csrfToken };
+  return readAuthenticationResult(await response.json(), response.status);
 }
 
-interface RequesterListResponse {
-  data: Requester[];
+export async function login(email: string, password: string): Promise<AuthenticationResult> {
+  const response = await fetch(`${API_URL}/api/auth/login`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.trim(), password }),
+  });
+  if (!response.ok) return readError(response, "We could not sign you in right now. Try again.");
+  return readAuthenticationResult(await response.json(), response.status);
 }
 
-export async function getRequesters(): Promise<Requester[]> {
-  const response = await fetch(`${API_URL}/api/requesters`, { credentials: "include" });
-  if (!response.ok) throw new Error("Development Requesters are unavailable");
-
-  const payload = await response.json() as RequesterListResponse;
-  if (!payload || !Array.isArray(payload.data)) {
-    throw new Error("Invalid Development Requester response");
-  }
-  return payload.data;
+export async function changePassword(currentPassword: string, newPassword: string): Promise<AuthenticationResult> {
+  const response = await fetch(`${API_URL}/api/auth/change-password`, {
+    method: "POST",
+    credentials: "include",
+    headers: requestHeaders({ "Content-Type": "application/json" }, true),
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (!response.ok) return readError(response, "We could not change your password right now. Try again.");
+  return readAuthenticationResult(await response.json(), response.status);
 }
 
-async function readError(response: Response, fallback: string): Promise<never> {
-  let payload: { error?: { code?: string; message?: string; fields?: ApiFieldError[]; retryable?: boolean } } | null = null;
-  try { payload = await response.json() as { error?: { code?: string; message?: string; fields?: ApiFieldError[]; retryable?: boolean } }; } catch { /* safe fallback */ }
+export async function logout(): Promise<void> {
+  const response = await fetch(`${API_URL}/api/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+    headers: requestHeaders(undefined, true),
+  });
+  if (!response.ok) return readError(response, "We could not sign you out right now. Try again.");
+  setCsrfToken(null);
+}
+
+async function readError(response: Response, fallback: string, triggerAuthenticationRecovery = true): Promise<never> {
+  let payload: { error?: { code?: string; message?: string; fields?: ApiFieldError[] | Record<string, string>; retryable?: boolean } } | null = null;
+  try { payload = await response.json() as { error?: { code?: string; message?: string; fields?: ApiFieldError[] | Record<string, string>; retryable?: boolean } }; } catch { /* safe fallback */ }
   const error = payload?.error;
-  throw new ApiError(error?.message ?? fallback, response.status, error?.code, error?.fields ?? [], error?.retryable ?? response.status >= 500);
+  const fields = Array.isArray(error?.fields)
+    ? error.fields
+    : Object.entries(error?.fields ?? {}).map(([field, message]) => ({ field, message }));
+  const retryAfter = Number(response.headers.get("Retry-After"));
+  if (triggerAuthenticationRecovery) signalAuthenticationRecovery(error?.code);
+  throw new ApiError(error?.message ?? fallback, response.status, error?.code, fields, error?.retryable ?? response.status >= 500, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined);
 }
 
 export async function getCategories(): Promise<Category[]> {
