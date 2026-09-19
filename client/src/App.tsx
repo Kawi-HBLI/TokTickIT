@@ -8,6 +8,7 @@ import { RequesterProvider, useRequester } from "./RequesterContext.js";
 import RequesterTicketDetail from "./RequesterTicketDetail.js";
 import StaffTicketQueue from "./StaffTicketQueue.js";
 import StaffTicketDetail from "./StaffTicketDetail.js";
+import UserManagement from "./UserManagement.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
 
@@ -91,10 +92,12 @@ function RoleWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: () => 
           ticketId={parseInt(route.match(/^\/staff\/tickets\/(\d+)$/)![1], 10)}
           onNavigate={navigate}
         />
+      ) : route === "/admin/users" && user.role === "ADMINISTRATOR" ? (
+        <UserManagement onNavigate={navigate} />
       ) : (
         <section className="workspace-card" aria-labelledby="role-workspace-title">
           <h1 id="role-workspace-title">User Management</h1>
-          <p className="page-intro">User Management workflow will be delivered in the next Lab 3 issue.</p>
+          <p className="page-intro">User Management is only accessible to Administrators.</p>
         </section>
       )}
     </main>

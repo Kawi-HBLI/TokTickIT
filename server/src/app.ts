@@ -5,6 +5,7 @@ import { createTicketRouter } from "./create-ticket.js";
 import { attachmentsRouter } from "./attachments-router.js";
 import { authRouter } from "./auth.js";
 import { staffQueueRouter } from "./staff-queue.js";
+import { adminUsersRouter } from "./admin-users.js";
 
 
 // The Express app is exported separately from app.listen() (see index.ts) so
@@ -61,4 +62,5 @@ app.get("/api/related-systems", async (_req, res) => {
 app.use("/api/tickets", createTicketRouter);
 app.use("/api/attachments", attachmentsRouter);
 app.use("/api/staff", staffQueueRouter);
+app.use("/api/admin/users", adminUsersRouter);
 export default app;
