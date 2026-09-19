@@ -20,6 +20,7 @@ vi.mock("../../src/auth.js", () => ({
     }
     next();
   }),
+  requireCsrf: vi.fn((_req, _res, next) => next()),
 }));
 
 const mockPrisma = {

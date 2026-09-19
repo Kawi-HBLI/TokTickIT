@@ -1195,3 +1195,177 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
   }
 }
 
+/* Staff Ticket Detail & Operations Styles */
+.staff-detail-heading {
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #64748b);
+  margin: 0 0 4px 0;
+}
+
+.resolution-indicated-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background-color: #f0fdf4;
+  border: 1px solid #86efac;
+  color: #166534;
+  padding: 14px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.resolution-icon {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #15803d;
+}
+
+.staff-detail-view .staff-workflow-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.workflow-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.workflow-control-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.owner-action-row,
+.priority-action-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.owner-action-row .form-select,
+.priority-action-row .form-select {
+  flex: 1;
+}
+
+.claim-btn {
+  white-space: nowrap;
+}
+
+.conflict-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: 6px;
+}
+
+.discussion-block {
+  margin-top: 20px;
+}
+
+.discussion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.badge-public {
+  background-color: var(--zen-100);
+  color: var(--zen-900);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.internal-notes-block {
+  border: 2px solid #f59e0b;
+  background-color: #fffdf5;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 28px;
+}
+
+.internal-badge {
+  background-color: #fef3c7;
+  color: #92400e;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #fcd34d;
+}
+
+.internal-note-card {
+  border-left: 4px solid #f59e0b !important;
+  background: #ffffff !important;
+  border: 1px solid #fde68a;
+}
+
+.internal-role-badge {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+}
+
+.internal-textarea {
+  border-color: #f59e0b;
+}
+
+.internal-textarea:focus-visible {
+  outline: 3px solid #f59e0b !important;
+}
+
+.divider-line {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 28px 0;
+}
+
+.submit-note-btn {
+  background-color: #d97706;
+  color: #ffffff;
+  border: none;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.submit-note-btn:hover:not(:disabled) {
+  background-color: #b45309;
+}
+
+.submit-note-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 767px) {
+  .workflow-controls-grid {
+    grid-template-columns: 1fr;
+  }
+  .owner-action-row,
+  .priority-action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .internal-notes-block {
+    padding: 14px;
+  }
+}
+
+

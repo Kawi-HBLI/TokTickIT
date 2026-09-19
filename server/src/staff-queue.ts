@@ -1,7 +1,13 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { Prisma, type TicketPriority, type TicketStatus } from "@prisma/client";
 import { getPrisma } from "./prisma.js";
-import { requireAuth } from "./auth.js";
+import { requireAuth, requireCsrf } from "./auth.js";
+import { positiveId } from "./ticket-validation.js";
+import {
+  isValidStatusTransition,
+  clearsResolutionIndication,
+  validateInternalNoteContent,
+} from "./ticket-workflow.js";
 
 export class StaffQueueError extends Error {
   constructor(
@@ -385,6 +391,562 @@ staffQueueRouter.get("/tickets", async (req: Request, res: Response, next: NextF
       error: {
         code: "STAFF_QUEUE_FAILED",
         message: "Ticket queue is temporarily unavailable.",
+        retryable: true,
+      },
+    });
+  }
+});
+
+// GET /api/staff/tickets/:id
+staffQueueRouter.get("/tickets/:id", async (req: Request, res: Response) => {
+  try {
+    const ticketId = positiveId(req.params.id);
+    if (!ticketId) {
+      res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } });
+      return;
+    }
+
+    const ticket = await getPrisma().ticket.findUnique({
+      where: { id: ticketId },
+      include: {
+        category: { select: { id: true, name: true } },
+        relatedSystem: { select: { id: true, name: true } },
+        requester: { select: { id: true, name: true, email: true } },
+        owner: { select: { id: true, name: true, email: true } },
+        requesterResolutionIndicatedBy: { select: { id: true, name: true } },
+        publicComments: {
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            author: { select: { id: true, name: true, role: true } },
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        },
+        internalNotes: {
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            author: { select: { id: true, name: true, role: true } },
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        },
+        attachments: {
+          select: {
+            id: true,
+            originalName: true,
+            mimeType: true,
+            sizeBytes: true,
+            createdAt: true,
+            isRemoved: true,
+            removalReason: true,
+            removedAt: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+
+    if (!ticket) {
+      res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } });
+      return;
+    }
+
+    res.status(200).json({
+      data: {
+        id: ticket.id,
+        ticketNumber: ticket.ticketNumber,
+        createdAt: ticket.createdAt.toISOString(),
+        updatedAt: ticket.updatedAt.toISOString(),
+        summary: ticket.summary,
+        description: ticket.description,
+        category: ticket.category,
+        relatedSystem: ticket.relatedSystem,
+        requester: ticket.requester,
+        owner: ticket.owner ? { id: ticket.owner.id, name: ticket.owner.name, email: ticket.owner.email } : null,
+        requestedPriority: ticket.requestedPriority,
+        itPriority: ticket.itPriority,
+        currentStatus: ticket.currentStatus,
+        requesterResolutionIndicatedAt: ticket.requesterResolutionIndicatedAt
+          ? ticket.requesterResolutionIndicatedAt.toISOString()
+          : null,
+        requesterResolutionIndicatedBy: ticket.requesterResolutionIndicatedBy
+          ? { id: ticket.requesterResolutionIndicatedBy.id, name: ticket.requesterResolutionIndicatedBy.name }
+          : null,
+        publicComments: ticket.publicComments.map((c) => ({
+          id: c.id,
+          content: c.content,
+          createdAt: c.createdAt.toISOString(),
+          author: c.author,
+        })),
+        internalNotes: ticket.internalNotes.map((n) => ({
+          id: n.id,
+          content: n.content,
+          createdAt: n.createdAt.toISOString(),
+          author: n.author,
+        })),
+        attachments: ticket.attachments.map((a) => ({
+          id: a.id,
+          originalName: a.originalName,
+          mimeType: a.mimeType,
+          sizeBytes: a.sizeBytes,
+          createdAt: a.createdAt.toISOString(),
+          isRemoved: a.isRemoved,
+          removalReason: a.removalReason,
+          removedAt: a.removedAt ? a.removedAt.toISOString() : null,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: {
+        code: "STAFF_TICKET_DETAIL_FAILED",
+        message: "Ticket detail is temporarily unavailable.",
+        retryable: true,
+      },
+    });
+  }
+});
+
+// POST /api/staff/tickets/:id/claim
+staffQueueRouter.post("/tickets/:id/claim", requireCsrf, async (req: Request, res: Response) => {
+  try {
+    const ticketId = positiveId(req.params.id);
+    if (!ticketId) {
+      res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } });
+      return;
+    }
+
+    const ticket = await getPrisma().ticket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, ownerId: true },
+    });
+    if (!ticket) {
+      res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } });
+      return;
+    }
+
+    if (ticket.ownerId !== null) {
+      res.status(409).json({
+        error: {
+          code: "TICKET_ALREADY_ASSIGNED",
+          message: "This ticket is already assigned to another staff member.",
+        },
+      });
+      return;
+    }
+
+    const result = await getPrisma().ticket.updateMany({
+      where: { id: ticketId, ownerId: null },
+      data: { ownerId: req.auth!.user.id },
+    });
+
+    if (result.count === 0) {
+      res.status(409).json({
+        error: {
+          code: "TICKET_ALREADY_ASSIGNED",
+          message: "This ticket is already assigned to another staff member.",
+        },
+      });
+      return;
+    }
+
+    const updated = await getPrisma().ticket.findUniqueOrThrow({
+      where: { id: ticketId },
+      include: { owner: { select: { id: true, name: true, email: true } } },
+    });
+
+    res.status(200).json({
+      data: {
+        owner: updated.owner ? { id: updated.owner.id, name: updated.owner.name, email: updated.owner.email } : null,
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: {
+        code: "TICKET_CLAIM_FAILED",
+        message: "We could not claim this ticket right now. Try again.",
+        retryable: true,
+      },
+    });
+  }
+});
+
+// PATCH /api/staff/tickets/:id/owner
+staffQueueRouter.patch("/tickets/:id/owner", requireCsrf, async (req: Request, res: Response) => {
+  try {
+    const ticketId = positiveId(req.params.id);
+    if (!ticketId) {
+      res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } });
+      return;
+    }
+
+    const { ownerId, expectedUpdatedAt } = req.body || {};
+    if (!expectedUpdatedAt || typeof expectedUpdatedAt !== "string" || isNaN(Date.parse(expectedUpdatedAt))) {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Valid expectedUpdatedAt is required." } });
+      return;
+    }
+
+    if (ownerId !== null && (typeof ownerId !== "number" || !Number.isSafeInteger(ownerId) || ownerId <= 0)) {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Valid ownerId is required." } });
+      return;
+    }
+
+    if (ownerId !== null) {
+      const assignee = await getPrisma().user.findUnique({ where: { id: ownerId } });
+      if (!assignee || !assignee.isActive || (assignee.role !== "IT_STAFF" && assignee.role !== "ADMINISTRATOR")) {
+        res.status(409).json({
+          error: {
+            code: "ASSIGNEE_NOT_ELIGIBLE",
+            message: "The selected user cannot be assigned as ticket owner.",
+          },
+        });
+        return;
+      }
+    }
+
+    const ticket = await getPrisma().ticket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, updatedAt: true },
+    });
+    if (!ticket) {
+      res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } });
+      return;
+    }
+
+    const expectedDate = new Date(expectedUpdatedAt);
+    if (ticket.updatedAt.toISOString() !== expectedDate.toISOString()) {
+      res.status(409).json({
+        error: {
+          code: "TICKET_VERSION_CONFLICT",
+          message: "This ticket was modified by another operation. Refresh and try again.",
+        },
+      });
+      return;
+    }
+
+    const updateResult = await getPrisma().ticket.updateMany({
+      where: { id: ticketId, updatedAt: expectedDate },
+      data: { ownerId },
+    });
+
+    if (updateResult.count === 0) {
+      res.status(409).json({
+        error: {
+          code: "TICKET_VERSION_CONFLICT",
+          message: "This ticket was modified by another operation. Refresh and try again.",
+        },
+      });
+      return;
+    }
+
+    const updated = await getPrisma().ticket.findUniqueOrThrow({
+      where: { id: ticketId },
+      include: { owner: { select: { id: true, name: true, email: true } } },
+    });
+
+    res.status(200).json({
+      data: {
+        owner: updated.owner ? { id: updated.owner.id, name: updated.owner.name, email: updated.owner.email } : null,
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: {
+        code: "TICKET_OWNER_UPDATE_FAILED",
+        message: "We could not update the ticket owner right now. Try again.",
+        retryable: true,
+      },
+    });
+  }
+});
+
+// PATCH /api/staff/tickets/:id/priority
+staffQueueRouter.patch("/tickets/:id/priority", requireCsrf, async (req: Request, res: Response) => {
+  try {
+    const ticketId = positiveId(req.params.id);
+    if (!ticketId) {
+      res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } });
+      return;
+    }
+
+    if (req.body?.requestedPriority !== undefined) {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Requested Priority cannot be changed." } });
+      return;
+    }
+
+    const { itPriority, expectedUpdatedAt } = req.body || {};
+    if (!expectedUpdatedAt || typeof expectedUpdatedAt !== "string" || isNaN(Date.parse(expectedUpdatedAt))) {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Valid expectedUpdatedAt is required." } });
+      return;
+    }
+
+    if (!itPriority || typeof itPriority !== "string" || !["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(itPriority)) {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Choose Low, Medium, High, or Critical." } });
+      return;
+    }
+
+    const ticket = await getPrisma().ticket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, updatedAt: true, requestedPriority: true },
+    });
+    if (!ticket) {
+      res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } });
+      return;
+    }
+
+    const expectedDate = new Date(expectedUpdatedAt);
+    if (ticket.updatedAt.toISOString() !== expectedDate.toISOString()) {
+      res.status(409).json({
+        error: {
+          code: "TICKET_VERSION_CONFLICT",
+          message: "This ticket was modified by another operation. Refresh and try again.",
+        },
+      });
+      return;
+    }
+
+    const updateResult = await getPrisma().ticket.updateMany({
+      where: { id: ticketId, updatedAt: expectedDate },
+      data: { itPriority: itPriority as TicketPriority },
+    });
+
+    if (updateResult.count === 0) {
+      res.status(409).json({
+        error: {
+          code: "TICKET_VERSION_CONFLICT",
+          message: "This ticket was modified by another operation. Refresh and try again.",
+        },
+      });
+      return;
+    }
+
+    const updated = await getPrisma().ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    res.status(200).json({
+      data: {
+        requestedPriority: updated.requestedPriority,
+        itPriority: updated.itPriority,
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: {
+        code: "IT_PRIORITY_UPDATE_FAILED",
+        message: "We could not update the IT priority right now. Try again.",
+        retryable: true,
+      },
+    });
+  }
+});
+
+// PATCH /api/staff/tickets/:id/status
+staffQueueRouter.patch("/tickets/:id/status", requireCsrf, async (req: Request, res: Response) => {
+  try {
+    const ticketId = positiveId(req.params.id);
+    if (!ticketId) {
+      res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } });
+      return;
+    }
+
+    const { status, expectedUpdatedAt } = req.body || {};
+    if (!expectedUpdatedAt || typeof expectedUpdatedAt !== "string" || isNaN(Date.parse(expectedUpdatedAt))) {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Valid expectedUpdatedAt is required." } });
+      return;
+    }
+
+    if (!status || typeof status !== "string" || !VALID_STATUSES.includes(status as TicketStatus)) {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Choose a valid ticket status." } });
+      return;
+    }
+
+    const ticket = await getPrisma().ticket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, currentStatus: true, updatedAt: true },
+    });
+    if (!ticket) {
+      res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } });
+      return;
+    }
+
+    const targetStatus = status as TicketStatus;
+    if (!isValidStatusTransition(ticket.currentStatus, targetStatus)) {
+      res.status(409).json({
+        error: {
+          code: "INVALID_STATUS_TRANSITION",
+          message: "This status transition is not permitted.",
+        },
+      });
+      return;
+    }
+
+    const expectedDate = new Date(expectedUpdatedAt);
+    if (ticket.updatedAt.toISOString() !== expectedDate.toISOString()) {
+      res.status(409).json({
+        error: {
+          code: "TICKET_VERSION_CONFLICT",
+          message: "This ticket was modified by another operation. Refresh and try again.",
+        },
+      });
+      return;
+    }
+
+    const updateResult = await getPrisma().ticket.updateMany({
+      where: { id: ticketId, updatedAt: expectedDate },
+      data: clearsResolutionIndication(targetStatus)
+        ? { currentStatus: targetStatus, requesterResolutionIndicatedAt: null, requesterResolutionIndicatedById: null }
+        : { currentStatus: targetStatus },
+    });
+
+    if (updateResult.count === 0) {
+      res.status(409).json({
+        error: {
+          code: "TICKET_VERSION_CONFLICT",
+          message: "This ticket was modified by another operation. Refresh and try again.",
+        },
+      });
+      return;
+    }
+
+    const updated = await getPrisma().ticket.findUniqueOrThrow({
+      where: { id: ticketId },
+      include: { requesterResolutionIndicatedBy: { select: { id: true, name: true } } },
+    });
+
+    res.status(200).json({
+      data: {
+        previousStatus: ticket.currentStatus,
+        currentStatus: updated.currentStatus,
+        requesterResolutionIndicatedAt: updated.requesterResolutionIndicatedAt
+          ? updated.requesterResolutionIndicatedAt.toISOString()
+          : null,
+        requesterResolutionIndicatedBy: updated.requesterResolutionIndicatedBy
+          ? { id: updated.requesterResolutionIndicatedBy.id, name: updated.requesterResolutionIndicatedBy.name }
+          : null,
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: {
+        code: "TICKET_STATUS_UPDATE_FAILED",
+        message: "We could not update the ticket status right now. Try again.",
+        retryable: true,
+      },
+    });
+  }
+});
+
+// GET /api/staff/tickets/:id/internal-notes
+staffQueueRouter.get("/tickets/:id/internal-notes", async (req: Request, res: Response) => {
+  try {
+    const ticketId = positiveId(req.params.id);
+    if (!ticketId) {
+      res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } });
+      return;
+    }
+
+    const ticket = await getPrisma().ticket.findUnique({ where: { id: ticketId }, select: { id: true } });
+    if (!ticket) {
+      res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } });
+      return;
+    }
+
+    const notes = await getPrisma().internalNote.findMany({
+      where: { ticketId },
+      select: {
+        id: true,
+        content: true,
+        createdAt: true,
+        author: { select: { id: true, name: true, role: true } },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+
+    res.status(200).json({
+      data: notes.map((n) => ({
+        id: n.id,
+        content: n.content,
+        createdAt: n.createdAt.toISOString(),
+        author: n.author,
+      })),
+      meta: { count: notes.length },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: {
+        code: "INTERNAL_NOTES_FETCH_FAILED",
+        message: "Internal notes are temporarily unavailable.",
+        retryable: true,
+      },
+    });
+  }
+});
+
+// POST /api/staff/tickets/:id/internal-notes
+staffQueueRouter.post("/tickets/:id/internal-notes", requireCsrf, async (req: Request, res: Response) => {
+  try {
+    const ticketId = positiveId(req.params.id);
+    if (!ticketId) {
+      res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } });
+      return;
+    }
+
+    let content: string;
+    try {
+      content = validateInternalNoteContent(req.body?.content);
+    } catch (err) {
+      res.status(400).json({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: err instanceof Error ? err.message : "Invalid internal note.",
+          fields: [{ field: "content", message: err instanceof Error ? err.message : "Invalid internal note." }],
+        },
+      });
+      return;
+    }
+
+    const ticket = await getPrisma().ticket.findUnique({ where: { id: ticketId }, select: { id: true } });
+    if (!ticket) {
+      res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } });
+      return;
+    }
+
+    const note = await getPrisma().internalNote.create({
+      data: {
+        ticketId,
+        authorId: req.auth!.user.id,
+        content,
+      },
+      include: {
+        author: { select: { id: true, name: true, role: true } },
+      },
+    });
+
+    res.setHeader("Location", `/api/staff/tickets/${ticketId}/internal-notes/${note.id}`);
+    res.status(201).json({
+      data: {
+        id: note.id,
+        content: note.content,
+        createdAt: note.createdAt.toISOString(),
+        author: note.author,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: {
+        code: "INTERNAL_NOTE_CREATE_FAILED",
+        message: "We could not add the internal note right now. Try again.",
         retryable: true,
       },
     });
