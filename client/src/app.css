@@ -1368,4 +1368,267 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
   }
 }
 
+/* Administrator User Management Styles */
+.user-management-view {
+  margin-top: 24px;
+}
+
+.workspace-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.create-user-btn {
+  font-weight: 700;
+  padding: 10px 20px;
+}
+
+.admin-users-table-container {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.admin-users-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #eef2f0;
+  vertical-align: middle;
+}
+
+.user-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-email-cell {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9rem;
+  color: #334155;
+}
+
+.user-row-inactive td {
+  opacity: 0.65;
+  background: #fafafa;
+}
+
+.user-action-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge-current-user {
+  background-color: var(--zen-700);
+  color: #ffffff;
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.badge-role-administrator {
+  color: #6b21a8;
+  background: #f3e8ff;
+  border: 1px solid #e9d5ff;
+}
+
+.badge-role-it_staff {
+  color: #1e40af;
+  background: #dbeafe;
+  border: 1px solid #bfdbfe;
+}
+
+.badge-role-requester {
+  color: #0f766e;
+  background: #ccfbf1;
+  border: 1px solid #99f6e4;
+}
+
+.badge-status-active {
+  color: #065f46;
+  background: #d1fae5;
+  border: 1px solid #a7f3d0;
+}
+
+.badge-status-inactive {
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+}
+
+.user-form-dialog {
+  max-width: 540px;
+  width: 95%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.reset-password-dialog {
+  max-width: 480px;
+  width: 95%;
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.dialog-header h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  color: var(--zen-900);
+}
+
+.btn-close-modal {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.btn-close-modal:hover {
+  color: #1e293b;
+  background: #f1f5f9;
+}
+
+.btn-close-alert {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: currentColor;
+  cursor: pointer;
+  opacity: 0.7;
+  padding: 0 4px;
+}
+
+.btn-close-alert:hover {
+  opacity: 1;
+}
+
+.alert-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.modal-info-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 0.88rem;
+}
+
+.modal-info-box code {
+  background: #e2e8f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.form-field-helper {
+  font-size: 0.8rem;
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.is-invalid {
+  border-color: #dc2626 !important;
+}
+
+.field-error {
+  color: #dc2626;
+  font-size: 0.82rem;
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.filter-status-row {
+  margin-top: 12px;
+  font-size: 0.88rem;
+  color: #48665a;
+  font-weight: 600;
+}
+
+/* User cards responsive styling */
+.admin-user-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 4px 12px rgba(16, 61, 45, 0.04);
+}
+
+.user-card-inactive {
+  opacity: 0.7;
+  background: #fafafa;
+}
+
+.user-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-card-name {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--zen-900);
+}
+
+.user-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+  font-size: 0.88rem;
+}
+
+.user-card-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+@media (min-width: 992px) {
+  .admin-users-cards {
+    display: none;
+  }
+}
+
+@media (max-width: 991px) {
+  .admin-users-table-container {
+    display: none;
+  }
+  .admin-users-cards {
+    display: grid;
+    gap: 16px;
+  }
+  .workspace-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .create-user-btn {
+    width: 100%;
+  }
+}
+
+
 

@@ -850,4 +850,96 @@ export async function createInternalNote(
   return response.json();
 }
 
+export interface AdminUser {
+  id: number;
+  name: string;
+  email: string;
+  department: string | null;
+  role: UserRole;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAdminUserInput {
+  name: string;
+  email: string;
+  department?: string | null;
+  role: UserRole;
+  isActive?: boolean;
+}
+
+export interface UpdateAdminUserInput {
+  name?: string;
+  email?: string;
+  department?: string | null;
+  role?: UserRole;
+  isActive?: boolean;
+}
+
+export async function fetchAdminUsers(params?: {
+  q?: string;
+  role?: string;
+}): Promise<{ data: AdminUser[] }> {
+  const query = new URLSearchParams();
+  if (params?.q?.trim()) query.set("q", params.q.trim());
+  if (params?.role && params.role !== "ALL") query.set("role", params.role);
+  const qs = query.toString();
+  const url = `${API_URL}/api/admin/users${qs ? `?${qs}` : ""}`;
+  const response = await fetch(url, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    return readError(response, "Users could not be loaded.");
+  }
+  return response.json();
+}
+
+export async function createAdminUser(
+  payload: CreateAdminUserInput
+): Promise<{ data: AdminUser }> {
+  const response = await fetch(`${API_URL}/api/admin/users`, {
+    method: "POST",
+    credentials: "include",
+    headers: requestHeaders({ "Content-Type": "application/json" }, true),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    return readError(response, "Could not create user.");
+  }
+  return response.json();
+}
+
+export async function updateAdminUser(
+  userId: number,
+  payload: UpdateAdminUserInput
+): Promise<{ data: AdminUser }> {
+  const response = await fetch(`${API_URL}/api/admin/users/${userId}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: requestHeaders({ "Content-Type": "application/json" }, true),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    return readError(response, "Could not update user.");
+  }
+  return response.json();
+}
+
+export async function resetAdminUserPassword(
+  userId: number
+): Promise<{ data: { message: string } }> {
+  const response = await fetch(`${API_URL}/api/admin/users/${userId}/reset-password`, {
+    method: "POST",
+    credentials: "include",
+    headers: requestHeaders({ "Content-Type": "application/json" }, true),
+  });
+  if (!response.ok) {
+    return readError(response, "Could not reset user password.");
+  }
+  return response.json();
+}
+
+
 
