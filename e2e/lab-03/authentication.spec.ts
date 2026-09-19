@@ -11,20 +11,20 @@ test.describe("E2E-AUTH-01: authenticated application lifecycle", () => {
     await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 
     await page.getByLabel("Email").fill("unknown@toktickit.local");
-    await page.getByLabel("Password").fill("incorrect-password");
+    await page.getByLabel("Password", { exact: true }).fill("incorrect-password");
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page.getByRole("alert")).toContainText("We could not sign you in. Check your email and password.");
 
     await page.getByLabel("Email").fill(email);
-    await page.getByLabel("Password").fill(initialPassword);
+    await page.getByLabel("Password", { exact: true }).fill(initialPassword);
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/change-password$/);
     await expect(page.getByRole("heading", { name: "Change your password" })).toBeVisible();
     await expect(page.getByText("My Tickets")).toBeHidden();
 
-    await page.getByLabel("Current or initial password").fill(initialPassword);
-    await page.getByLabel("New password").fill(newPassword);
-    await page.getByLabel("Confirm new password").fill(newPassword);
+    await page.getByLabel("Current or initial password", { exact: true }).fill(initialPassword);
+    await page.getByLabel("New password", { exact: true }).fill(newPassword);
+    await page.getByLabel("Confirm new password", { exact: true }).fill(newPassword);
     await page.getByRole("button", { name: "Change password" }).click();
     await expect(page).toHaveURL(/\/tickets$/);
     await expect(page.locator(".requester-identity strong")).toHaveText("Amina Rahman");

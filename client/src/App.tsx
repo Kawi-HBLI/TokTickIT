@@ -141,8 +141,25 @@ function RequesterWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: (
 
 function AppContent() {
   const { currentUser, loadState, retry, logout } = useRequester();
-  function completedAuthentication(user: CurrentUser) { replaceRoute(user.mustChangePassword ? "/change-password" : roleHome(user)); }
-  async function logoutAndRedirect() { await logout(); replaceRoute("/login"); }
+  const [, setCurrentPath] = useState(() => window.location.pathname);
+
+  useEffect(() => {
+    const onPop = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  function completedAuthentication(user: CurrentUser) {
+    replaceRoute(user.mustChangePassword ? "/change-password" : roleHome(user));
+    setCurrentPath(window.location.pathname);
+  }
+  async function logoutAndRedirect() {
+    await logout();
+    window.history.pushState({}, "", "/login");
+    setCurrentPath("/login");
+  }
   if (loadState === "loading") return <main className="auth-page"><section className="auth-card" aria-labelledby="auth-loading-title"><h1 id="auth-loading-title">Loading TokTickIT…</h1><p className="state-message" role="status" aria-live="polite">Restoring your secure session.</p></section></main>;
   if (loadState === "unauthenticated") { if (window.location.pathname !== "/login") replaceRoute("/login"); return <Login onAuthenticated={completedAuthentication} />; }
   if (!currentUser) return <main className="auth-page"><section className="auth-card" aria-labelledby="auth-error-title"><h1 id="auth-error-title">We could not restore your session</h1><p className="state-message state-message-error" role="alert">Please try again.</p><button className="btn btn-outline-success" type="button" onClick={() => void retry()}>Retry</button></section></main>;

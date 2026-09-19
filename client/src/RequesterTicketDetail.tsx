@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { ApiError, getTicketDetail, TicketDetail } from "./api.js";
+import {
+  ApiError,
+  getTicketDetail,
+  TicketDetail,
+  PublicComment,
+  fetchPublicComments,
+  createPublicComment,
+  indicateProblemResolved,
+} from "./api.js";
 import { useRequester } from "./RequesterContext.js";
 import AttachmentSection from "./AttachmentSection.js";
 
@@ -34,6 +42,18 @@ export default function RequesterTicketDetail({
   const [error, setError] = useState<{ code: string; message: string; status?: number } | null>(null);
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
+  // Conversation state
+  const [comments, setComments] = useState<PublicComment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(true);
+  const [commentText, setCommentText] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
+  const [commentSuccess, setCommentSuccess] = useState<string | null>(null);
+
+  // Resolution indication state
+  const [indicatingResolution, setIndicatingResolution] = useState(false);
+  const [resolutionError, setResolutionError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!currentRequester) return;
     let active = true;
@@ -67,6 +87,92 @@ export default function RequesterTicketDetail({
       active = false;
     };
   }, [ticketId, currentRequester?.id, reloadTrigger]);
+
+  // Load public comments
+  useEffect(() => {
+    if (!currentRequester) return;
+    let active = true;
+    setLoadingComments(true);
+
+    fetchPublicComments(ticketId)
+      .then((res) => {
+        if (!active) return;
+        setComments(res.data);
+        setLoadingComments(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setLoadingComments(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [ticketId, currentRequester?.id, reloadTrigger]);
+
+  const handlePostComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = commentText.trim();
+    if (trimmed.length === 0) {
+      setCommentError("Please enter a comment before posting.");
+      return;
+    }
+    if (trimmed.length > 2000) {
+      setCommentError("Comment cannot exceed 2,000 characters.");
+      return;
+    }
+
+    setSubmittingComment(true);
+    setCommentError(null);
+    setCommentSuccess(null);
+
+    try {
+      const res = await createPublicComment(ticketId, trimmed);
+      setComments((prev) => [...prev, res.data]);
+      setCommentText("");
+      setCommentSuccess("Your comment has been posted.");
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        setCommentError(err.message);
+      } else {
+        setCommentError("Could not post public comment. Please try again.");
+      }
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handleIndicateResolution = async () => {
+    if (!ticket) return;
+    setIndicatingResolution(true);
+    setResolutionError(null);
+
+    try {
+      const res = await indicateProblemResolved(ticket.id, ticket.updatedAt);
+      setTicket((prev) =>
+        prev
+          ? {
+              ...prev,
+              requesterResolutionIndicatedAt: res.data.indicatedAt,
+              requesterResolutionIndicatedBy: res.data.indicatedBy,
+            }
+          : null
+      );
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        if (err.status === 409) {
+          setReloadTrigger((count) => count + 1);
+          setResolutionError("The ticket status or version changed. Reloading latest details…");
+        } else {
+          setResolutionError(err.message);
+        }
+      } else {
+        setResolutionError("Failed to record resolution indication. Please try again.");
+      }
+    } finally {
+      setIndicatingResolution(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -136,6 +242,13 @@ export default function RequesterTicketDetail({
   }
 
   if (!ticket) return null;
+
+  const isResolutionEligible = [
+    "NEW",
+    "OPEN",
+    "IN_PROGRESS",
+    "WAITING_FOR_REQUESTER",
+  ].includes(ticket.currentStatus);
 
   return (
     <article className="ticket-page ticket-detail-page" aria-labelledby="ticket-detail-title">
@@ -222,6 +335,130 @@ export default function RequesterTicketDetail({
             {ticket.description}
           </div>
         </div>
+      </section>
+
+      {/* Conversation Section */}
+      <section className="ticket-group conversation-section" aria-labelledby="conversation-heading">
+        <h2 id="conversation-heading" className="section-title">Conversation</h2>
+
+        {/* Resolution Indication Action or Status */}
+        <div className="resolution-indication-container" aria-label="Resolution indication">
+          {ticket.requesterResolutionIndicatedAt ? (
+            <div className="resolution-indicated-banner" role="status">
+              <span className="resolution-icon" aria-hidden="true">✓</span>
+              <div>
+                <strong>Problem indicated as resolved</strong>
+                <p>
+                  Reported on {formatDate(ticket.requesterResolutionIndicatedAt)} by{" "}
+                  {ticket.requesterResolutionIndicatedBy?.name || "Requester"}. IT staff will review and formally resolve this ticket.
+                </p>
+              </div>
+            </div>
+          ) : isResolutionEligible ? (
+            <div className="resolution-action-card">
+              <div className="resolution-action-info">
+                <strong>Problem appears resolved?</strong>
+                <p className="resolution-explanation">
+                  If your issue has been resolved, you can notify IT staff. This notifies IT and does not mark the ticket Resolved or Closed immediately.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline-success resolution-action-btn"
+                disabled={indicatingResolution}
+                onClick={handleIndicateResolution}
+              >
+                {indicatingResolution ? "Submitting…" : "Problem appears resolved"}
+              </button>
+            </div>
+          ) : null}
+
+          {resolutionError && (
+            <div className="state-message state-message-error" role="alert">
+              <p>{resolutionError}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Public Comments List */}
+        <div className="comments-list-section" aria-label="Public comments">
+          <h3 className="comments-subtitle">Public Comments</h3>
+          {loadingComments ? (
+            <p className="muted-text">Loading comments…</p>
+          ) : comments.length === 0 ? (
+            <p className="no-comments-text">No comments yet.</p>
+          ) : (
+            <ul className="comments-list" role="list">
+              {comments.map((comment) => (
+                <li key={comment.id} className="comment-card public-comment">
+                  <header className="comment-header">
+                    <span className="comment-author">{comment.author.name}</span>
+                    <span className="comment-role-badge">
+                      {comment.author.role === "REQUESTER"
+                        ? "Requester"
+                        : comment.author.role === "IT_STAFF"
+                        ? "IT Staff"
+                        : "Administrator"}
+                    </span>
+                    <time className="comment-date" dateTime={comment.createdAt}>
+                      {formatDate(comment.createdAt)}
+                    </time>
+                  </header>
+                  <div className="comment-body">{comment.content}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Public Comment Composer */}
+        <form onSubmit={handlePostComment} className="comment-composer-form" noValidate>
+          <div className="composer-field">
+            <label htmlFor="public-comment-input" className="form-label">
+              Add a comment
+            </label>
+            <textarea
+              id="public-comment-input"
+              className="composer-textarea"
+              rows={4}
+              maxLength={2000}
+              value={commentText}
+              onChange={(e) => {
+                setCommentText(e.target.value);
+                if (commentError) setCommentError(null);
+                if (commentSuccess) setCommentSuccess(null);
+              }}
+              placeholder="Type a public comment for IT staff…"
+              disabled={submittingComment}
+              aria-describedby="comment-char-count"
+              aria-invalid={!!commentError}
+            />
+            <div className="composer-footer">
+              <span id="comment-char-count" className="char-count" aria-live="polite">
+                {commentText.length} / 2000 characters
+              </span>
+              {commentError && (
+                <span className="error-text" role="alert">
+                  {commentError}
+                </span>
+              )}
+              {commentSuccess && (
+                <span className="success-text" role="status">
+                  {commentSuccess}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="composer-actions">
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={submittingComment || commentText.trim().length === 0}
+            >
+              {submittingComment ? "Posting comment…" : "Post public comment"}
+            </button>
+          </div>
+        </form>
       </section>
 
       {/* Attachment Section */}

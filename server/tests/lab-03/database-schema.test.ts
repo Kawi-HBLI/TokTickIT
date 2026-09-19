@@ -22,7 +22,7 @@ const migration = readFileSync(
     ),
   ),
   "utf8",
-);
+).replace(/\r\n/g, "\n");
 const workflowMigration = readFileSync(
   fileURLToPath(
     new URL(
@@ -31,7 +31,7 @@ const workflowMigration = readFileSync(
     ),
   ),
   "utf8",
-);
+).replace(/\r\n/g, "\n");
 
 describe("Lab 3 authentication database foundation", () => {
   it("defines User roles and server-side Session storage", () => {

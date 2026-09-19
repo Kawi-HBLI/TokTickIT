@@ -159,7 +159,7 @@ describe("RequesterTicketDetail", () => {
   });
 
   describe("UI-SCOPE-01: Scope Boundaries (Strict Read-Only)", () => {
-    it("does not render any IT Staff controls, status changer, comment box, or internal notes", async () => {
+    it("does not render any IT Staff controls, status changer, or internal notes", async () => {
       renderDetail(42);
       await screen.findByRole("heading", { name: "TKT-2026-00042" });
 
@@ -167,9 +167,7 @@ describe("RequesterTicketDetail", () => {
       expect(screen.queryByLabelText(/change status/i)).not.toBeInTheDocument();
       expect(screen.queryByRole("combobox", { name: /status/i })).not.toBeInTheDocument();
 
-      // No comment box or textarea (except removal dialog when opened)
-      expect(screen.queryByLabelText(/comment/i)).not.toBeInTheDocument();
-      expect(screen.queryByPlaceholderText(/add a comment/i)).not.toBeInTheDocument();
+      // No internal notes or staff controls
       expect(screen.queryByLabelText(/internal notes/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/action taken/i)).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /assign/i })).not.toBeInTheDocument();
