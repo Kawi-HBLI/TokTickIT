@@ -2,6 +2,7 @@ import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import {
   ApiError,
   Assignee,
+  AttachmentItem,
   StaffTicketDetail as StaffTicketDetailType,
   TicketStatus,
   RequestedPriority,
@@ -13,6 +14,8 @@ import {
   updateStaffTicketStatus,
   createPublicComment,
   createInternalNote,
+  previewAttachmentFile,
+  downloadAttachmentFile,
 } from "./api.js";
 import { useRequester } from "./RequesterContext.js";
 
@@ -96,11 +99,16 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
   // Dialog state
-  const [pendingOwnerChange, setPendingOwnerChange] = useState<number | null | "cancel">(null);
+  const [pendingOwnerChange, setPendingOwnerChange] = useState<{ targetOwnerId: number | null } | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<TicketStatus | null>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const dialogConfirmButton = useRef<HTMLButtonElement>(null);
   const dialogCancelButton = useRef<HTMLButtonElement>(null);
+
+  // Attachment actions state
+  const [previewingAttachmentId, setPreviewingAttachmentId] = useState<number | null>(null);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<number | null>(null);
+  const [attachmentActionError, setAttachmentActionError] = useState<string | null>(null);
 
   // Public comments composer
   const [publicCommentText, setPublicCommentText] = useState("");
@@ -225,12 +233,12 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
     if (targetOwnerId === currentOwnerId) return;
 
     // Trigger confirmation dialog
-    setPendingOwnerChange(targetOwnerId);
+    setPendingOwnerChange({ targetOwnerId });
   }
 
   async function confirmOwnerChange() {
-    if (!ticket || pendingOwnerChange === "cancel") return;
-    const targetOwnerId = pendingOwnerChange;
+    if (!ticket || !pendingOwnerChange) return;
+    const targetOwnerId = pendingOwnerChange.targetOwnerId;
     setPendingOwnerChange(null);
     setConflictError(null);
     setSuccessMessage(null);
@@ -417,6 +425,70 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
       );
     } finally {
       setSubmittingInternalNote(false);
+    }
+  }
+
+  async function handlePreviewAttachment(att: AttachmentItem) {
+    setAttachmentActionError(null);
+    setPreviewingAttachmentId(att.id);
+
+    let previewWindow: Window | null = null;
+    try {
+      previewWindow = window.open("about:blank", "_blank");
+      if (previewWindow) {
+        try {
+          previewWindow.document.title = `Loading ${att.originalName}…`;
+        } catch {
+          // ignore potential cross-origin restrictions
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const { blob } = await previewAttachmentFile(att.id);
+      const url = URL.createObjectURL(blob);
+      if (previewWindow && !previewWindow.closed) {
+        previewWindow.location.href = url;
+      } else {
+        const fallback = window.open(url, "_blank", "noopener,noreferrer");
+        if (!fallback) {
+          setAttachmentActionError("Pop-up was blocked by browser. Please allow pop-ups for this site to preview attachments.");
+        }
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err: unknown) {
+      if (previewWindow && !previewWindow.closed) {
+        try {
+          previewWindow.close();
+        } catch {
+          // ignore
+        }
+      }
+      setAttachmentActionError(err instanceof Error ? err.message : "Failed to preview attachment.");
+    } finally {
+      setPreviewingAttachmentId(null);
+    }
+  }
+
+  async function handleDownloadAttachment(att: AttachmentItem) {
+    setAttachmentActionError(null);
+    setDownloadingAttachmentId(att.id);
+    try {
+      const { blob } = await downloadAttachmentFile(att.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = att.originalName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err: unknown) {
+      setAttachmentActionError(err instanceof Error ? err.message : "Failed to download attachment.");
+    } finally {
+      setDownloadingAttachmentId(null);
     }
   }
 
@@ -679,6 +751,11 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
         <h2 id="attachments-heading" className="section-title">
           Attachments ({activeAttachments.length})
         </h2>
+        {attachmentActionError && (
+          <div className="alert alert-danger mb-3" role="alert">
+            {attachmentActionError}
+          </div>
+        )}
         {activeAttachments.length === 0 ? (
           <p className="muted-text">No active attachments for this ticket.</p>
         ) : (
@@ -692,21 +769,22 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
                   </span>
                 </div>
                 <div className="attachment-actions">
-                  <a
-                    href={`/api/attachments/${att.id}/preview`}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
                     className="btn btn-sm btn-outline-secondary"
+                    onClick={() => handlePreviewAttachment(att)}
+                    disabled={previewingAttachmentId === att.id}
                   >
-                    Preview
-                  </a>
-                  <a
-                    href={`/api/attachments/${att.id}/download`}
-                    download
+                    {previewingAttachmentId === att.id ? "Loading…" : "Preview"}
+                  </button>
+                  <button
+                    type="button"
                     className="btn btn-sm btn-outline-secondary"
+                    onClick={() => handleDownloadAttachment(att)}
+                    disabled={downloadingAttachmentId === att.id}
                   >
-                    Download
-                  </a>
+                    {downloadingAttachmentId === att.id ? "Downloading…" : "Download"}
+                  </button>
                 </div>
               </li>
             ))}
@@ -883,8 +961,8 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
         </div>
       </section>
 
-      {/* Confirmation Dialog for Owner Reassignment */}
-      {pendingOwnerChange !== null && pendingOwnerChange !== "cancel" && (
+      {/* Confirmation Dialog for Owner Reassignment / Unassignment */}
+      {pendingOwnerChange !== null && (
         <div className="dialog-backdrop" role="presentation">
           <section
             className="confirm-dialog"
@@ -894,12 +972,16 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
             aria-describedby="reassign-desc"
             onKeyDown={handleDialogKeyDown}
           >
-            <h2 id="reassign-title">Reassign Ticket Owner?</h2>
+            <h2 id="reassign-title">
+              {pendingOwnerChange.targetOwnerId === null
+                ? "Unassign Ticket Owner?"
+                : "Reassign Ticket Owner?"}
+            </h2>
             <p id="reassign-desc">
-              {pendingOwnerChange === null
+              {pendingOwnerChange.targetOwnerId === null
                 ? "Are you sure you want to unassign this ticket?"
                 : `Are you sure you want to assign this ticket to ${
-                    assignees.find((a) => a.id === pendingOwnerChange)?.name || "the selected user"
+                    assignees.find((a) => a.id === pendingOwnerChange.targetOwnerId)?.name || "the selected user"
                   }?`}
             </p>
             <div className="selector-actions">
@@ -917,7 +999,9 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
                 className="btn btn-primary"
                 onClick={confirmOwnerChange}
               >
-                Confirm Reassignment
+                {pendingOwnerChange.targetOwnerId === null
+                  ? "Confirm Unassignment"
+                  : "Confirm Reassignment"}
               </button>
             </div>
           </section>

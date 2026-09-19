@@ -19,6 +19,8 @@ vi.mock("../../src/api.js", async (importOriginal) => {
     updateStaffTicketStatus: vi.fn(),
     createPublicComment: vi.fn(),
     createInternalNote: vi.fn(),
+    previewAttachmentFile: vi.fn(),
+    downloadAttachmentFile: vi.fn(),
   };
 });
 
@@ -58,6 +60,15 @@ const sampleTicket: api.StaffTicketDetail = {
   publicComments: [],
   internalNotes: [],
   attachments: [],
+};
+
+const sampleAttachment: api.AttachmentItem = {
+  id: 88,
+  originalName: "system-logs.txt",
+  mimeType: "text/plain",
+  sizeBytes: 2048,
+  createdAt: "2026-09-10T10:05:00.000Z",
+  isRemoved: false,
 };
 
 function renderComponent(ticketId = 42, onNavigate = vi.fn()) {
@@ -143,6 +154,80 @@ describe("UI-DETAIL-01 & UI-DISC-01: IT Staff Ticket Detail Component", () => {
     await waitFor(() => {
       expect(screen.getByText("Ticket assigned to Marcus Vance.")).toBeInTheDocument();
     });
+  });
+
+  it("prompts confirmation dialog when unassigning owner and confirms unassignment", async () => {
+    const user = userEvent.setup();
+    const assignedTicket = {
+      ...sampleTicket,
+      owner: { id: 10, name: "Ethan Brooks", email: "ethan@toktickit.local" },
+    };
+    vi.mocked(api.fetchStaffTicketDetail).mockResolvedValue({ data: assignedTicket });
+    vi.mocked(api.updateStaffTicketOwner).mockResolvedValue({
+      data: {
+        owner: null,
+        updatedAt: "2026-09-10T10:35:00.000Z",
+      },
+    });
+
+    renderComponent();
+    const ownerSelect = await screen.findByLabelText("Ticket Owner");
+    await user.selectOptions(ownerSelect, "unassigned");
+
+    // Confirmation dialog should appear
+    expect(screen.getByRole("dialog", { name: "Unassign Ticket Owner?" })).toBeInTheDocument();
+    expect(screen.getByText("Are you sure you want to unassign this ticket?")).toBeInTheDocument();
+
+    const confirmBtn = screen.getByRole("button", { name: "Confirm Unassignment" });
+    await user.click(confirmBtn);
+
+    expect(api.updateStaffTicketOwner).toHaveBeenCalledWith(42, null, "2026-09-10T10:15:00.000Z");
+    await waitFor(() => {
+      expect(screen.getByText("Ticket unassigned.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Claim Ticket" })).toBeInTheDocument();
+    });
+  });
+
+  it("triggers previewAttachmentFile and downloadAttachmentFile using centralized api helpers", async () => {
+    const user = userEvent.setup();
+    const ticketWithAttachment = {
+      ...sampleTicket,
+      attachments: [sampleAttachment],
+    };
+    vi.mocked(api.fetchStaffTicketDetail).mockResolvedValue({ data: ticketWithAttachment });
+    vi.mocked(api.previewAttachmentFile).mockResolvedValue({
+      blob: new Blob(["dummy content"], { type: "text/plain" }),
+      contentType: "text/plain",
+    });
+    vi.mocked(api.downloadAttachmentFile).mockResolvedValue({
+      blob: new Blob(["dummy content"], { type: "text/plain" }),
+      contentType: "text/plain",
+    });
+
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const originalRevokeObjectUrl = URL.revokeObjectURL;
+    const originalClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = vi.fn();
+    URL.createObjectURL = vi.fn(() => "blob:http://localhost/mock-blob-url");
+    URL.revokeObjectURL = vi.fn();
+    window.open = vi.fn();
+
+    try {
+      renderComponent();
+      await screen.findByText("system-logs.txt");
+
+      const previewBtn = screen.getByRole("button", { name: "Preview" });
+      await user.click(previewBtn);
+      expect(api.previewAttachmentFile).toHaveBeenCalledWith(88);
+
+      const downloadBtn = screen.getByRole("button", { name: "Download" });
+      await user.click(downloadBtn);
+      expect(api.downloadAttachmentFile).toHaveBeenCalledWith(88);
+    } finally {
+      URL.createObjectURL = originalCreateObjectUrl;
+      URL.revokeObjectURL = originalRevokeObjectUrl;
+      HTMLAnchorElement.prototype.click = originalClick;
+    }
   });
 
   it("updates IT priority when changed and submitted", async () => {

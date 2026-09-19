@@ -104,6 +104,23 @@ test.describe("E2E-STAFF-OPS-01: IT Staff Ticket Operations and Authorization", 
     await expect(page.getByText("Ticket assigned to Farah Malik.")).toBeVisible();
     await expect(page.getByText(/Current Owner:\s*Farah Malik/i)).toBeVisible();
 
+    // 4b. Unassign Ticket Owner with Confirmation Dialog
+    await ownerSelect.selectOption({ label: "Unassigned" });
+    const unassignDialog = page.getByRole("dialog", { name: "Unassign Ticket Owner?" });
+    await expect(unassignDialog).toBeVisible();
+    await expect(unassignDialog.getByText(/unassign this ticket/i)).toBeVisible();
+
+    await unassignDialog.getByRole("button", { name: "Confirm Unassignment" }).click();
+    await expect(unassignDialog).toBeHidden();
+    await expect(page.getByText("Ticket unassigned.")).toBeVisible();
+    await expect(page.getByText(/Current Owner:\s*Unassigned/i)).toBeVisible();
+
+    // Claim again for subsequent steps
+    const reclaimBtn = page.getByRole("button", { name: "Claim Ticket" });
+    await expect(reclaimBtn).toBeVisible();
+    await reclaimBtn.click();
+    await expect(page.getByText("You claimed this ticket.")).toBeVisible();
+
     // 5. Update IT Priority
     const prioritySelect = page.getByLabel("IT Priority");
     await prioritySelect.selectOption({ value: "CRITICAL" });
