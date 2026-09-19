@@ -655,3 +655,199 @@ export async function indicateProblemResolved(
   return response.json();
 }
 
+export type TicketStatus =
+  | "NEW"
+  | "OPEN"
+  | "IN_PROGRESS"
+  | "WAITING_FOR_REQUESTER"
+  | "RESOLVED"
+  | "CLOSED"
+  | "REOPENED"
+  | "CANCELLED";
+
+export interface InternalNote {
+  id: number;
+  content: string;
+  createdAt: string;
+  author: {
+    id: number;
+    name: string;
+    role: UserRole;
+  };
+}
+
+export interface InternalNotesResponse {
+  data: InternalNote[];
+  meta: { count: number };
+}
+
+export interface Assignee {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRole;
+}
+
+export interface StaffTicketDetail {
+  id: number;
+  ticketNumber: string;
+  createdAt: string;
+  updatedAt: string;
+  summary: string;
+  description: string;
+  category: { id: number; name: string };
+  relatedSystem: { id: number; name: string } | null;
+  requester: { id: number; name: string; email: string };
+  owner: { id: number; name: string; email: string } | null;
+  requestedPriority: RequestedPriority;
+  itPriority: RequestedPriority;
+  currentStatus: TicketStatus;
+  requesterResolutionIndicatedAt: string | null;
+  requesterResolutionIndicatedBy: { id: number; name: string } | null;
+  publicComments: PublicComment[];
+  internalNotes: InternalNote[];
+  attachments: AttachmentItem[];
+}
+
+export interface StaffClaimResponse {
+  data: {
+    owner: { id: number; name: string; email: string } | null;
+    updatedAt: string;
+  };
+}
+
+export interface StaffOwnerResponse {
+  data: {
+    owner: { id: number; name: string; email: string } | null;
+    updatedAt: string;
+  };
+}
+
+export interface StaffPriorityResponse {
+  data: {
+    requestedPriority: RequestedPriority;
+    itPriority: RequestedPriority;
+    updatedAt: string;
+  };
+}
+
+export interface StaffStatusResponse {
+  data: {
+    previousStatus: TicketStatus;
+    currentStatus: TicketStatus;
+    requesterResolutionIndicatedAt: string | null;
+    requesterResolutionIndicatedBy: { id: number; name: string } | null;
+    updatedAt: string;
+  };
+}
+
+export async function fetchStaffTicketDetail(ticketId: number): Promise<{ data: StaffTicketDetail }> {
+  const response = await fetch(`${API_URL}/api/staff/tickets/${ticketId}`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    return readError(response, "Staff ticket detail could not be loaded.");
+  }
+  return response.json();
+}
+
+export async function fetchAssignees(): Promise<{ data: Assignee[] }> {
+  const response = await fetch(`${API_URL}/api/staff/assignees`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    return readError(response, "Assignees could not be loaded.");
+  }
+  return response.json();
+}
+
+export async function claimStaffTicket(ticketId: number): Promise<StaffClaimResponse> {
+  const response = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/claim`, {
+    method: "POST",
+    credentials: "include",
+    headers: requestHeaders({ "Content-Type": "application/json" }, true),
+  });
+  if (!response.ok) {
+    return readError(response, "Could not claim ticket.");
+  }
+  return response.json();
+}
+
+export async function updateStaffTicketOwner(
+  ticketId: number,
+  ownerId: number | null,
+  expectedUpdatedAt: string
+): Promise<StaffOwnerResponse> {
+  const response = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/owner`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: requestHeaders({ "Content-Type": "application/json" }, true),
+    body: JSON.stringify({ ownerId, expectedUpdatedAt }),
+  });
+  if (!response.ok) {
+    return readError(response, "Could not update ticket owner.");
+  }
+  return response.json();
+}
+
+export async function updateStaffTicketPriority(
+  ticketId: number,
+  itPriority: RequestedPriority,
+  expectedUpdatedAt: string
+): Promise<StaffPriorityResponse> {
+  const response = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/priority`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: requestHeaders({ "Content-Type": "application/json" }, true),
+    body: JSON.stringify({ itPriority, expectedUpdatedAt }),
+  });
+  if (!response.ok) {
+    return readError(response, "Could not update IT priority.");
+  }
+  return response.json();
+}
+
+export async function updateStaffTicketStatus(
+  ticketId: number,
+  status: TicketStatus,
+  expectedUpdatedAt: string
+): Promise<StaffStatusResponse> {
+  const response = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/status`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: requestHeaders({ "Content-Type": "application/json" }, true),
+    body: JSON.stringify({ status, expectedUpdatedAt }),
+  });
+  if (!response.ok) {
+    return readError(response, "Could not update ticket status.");
+  }
+  return response.json();
+}
+
+export async function fetchInternalNotes(ticketId: number): Promise<InternalNotesResponse> {
+  const response = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/internal-notes`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    return readError(response, "Internal notes could not be loaded.");
+  }
+  return response.json();
+}
+
+export async function createInternalNote(
+  ticketId: number,
+  content: string
+): Promise<{ data: InternalNote }> {
+  const response = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/internal-notes`, {
+    method: "POST",
+    credentials: "include",
+    headers: requestHeaders({ "Content-Type": "application/json" }, true),
+    body: JSON.stringify({ content }),
+  });
+  if (!response.ok) {
+    return readError(response, "Could not add internal note.");
+  }
+  return response.json();
+}
+
+

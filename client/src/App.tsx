@@ -7,6 +7,7 @@ import MyTickets from "./MyTickets.js";
 import { RequesterProvider, useRequester } from "./RequesterContext.js";
 import RequesterTicketDetail from "./RequesterTicketDetail.js";
 import StaffTicketQueue from "./StaffTicketQueue.js";
+import StaffTicketDetail from "./StaffTicketDetail.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
 
@@ -35,6 +36,7 @@ function RoleWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: () => 
   const [route, setRoute] = useState<string>(() => {
     const path = window.location.pathname;
     if (user.role === "ADMINISTRATOR" && path === "/admin/users") return "/admin/users";
+    if (/^\/staff\/tickets(\/\d+)?$/.test(path)) return path;
     return "/staff/tickets";
   });
   const [message, setMessage] = useState<string | null>(null);
@@ -85,13 +87,10 @@ function RoleWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: () => 
       {route === "/staff/tickets" ? (
         <StaffTicketQueue onNavigate={navigate} />
       ) : route.match(/^\/staff\/tickets\/\d+$/) ? (
-        <section className="workspace-card" aria-labelledby="staff-detail-placeholder-title">
-          <h1 id="staff-detail-placeholder-title">Ticket Detail</h1>
-          <p className="page-intro">IT Staff Ticket operations workflow will be delivered in the next Lab 3 issue (Issue #33).</p>
-          <button type="button" className="btn btn-outline-success" onClick={() => navigate("/staff/tickets")}>
-            Back to Ticket Queue
-          </button>
-        </section>
+        <StaffTicketDetail
+          ticketId={parseInt(route.match(/^\/staff\/tickets\/(\d+)$/)![1], 10)}
+          onNavigate={navigate}
+        />
       ) : (
         <section className="workspace-card" aria-labelledby="role-workspace-title">
           <h1 id="role-workspace-title">User Management</h1>
@@ -165,7 +164,13 @@ function AppContent() {
   if (!currentUser) return <main className="auth-page"><section className="auth-card" aria-labelledby="auth-error-title"><h1 id="auth-error-title">We could not restore your session</h1><p className="state-message state-message-error" role="alert">Please try again.</p><button className="btn btn-outline-success" type="button" onClick={() => void retry()}>Retry</button></section></main>;
   if (currentUser.mustChangePassword) { if (window.location.pathname !== "/change-password") replaceRoute("/change-password"); return <ChangePassword onComplete={completedAuthentication} onLogout={logoutAndRedirect} />; }
   if (window.location.pathname === "/login" || window.location.pathname === "/change-password") replaceRoute(roleHome(currentUser));
-  if (currentUser.role !== "REQUESTER") { if (window.location.pathname !== roleHome(currentUser)) replaceRoute(roleHome(currentUser)); return <RoleWorkspace user={currentUser} onLogout={logoutAndRedirect} />; }
+  if (currentUser.role !== "REQUESTER") {
+    const isAllowedStaffRoute =
+      /^\/staff\/tickets(\/\d+)?$/.test(window.location.pathname) ||
+      (currentUser.role === "ADMINISTRATOR" && window.location.pathname === "/admin/users");
+    if (!isAllowedStaffRoute) replaceRoute(roleHome(currentUser));
+    return <RoleWorkspace user={currentUser} onLogout={logoutAndRedirect} />;
+  }
   if (window.location.pathname !== "/tickets" && window.location.pathname !== "/tickets/new" && !/^\/tickets\/\d+$/.test(window.location.pathname)) replaceRoute("/tickets");
   return <RequesterWorkspace user={currentUser} onLogout={logoutAndRedirect} />;
 }

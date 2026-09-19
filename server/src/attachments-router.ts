@@ -7,19 +7,27 @@ import { attachmentStorage, contentDispositionHeader, safeFilename } from "./att
 
 export const attachmentsRouter = Router();
 
+import { requireAuth } from "./auth.js";
+
 // GET /api/attachments/:id/preview
-attachmentsRouter.get("/:id/preview", requireRequester, async (req, res, next) => {
+attachmentsRouter.get("/:id/preview", requireAuth, async (req, res, next) => {
   try {
     const id = positiveId(req.params.id);
     if (!id) {
       throw new TicketError(400, "VALIDATION_ERROR", "Invalid attachment ID.");
     }
 
-    const attachment = await getPrisma().attachment.findFirst({
-      where: { id, ticket: { requesterId: req.requester!.id } },
+    const attachment = await getPrisma().attachment.findUnique({
+      where: { id },
+      include: { ticket: { select: { requesterId: true } } },
     });
 
     if (!attachment) {
+      throw new TicketError(404, "ATTACHMENT_NOT_FOUND", "Attachment not found.");
+    }
+
+    const user = req.auth!.user;
+    if (user.role === "REQUESTER" && attachment.ticket.requesterId !== user.id) {
       throw new TicketError(404, "ATTACHMENT_NOT_FOUND", "Attachment not found.");
     }
 
@@ -45,18 +53,24 @@ attachmentsRouter.get("/:id/preview", requireRequester, async (req, res, next) =
 });
 
 // GET /api/attachments/:id/download
-attachmentsRouter.get("/:id/download", requireRequester, async (req, res, next) => {
+attachmentsRouter.get("/:id/download", requireAuth, async (req, res, next) => {
   try {
     const id = positiveId(req.params.id);
     if (!id) {
       throw new TicketError(400, "VALIDATION_ERROR", "Invalid attachment ID.");
     }
 
-    const attachment = await getPrisma().attachment.findFirst({
-      where: { id, ticket: { requesterId: req.requester!.id } },
+    const attachment = await getPrisma().attachment.findUnique({
+      where: { id },
+      include: { ticket: { select: { requesterId: true } } },
     });
 
     if (!attachment) {
+      throw new TicketError(404, "ATTACHMENT_NOT_FOUND", "Attachment not found.");
+    }
+
+    const user = req.auth!.user;
+    if (user.role === "REQUESTER" && attachment.ticket.requesterId !== user.id) {
       throw new TicketError(404, "ATTACHMENT_NOT_FOUND", "Attachment not found.");
     }
 
