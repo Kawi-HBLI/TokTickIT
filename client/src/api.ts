@@ -111,6 +111,8 @@ export interface TicketDetail {
     name: string;
   };
   attachments: AttachmentItem[];
+  requesterResolutionIndicatedAt?: string | null;
+  requesterResolutionIndicatedBy?: { id: number; name: string } | null;
 }
 
 export interface AttachmentListResponse {
@@ -579,3 +581,77 @@ export async function fetchStaffAssignees(): Promise<{ data: StaffAssignee[] }> 
 
   return response.json();
 }
+
+export interface PublicComment {
+  id: number;
+  ticketId: number;
+  content: string;
+  createdAt: string;
+  author: {
+    id: number;
+    name: string;
+    role: UserRole;
+  };
+}
+
+export interface PublicCommentsResponse {
+  data: PublicComment[];
+  meta: { count: number };
+}
+
+export interface ResolutionIndicationResponse {
+  data: {
+    indicatedAt: string;
+    indicatedBy: { id: number; name: string };
+    currentStatus: string;
+  };
+}
+
+export async function fetchPublicComments(ticketId: number): Promise<PublicCommentsResponse> {
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/public-comments`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    return readError(response, "Public comments could not be loaded.");
+  }
+
+  return response.json();
+}
+
+export async function createPublicComment(
+  ticketId: number,
+  content: string
+): Promise<{ data: PublicComment }> {
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/public-comments`, {
+    method: "POST",
+    credentials: "include",
+    headers: requestHeaders({ "Content-Type": "application/json" }, true),
+    body: JSON.stringify({ content }),
+  });
+
+  if (!response.ok) {
+    return readError(response, "Could not post public comment.");
+  }
+
+  return response.json();
+}
+
+export async function indicateProblemResolved(
+  ticketId: number,
+  expectedUpdatedAt: string
+): Promise<ResolutionIndicationResponse> {
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/resolution-indication`, {
+    method: "POST",
+    credentials: "include",
+    headers: requestHeaders({ "Content-Type": "application/json" }, true),
+    body: JSON.stringify({ expectedUpdatedAt }),
+  });
+
+  if (!response.ok) {
+    return readError(response, "Could not record resolution indication.");
+  }
+
+  return response.json();
+}
+

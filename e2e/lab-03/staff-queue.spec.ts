@@ -7,13 +7,14 @@ const newPassword = "Ethan-Staff-2026!";
 async function loginAsStaff(page: import("@playwright/test").Page) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(staffEmail);
-  await page.getByLabel("Password").fill(initialPassword);
+  await page.getByLabel("Password", { exact: true }).fill(initialPassword);
   await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL(/\/(change-password|staff\/tickets)$/);
 
   if (page.url().includes("/change-password")) {
-    await page.getByLabel("Current or initial password").fill(initialPassword);
-    await page.getByLabel("New password").fill(newPassword);
-    await page.getByLabel("Confirm new password").fill(newPassword);
+    await page.getByLabel("Current or initial password", { exact: true }).fill(initialPassword);
+    await page.getByLabel("New password", { exact: true }).fill(newPassword);
+    await page.getByLabel("Confirm new password", { exact: true }).fill(newPassword);
     await page.getByRole("button", { name: "Change password" }).click();
   }
 
