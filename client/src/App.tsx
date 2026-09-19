@@ -6,6 +6,7 @@ import Login from "./Login.js";
 import MyTickets from "./MyTickets.js";
 import { RequesterProvider, useRequester } from "./RequesterContext.js";
 import RequesterTicketDetail from "./RequesterTicketDetail.js";
+import StaffTicketQueue from "./StaffTicketQueue.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
 
@@ -31,10 +32,74 @@ function SystemDiagnostics() {
 }
 
 function RoleWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: () => Promise<void> }) {
+  const [route, setRoute] = useState<string>(() => {
+    const path = window.location.pathname;
+    if (user.role === "ADMINISTRATOR" && path === "/admin/users") return "/admin/users";
+    return "/staff/tickets";
+  });
   const [message, setMessage] = useState<string | null>(null);
   async function logout() { try { await onLogout(); } catch { setMessage("We could not sign you out right now. Try again."); } }
-  const navigation = user.role === "ADMINISTRATOR" ? ["User Management", "Ticket Queue"] : ["Ticket Queue"];
-  return <main className="app-page" id="top"><header className="app-shell"><a className="shell-brand" href="#top" aria-label="TokTickIT home">TokTickIT</a><nav aria-label="Primary navigation">{navigation.map((item) => <span className="nav-link" key={item}>{item}</span>)}</nav><div className="requester-identity"><span>{user.role === "IT_STAFF" ? "IT Staff" : "Administrator"}</span><strong>{user.name}</strong><button className="link-button" type="button" onClick={() => void logout()}>Log out</button></div></header>{message && <p className="form-alert" role="alert">{message}</p>}<section className="workspace-card" aria-labelledby="role-workspace-title"><h1 id="role-workspace-title">{user.role === "IT_STAFF" ? "Ticket Queue" : "User Management"}</h1><p className="page-intro">This role is authenticated. Its workflow will be delivered in the next Lab 3 issue.</p></section></main>;
+  function navigate(next: string) {
+    window.history.pushState({}, "", next);
+    setRoute(next);
+  }
+  useEffect(() => {
+    const onPop = () => {
+      setRoute(window.location.pathname);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  return (
+    <main className="app-page" id="top">
+      <header className="app-shell">
+        <a className="shell-brand" href="#top" aria-label="TokTickIT home">TokTickIT</a>
+        <nav aria-label="Primary navigation">
+          {user.role === "ADMINISTRATOR" && (
+            <button
+              type="button"
+              className={route === "/admin/users" ? "nav-link active" : "nav-link"}
+              aria-current={route === "/admin/users" ? "page" : undefined}
+              onClick={() => navigate("/admin/users")}
+            >
+              User Management
+            </button>
+          )}
+          <button
+            type="button"
+            className={route.startsWith("/staff/tickets") ? "nav-link active" : "nav-link"}
+            aria-current={route.startsWith("/staff/tickets") ? "page" : undefined}
+            onClick={() => navigate("/staff/tickets")}
+          >
+            Ticket Queue
+          </button>
+        </nav>
+        <div className="requester-identity">
+          <span>{user.role === "IT_STAFF" ? "IT Staff" : "Administrator"}</span>
+          <strong>{user.name}</strong>
+          <button className="link-button" type="button" onClick={() => void logout()}>Log out</button>
+        </div>
+      </header>
+      {message && <p className="form-alert" role="alert">{message}</p>}
+      {route === "/staff/tickets" ? (
+        <StaffTicketQueue onNavigate={navigate} />
+      ) : route.match(/^\/staff\/tickets\/\d+$/) ? (
+        <section className="workspace-card" aria-labelledby="staff-detail-placeholder-title">
+          <h1 id="staff-detail-placeholder-title">Ticket Detail</h1>
+          <p className="page-intro">IT Staff Ticket operations workflow will be delivered in the next Lab 3 issue (Issue #33).</p>
+          <button type="button" className="btn btn-outline-success" onClick={() => navigate("/staff/tickets")}>
+            Back to Ticket Queue
+          </button>
+        </section>
+      ) : (
+        <section className="workspace-card" aria-labelledby="role-workspace-title">
+          <h1 id="role-workspace-title">User Management</h1>
+          <p className="page-intro">User Management workflow will be delivered in the next Lab 3 issue.</p>
+        </section>
+      )}
+    </main>
+  );
 }
 
 function RequesterWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: () => Promise<void> }) {
