@@ -1,5 +1,4 @@
 import {
-  ChangeEvent,
   FormEvent,
   KeyboardEvent,
   useEffect,
@@ -12,7 +11,7 @@ import {
   ApiError,
   createAdminUser,
   fetchAdminUsers,
-  resetAdminUserPassword,
+  setAdminUserInitialPassword,
   updateAdminUser,
   UserRole,
 } from "./api.js";
@@ -25,15 +24,14 @@ export interface UserManagementProps {
 interface CreateUserState {
   name: string;
   email: string;
-  department: string;
   role: UserRole;
   isActive: boolean;
+  initialPassword: string;
 }
 
 interface EditUserState {
   name: string;
   email: string;
-  department: string;
   role: UserRole;
   isActive: boolean;
 }
@@ -41,9 +39,9 @@ interface EditUserState {
 const INITIAL_CREATE_STATE: CreateUserState = {
   name: "",
   email: "",
-  department: "",
   role: "REQUESTER",
   isActive: true,
+  initialPassword: "",
 };
 
 function formatRole(role: UserRole): string {
@@ -86,10 +84,12 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
   const [editError, setEditError] = useState<string | null>(null);
   const [editFieldErrors, setEditFieldErrors] = useState<Record<string, string>>({});
 
-  // Reset Password Modal
+  // Reset Initial Password Modal
   const [resettingUser, setResettingUser] = useState<AdminUser | null>(null);
+  const [resetPasswordInput, setResetPasswordInput] = useState("");
   const [resetSubmitting, setResetSubmitting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [resetFieldError, setResetFieldError] = useState<string | null>(null);
 
   // Focus management
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -184,7 +184,6 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
     setEditForm({
       name: user.name,
       email: user.email,
-      department: user.department || "",
       role: user.role,
       isActive: user.isActive,
     });
@@ -204,12 +203,16 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
   function openResetModal(user: AdminUser) {
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setResettingUser(user);
+    setResetPasswordInput("");
     setResetError(null);
+    setResetFieldError(null);
   }
 
   function closeResetModal() {
     setResettingUser(null);
+    setResetPasswordInput("");
     setResetError(null);
+    setResetFieldError(null);
     previousFocus.current?.focus();
   }
 
@@ -230,8 +233,8 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
 
   useEffect(() => {
     if (resettingUser && resetModalRef.current) {
-      const confirmBtn = resetModalRef.current.querySelector<HTMLButtonElement>(".btn-danger, .btn-primary");
-      confirmBtn?.focus();
+      const firstInput = resetModalRef.current.querySelector<HTMLInputElement>("input");
+      firstInput?.focus();
     }
   }, [resettingUser]);
 
@@ -242,13 +245,16 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
     setCreateFieldErrors({});
 
     const fieldErrors: Record<string, string> = {};
-    if (!createForm.name.trim()) {
-      fieldErrors.name = "Full name is required.";
+    if (!createForm.name.trim() || createForm.name.trim().length < 2) {
+      fieldErrors.name = "Full name must be between 2 and 100 characters.";
     }
     if (!createForm.email.trim()) {
       fieldErrors.email = "Email address is required.";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(createForm.email.trim())) {
       fieldErrors.email = "Please enter a valid email address.";
+    }
+    if (!createForm.initialPassword || createForm.initialPassword.length < 12 || createForm.initialPassword.length > 72) {
+      fieldErrors.initialPassword = "Initial password must contain 12-72 characters.";
     }
 
     if (Object.keys(fieldErrors).length > 0) {
@@ -261,9 +267,9 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
       const res = await createAdminUser({
         name: createForm.name.trim(),
         email: createForm.email.trim().toLowerCase(),
-        department: createForm.department.trim() || null,
         role: createForm.role,
         isActive: createForm.isActive,
+        initialPassword: createForm.initialPassword,
       });
 
       setFeedback({
@@ -300,8 +306,8 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
     setEditFieldErrors({});
 
     const fieldErrors: Record<string, string> = {};
-    if (!editForm.name.trim()) {
-      fieldErrors.name = "Full name is required.";
+    if (!editForm.name.trim() || editForm.name.trim().length < 2) {
+      fieldErrors.name = "Full name must be between 2 and 100 characters.";
     }
     if (!editForm.email.trim()) {
       fieldErrors.email = "Email address is required.";
@@ -319,14 +325,19 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
       const res = await updateAdminUser(editingUser.id, {
         name: editForm.name.trim(),
         email: editForm.email.trim().toLowerCase(),
-        department: editForm.department.trim() || null,
         role: editForm.role,
         isActive: editForm.isActive,
+        expectedUpdatedAt: editingUser.updatedAt,
       });
+
+      const unassignedText =
+        res.unassignedTicketCount && res.unassignedTicketCount > 0
+          ? ` (${res.unassignedTicketCount} owned tickets were unassigned)`
+          : "";
 
       setFeedback({
         type: "success",
-        message: `User "${res.data.name}" was updated successfully.`,
+        message: `User "${res.data.name}" was updated successfully${unassignedText}.`,
       });
       closeEditModal();
       setReloadTrigger((prev) => prev + 1);
@@ -349,26 +360,38 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
     }
   }
 
-  // Submit Reset Password
-  async function handleResetPassword() {
+  // Submit Reset / Set Initial Password
+  async function handleResetInitialPassword(e: FormEvent) {
+    e.preventDefault();
     if (!resettingUser) return;
-    setResetSubmitting(true);
-    setResetError(null);
 
+    setResetError(null);
+    setResetFieldError(null);
+
+    if (!resetPasswordInput || resetPasswordInput.length < 12 || resetPasswordInput.length > 72) {
+      setResetFieldError("Initial password must contain 12-72 characters.");
+      return;
+    }
+
+    setResetSubmitting(true);
     try {
-      await resetAdminUserPassword(resettingUser.id);
+      await setAdminUserInitialPassword(resettingUser.id, resetPasswordInput);
       setFeedback({
         type: "success",
-        message: `Password for "${resettingUser.name}" has been reset to ChangeMe-2026!. User must change password upon next login.`,
+        message: `Initial password for "${resettingUser.name}" has been set. The user must change password upon next login.`,
       });
       closeResetModal();
       setReloadTrigger((prev) => prev + 1);
     } catch (err) {
       console.error(err);
       if (err instanceof ApiError) {
+        if (err.fields && err.fields.length > 0) {
+          const field = err.fields.find((f) => f.field === "initialPassword");
+          if (field) setResetFieldError(field.message);
+        }
         setResetError(err.message);
       } else {
-        setResetError("Could not reset user password. Please try again.");
+        setResetError("Could not set initial password. Please try again.");
       }
     } finally {
       setResetSubmitting(false);
@@ -538,7 +561,6 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                 <tr>
                   <th scope="col">Name</th>
                   <th scope="col">Email</th>
-                  <th scope="col">Department</th>
                   <th scope="col">Role</th>
                   <th scope="col">Status</th>
                   <th scope="col">
@@ -556,7 +578,6 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                       )}
                     </td>
                     <td className="user-email-cell">{u.email}</td>
-                    <td>{u.department || <span className="text-muted">—</span>}</td>
                     <td>
                       <span className={`badge badge-role badge-role-${u.role.toLowerCase()}`}>
                         {formatRole(u.role)}
@@ -587,7 +608,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                           aria-label={`Reset password for ${u.name}`}
                           onClick={() => openResetModal(u)}
                         >
-                          Reset Password
+                          Reset Initial Password
                         </button>
                       </div>
                     </td>
@@ -625,10 +646,6 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                     <span className="meta-value">{u.email}</span>
                   </div>
                   <div className="meta-row">
-                    <span className="meta-label">Department:</span>
-                    <span className="meta-value">{u.department || "—"}</span>
-                  </div>
-                  <div className="meta-row">
                     <span className="meta-label">Role:</span>
                     <span className="meta-value">
                       <span className={`badge badge-role badge-role-${u.role.toLowerCase()}`}>
@@ -652,7 +669,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                     aria-label={`Reset password for ${u.name}`}
                     onClick={() => openResetModal(u)}
                   >
-                    Reset Password
+                    Reset Initial Password
                   </button>
                 </div>
               </article>
@@ -734,20 +751,6 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
               </div>
 
               <div className="form-group mb-3">
-                <label htmlFor="create-dept">Department</label>
-                <input
-                  id="create-dept"
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Operations, IT, Finance"
-                  value={createForm.department}
-                  onChange={(e) =>
-                    setCreateForm((prev) => ({ ...prev, department: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div className="form-group mb-3">
                 <label htmlFor="create-role">
                   Role <span className="text-danger">*</span>
                 </label>
@@ -768,6 +771,28 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                 </select>
               </div>
 
+              <div className="form-group mb-3">
+                <label htmlFor="create-password">
+                  Initial Password <span className="text-danger">*</span>
+                </label>
+                <input
+                  id="create-password"
+                  type="password"
+                  className={`form-input ${createFieldErrors.initialPassword ? "is-invalid" : ""}`}
+                  placeholder="12–72 characters"
+                  value={createForm.initialPassword}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({ ...prev, initialPassword: e.target.value }))
+                  }
+                  required
+                />
+                {createFieldErrors.initialPassword && (
+                  <p className="field-error" role="alert">
+                    {createFieldErrors.initialPassword}
+                  </p>
+                )}
+              </div>
+
               <div className="form-check mb-3">
                 <input
                   id="create-is-active"
@@ -785,8 +810,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
 
               <div className="modal-info-box mb-4">
                 <p className="mb-0 text-muted">
-                  <strong>Initial Password:</strong> A temporary password{" "}
-                  <code>ChangeMe-2026!</code> will be generated. The user will be required to change it upon first login.
+                  The initial password will be securely hashed. The user will be required to change it upon first login.
                 </p>
               </div>
 
@@ -885,22 +909,6 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
               </div>
 
               <div className="form-group mb-3">
-                <label htmlFor="edit-dept">Department</label>
-                <input
-                  id="edit-dept"
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Operations, IT, Finance"
-                  value={editForm.department}
-                  onChange={(e) =>
-                    setEditForm((prev) =>
-                      prev ? { ...prev, department: e.target.value } : null
-                    )
-                  }
-                />
-              </div>
-
-              <div className="form-group mb-3">
                 <label htmlFor="edit-role">
                   Role <span className="text-danger">*</span>
                 </label>
@@ -908,7 +916,6 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                   id="edit-role"
                   className="form-select"
                   value={editForm.role}
-                  disabled={isEditingSelf}
                   onChange={(e) =>
                     setEditForm((prev) =>
                       prev ? { ...prev, role: e.target.value as UserRole } : null
@@ -919,11 +926,6 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                   <option value="IT_STAFF">IT Staff</option>
                   <option value="ADMINISTRATOR">Administrator</option>
                 </select>
-                {isEditingSelf && (
-                  <p className="form-field-helper text-muted">
-                    You cannot change your own administrator role.
-                  </p>
-                )}
               </div>
 
               <div className="form-check mb-3">
@@ -971,7 +973,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
         </div>
       )}
 
-      {/* RESET PASSWORD CONFIRMATION MODAL */}
+      {/* RESET INITIAL PASSWORD MODAL */}
       {resettingUser && (
         <div className="dialog-backdrop" role="presentation">
           <section
@@ -983,41 +985,73 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
             aria-describedby="reset-dialog-desc"
             onKeyDown={(e) => handleModalKeyDown(e, closeResetModal, resetModalRef)}
           >
-            <h2 id="reset-dialog-title">Reset User Password?</h2>
-            <p id="reset-dialog-desc">
-              Are you sure you want to reset the password for{" "}
-              <strong>{resettingUser.name}</strong> ({resettingUser.email})?
-            </p>
-            <div className="modal-info-box mb-4">
-              <p className="mb-0 text-muted">
-                The password will be reset to <code>ChangeMe-2026!</code>. The user will be required to set a new password on their next login, and all of their current active sessions will be terminated immediately.
-              </p>
-            </div>
-
-            {resetError && (
-              <div className="alert alert-danger mb-3" role="alert">
-                {resetError}
-              </div>
-            )}
-
-            <div className="dialog-actions">
+            <div className="dialog-header">
+              <h2 id="reset-dialog-title">Set Initial Password</h2>
               <button
                 type="button"
-                className="btn btn-outline-secondary"
+                className="btn-close-modal"
+                aria-label="Close dialog"
                 onClick={closeResetModal}
-                disabled={resetSubmitting}
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={handleResetPassword}
-                disabled={resetSubmitting}
-              >
-                {resetSubmitting ? "Resetting…" : "Confirm Reset Password"}
+                ×
               </button>
             </div>
+
+            <p id="reset-dialog-desc">
+              Set a replacement initial password for <strong>{resettingUser.name}</strong> ({resettingUser.email}).
+            </p>
+
+            <form onSubmit={handleResetInitialPassword} noValidate>
+              <div className="form-group mb-3">
+                <label htmlFor="reset-initial-password">
+                  New Initial Password <span className="text-danger">*</span>
+                </label>
+                <input
+                  id="reset-initial-password"
+                  type="password"
+                  className={`form-input ${resetFieldError ? "is-invalid" : ""}`}
+                  placeholder="12–72 characters"
+                  value={resetPasswordInput}
+                  onChange={(e) => setResetPasswordInput(e.target.value)}
+                  required
+                />
+                {resetFieldError && (
+                  <p className="field-error" role="alert">
+                    {resetFieldError}
+                  </p>
+                )}
+              </div>
+
+              <div className="modal-info-box mb-4">
+                <p className="mb-0 text-muted">
+                  The user will be required to change this password on their next login, and all of their current active sessions will be terminated immediately.
+                </p>
+              </div>
+
+              {resetError && (
+                <div className="alert alert-danger mb-3" role="alert">
+                  {resetError}
+                </div>
+              )}
+
+              <div className="dialog-actions">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={closeResetModal}
+                  disabled={resetSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-danger"
+                  disabled={resetSubmitting}
+                >
+                  {resetSubmitting ? "Setting…" : "Set Initial Password"}
+                </button>
+              </div>
+            </form>
           </section>
         </div>
       )}

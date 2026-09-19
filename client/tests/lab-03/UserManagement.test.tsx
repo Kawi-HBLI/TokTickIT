@@ -14,7 +14,7 @@ vi.mock("../../src/api.js", async (importOriginal) => {
     fetchAdminUsers: vi.fn(),
     createAdminUser: vi.fn(),
     updateAdminUser: vi.fn(),
-    resetAdminUserPassword: vi.fn(),
+    setAdminUserInitialPassword: vi.fn(),
   };
 });
 
@@ -34,7 +34,6 @@ const sampleUsers: api.AdminUser[] = [
     id: 1,
     name: "Harper Morgan",
     email: "harper.morgan@toktickit.local",
-    department: "Executive",
     role: "ADMINISTRATOR",
     isActive: true,
     mustChangePassword: false,
@@ -45,7 +44,6 @@ const sampleUsers: api.AdminUser[] = [
     id: 2,
     name: "Avery Jordan",
     email: "avery.jordan@toktickit.local",
-    department: "IT Infrastructure",
     role: "IT_STAFF",
     isActive: true,
     mustChangePassword: false,
@@ -56,7 +54,6 @@ const sampleUsers: api.AdminUser[] = [
     id: 3,
     name: "Robin Taylor",
     email: "robin.taylor@toktickit.local",
-    department: "Marketing",
     role: "REQUESTER",
     isActive: false,
     mustChangePassword: false,
@@ -73,7 +70,7 @@ function renderComponent(onNavigate = vi.fn()) {
   );
 }
 
-describe("UI-ADMIN-01: Administrator User Management", () => {
+describe("UI-USER-01: Administrator User Management", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.getCurrentUser).mockResolvedValue({
@@ -85,7 +82,7 @@ describe("UI-ADMIN-01: Administrator User Management", () => {
     });
   });
 
-  it("renders user table with name, email, department, role badges, and status", async () => {
+  it("renders user table with name, email, role badges, and status", async () => {
     renderComponent();
 
     await waitFor(() => {
@@ -95,7 +92,6 @@ describe("UI-ADMIN-01: Administrator User Management", () => {
     expect(screen.getAllByText("harper.morgan@toktickit.local").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Avery Jordan").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Robin Taylor").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Executive").length).toBeGreaterThan(0);
     expect(screen.getAllByText("IT Staff").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Inactive").length).toBeGreaterThan(0);
     expect(screen.getAllByText("You").length).toBeGreaterThan(0);
@@ -142,14 +138,13 @@ describe("UI-ADMIN-01: Administrator User Management", () => {
     });
   });
 
-  it("opens create user dialog, validates required fields, and submits new user", async () => {
+  it("opens create user dialog, validates required fields, and submits new user with initial password", async () => {
     const user = userEvent.setup();
     vi.mocked(api.createAdminUser).mockResolvedValue({
       data: {
         id: 4,
         name: "Morgan Vance",
         email: "morgan.vance@toktickit.local",
-        department: "Operations",
         role: "REQUESTER",
         isActive: true,
         mustChangePassword: true,
@@ -169,28 +164,28 @@ describe("UI-ADMIN-01: Administrator User Management", () => {
 
     const dialog = screen.getByRole("dialog");
     expect(dialog).toBeInTheDocument();
-    expect(within(dialog).getByText(/Initial Password:/i)).toBeInTheDocument();
 
     // Try submitting empty
     const submitBtn = within(dialog).getByRole("button", { name: "Create User" });
     await user.click(submitBtn);
 
-    expect(within(dialog).getByText("Full name is required.")).toBeInTheDocument();
+    expect(within(dialog).getByText("Full name must be between 2 and 100 characters.")).toBeInTheDocument();
     expect(within(dialog).getByText("Email address is required.")).toBeInTheDocument();
+    expect(within(dialog).getByText("Initial password must contain 12-72 characters.")).toBeInTheDocument();
 
     // Fill valid data
     await user.type(within(dialog).getByLabelText(/Full Name/i), "Morgan Vance");
     await user.type(within(dialog).getByLabelText(/Email Address/i), "morgan.vance@toktickit.local");
-    await user.type(within(dialog).getByLabelText("Department"), "Operations");
+    await user.type(within(dialog).getByLabelText(/Initial Password/i), "ValidPass123456!");
     await user.click(submitBtn);
 
     await waitFor(() => {
       expect(api.createAdminUser).toHaveBeenCalledWith({
         name: "Morgan Vance",
         email: "morgan.vance@toktickit.local",
-        department: "Operations",
         role: "REQUESTER",
         isActive: true,
+        initialPassword: "ValidPass123456!",
       });
     });
 
@@ -199,7 +194,7 @@ describe("UI-ADMIN-01: Administrator User Management", () => {
     });
   });
 
-  it("prevents self-deactivation and self-role demotion in edit dialog for current user", async () => {
+  it("prevents self-deactivation in edit dialog for current user", async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -214,14 +209,14 @@ describe("UI-ADMIN-01: Administrator User Management", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toBeInTheDocument();
 
-    // Check that role and active account inputs are disabled
-    const roleSelect = within(dialog).getByLabelText(/Role/i);
+    // Active account checkbox should be disabled for self
     const activeCheck = within(dialog).getByLabelText(/Active Account/i);
-
-    expect(roleSelect).toBeDisabled();
     expect(activeCheck).toBeDisabled();
-    expect(within(dialog).getByText("You cannot change your own administrator role.")).toBeInTheDocument();
     expect(within(dialog).getByText("You cannot deactivate your own account.")).toBeInTheDocument();
+
+    // Role select is NOT disabled for self on client (server handles last-active-admin check)
+    const roleSelect = within(dialog).getByLabelText(/Role/i);
+    expect(roleSelect).not.toBeDisabled();
 
     // Cancel dialog
     const cancelBtn = within(dialog).getByRole("button", { name: "Cancel" });
@@ -232,14 +227,13 @@ describe("UI-ADMIN-01: Administrator User Management", () => {
     });
   });
 
-  it("edits another user and saves successfully", async () => {
+  it("edits another user and saves successfully with expectedUpdatedAt", async () => {
     const user = userEvent.setup();
     vi.mocked(api.updateAdminUser).mockResolvedValue({
       data: {
         id: 2,
         name: "Avery Jordan",
         email: "avery.jordan@toktickit.local",
-        department: "DevOps",
         role: "ADMINISTRATOR",
         isActive: true,
         mustChangePassword: false,
@@ -264,10 +258,7 @@ describe("UI-ADMIN-01: Administrator User Management", () => {
     expect(roleSelect).not.toBeDisabled();
     expect(activeCheck).not.toBeDisabled();
 
-    // Change department and role
-    const deptInput = within(dialog).getByLabelText("Department");
-    await user.clear(deptInput);
-    await user.type(deptInput, "DevOps");
+    // Change role to ADMINISTRATOR
     await user.selectOptions(roleSelect, "ADMINISTRATOR");
 
     const saveBtn = within(dialog).getByRole("button", { name: "Save Changes" });
@@ -277,9 +268,9 @@ describe("UI-ADMIN-01: Administrator User Management", () => {
       expect(api.updateAdminUser).toHaveBeenCalledWith(2, {
         name: "Avery Jordan",
         email: "avery.jordan@toktickit.local",
-        department: "DevOps",
         role: "ADMINISTRATOR",
         isActive: true,
+        expectedUpdatedAt: "2026-09-02T00:00:00.000Z",
       });
     });
 
@@ -288,10 +279,19 @@ describe("UI-ADMIN-01: Administrator User Management", () => {
     });
   });
 
-  it("opens reset password confirmation dialog and resets password", async () => {
+  it("opens reset password dialog and sets new initial password", async () => {
     const user = userEvent.setup();
-    vi.mocked(api.resetAdminUserPassword).mockResolvedValue({
-      data: { message: "Password reset successfully." },
+    vi.mocked(api.setAdminUserInitialPassword).mockResolvedValue({
+      data: {
+        id: 2,
+        name: "Avery Jordan",
+        email: "avery.jordan@toktickit.local",
+        role: "IT_STAFF",
+        isActive: true,
+        mustChangePassword: true,
+        createdAt: "2026-09-02T00:00:00.000Z",
+        updatedAt: "2026-09-19T00:00:00.000Z",
+      },
     });
 
     renderComponent();
@@ -303,19 +303,22 @@ describe("UI-ADMIN-01: Administrator User Management", () => {
     const resetBtns = screen.getAllByRole("button", { name: "Reset password for Avery Jordan" });
     await user.click(resetBtns[0]);
 
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText(/Reset User Password\?/i)).toBeInTheDocument();
-    expect(screen.getByText(/The password will be reset to/i)).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByRole("heading", { name: "Set Initial Password" })).toBeVisible();
 
-    const confirmBtn = screen.getByRole("button", { name: "Confirm Reset Password" });
+    const passwordInput = within(dialog).getByLabelText(/New Initial Password/i);
+    await user.type(passwordInput, "NewTempSecret-2026!");
+
+    const confirmBtn = within(dialog).getByRole("button", { name: "Set Initial Password" });
     await user.click(confirmBtn);
 
     await waitFor(() => {
-      expect(api.resetAdminUserPassword).toHaveBeenCalledWith(2);
+      expect(api.setAdminUserInitialPassword).toHaveBeenCalledWith(2, "NewTempSecret-2026!");
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/Password for "Avery Jordan" has been reset to ChangeMe-2026!/i)).toBeInTheDocument();
+      expect(screen.getByText(/Initial password for "Avery Jordan" has been set/i)).toBeInTheDocument();
     });
   });
 

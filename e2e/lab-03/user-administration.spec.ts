@@ -1,28 +1,28 @@
 import { expect, test } from "@playwright/test";
 
 const adminEmail = "harper.morgan@toktickit.local";
-const initialPassword = "ChangeMe-2026!";
-const newPassword = "Harper-Admin-2026!";
+const initialAdminPassword = "ChangeMe-2026!";
+const permanentAdminPassword = "Harper-Admin-2026!";
 
 async function loginAsAdmin(page: import("@playwright/test").Page) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(adminEmail);
-  await page.getByLabel("Password", { exact: true }).fill(initialPassword);
+  await page.getByLabel("Password", { exact: true }).fill(initialAdminPassword);
   await page.getByRole("button", { name: "Sign in" }).click();
 
-  // If initial password was already changed in a previous run, retry with newPassword
+  // If initial password was already changed in a previous run or test, retry with permanentAdminPassword
   const hasAlert = await page.getByRole("alert").isVisible().catch(() => false);
   if (hasAlert) {
-    await page.getByLabel("Password", { exact: true }).fill(newPassword);
+    await page.getByLabel("Password", { exact: true }).fill(permanentAdminPassword);
     await page.getByRole("button", { name: "Sign in" }).click();
   }
 
   await page.waitForURL(/\/(change-password|admin\/users|staff\/tickets)$/);
 
   if (page.url().includes("/change-password")) {
-    await page.getByLabel("Current or initial password", { exact: true }).fill(initialPassword);
-    await page.getByLabel("New password", { exact: true }).fill(newPassword);
-    await page.getByLabel("Confirm new password", { exact: true }).fill(newPassword);
+    await page.getByLabel("Current or initial password", { exact: true }).fill(initialAdminPassword);
+    await page.getByLabel("New password", { exact: true }).fill(permanentAdminPassword);
+    await page.getByLabel("Confirm new password", { exact: true }).fill(permanentAdminPassword);
     await page.getByRole("button", { name: "Change password" }).click();
   }
 
@@ -33,8 +33,56 @@ async function loginAsAdmin(page: import("@playwright/test").Page) {
   await expect(page).toHaveURL(/\/admin\/users$/);
 }
 
+async function loginAsRequester(page: import("@playwright/test").Page) {
+  const email = "chalida.srisuk@toktickit.local";
+  const initialPassword = "ChangeMe-2026!";
+  const newPassword = "Chalida-Pass-2026!";
+
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(initialPassword);
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await page.waitForTimeout(500);
+  const hasAlert = await page.getByRole("alert").isVisible().catch(() => false);
+  if (hasAlert) {
+    await page.getByLabel("Password", { exact: true }).fill(newPassword);
+    await page.getByRole("button", { name: "Sign in" }).click();
+  }
+
+  await page.waitForURL(/\/(change-password|tickets)$/);
+  if (page.url().includes("/change-password")) {
+    await page.getByLabel("Current or initial password", { exact: true }).fill(initialPassword);
+    await page.getByLabel("New password", { exact: true }).fill(newPassword);
+    await page.getByLabel("Confirm new password", { exact: true }).fill(newPassword);
+    await page.getByRole("button", { name: "Change password" }).click();
+  }
+  await expect(page).toHaveURL(/\/tickets$/);
+}
+
 test.describe("E2E-ADMIN-01: Administrator User Management Workflow", () => {
-  test("full user management lifecycle: list, search, create, self-protection, edit, reset password, responsive view", async ({
+  test("requester direct URL and API to admin users is denied", async ({ page }) => {
+    // 1. Sign in as requester
+    await loginAsRequester(page);
+
+    // 2. Direct API call to admin users must return 403 Forbidden
+    const status = await page.evaluate(async () => {
+      const res = await fetch("http://localhost:8000/api/admin/users", { credentials: "include" });
+      return res.status;
+    });
+    expect(status).toBe(403);
+
+    // 3. Direct URL navigation to /admin/users must not expose admin management
+    await page.goto("/admin/users");
+    await expect(page.getByRole("heading", { name: "User Management" })).toBeHidden();
+    await expect(page.locator(".admin-users-table")).toBeHidden();
+
+    // 4. Log out requester
+    await page.getByRole("button", { name: "Log out" }).click();
+    await expect(page).toHaveURL(/\/login$/);
+  });
+
+  test("full user management lifecycle: list, search, create with initial password, self-protection, edit, reset password, first login, and responsive view", async ({
     page,
   }) => {
     // 1. Sign in as Administrator and navigate to User Management
@@ -48,11 +96,10 @@ test.describe("E2E-ADMIN-01: Administrator User Management Workflow", () => {
     await expect(tableContainer).toBeVisible();
     await expect(page.locator(".admin-users-cards")).toBeHidden();
 
-    // Verify table columns
+    // Verify table columns (no Department column)
     const table = page.locator(".admin-users-table");
     await expect(table.getByRole("columnheader", { name: "Name" })).toBeVisible();
     await expect(table.getByRole("columnheader", { name: "Email" })).toBeVisible();
-    await expect(table.getByRole("columnheader", { name: "Department" })).toBeVisible();
     await expect(table.getByRole("columnheader", { name: "Role" })).toBeVisible();
     await expect(table.getByRole("columnheader", { name: "Status" })).toBeVisible();
 
@@ -82,7 +129,7 @@ test.describe("E2E-ADMIN-01: Administrator User Management Workflow", () => {
     await roleSelect.selectOption("ALL");
     await page.waitForTimeout(400);
 
-    // 4. Create User Workflow
+    // 4. Create User Workflow with Admin-Provided Initial Password
     const createBtn = page.getByRole("button", { name: "Create User" });
     await createBtn.click();
 
@@ -93,17 +140,18 @@ test.describe("E2E-ADMIN-01: Administrator User Management Workflow", () => {
     // Validation: submit empty form
     const createSubmitBtn = createDialog.getByRole("button", { name: "Create User" });
     await createSubmitBtn.click();
-    await expect(createDialog.getByText("Full name is required.")).toBeVisible();
+    await expect(createDialog.getByText("Full name must be between 2 and 100 characters.")).toBeVisible();
     await expect(createDialog.getByText("Email address is required.")).toBeVisible();
 
     // Fill valid user data
     const timestamp = Date.now();
     const newUserName = `E2E Operator ${timestamp}`;
-    const newUserEmail = `e2e.operator.${timestamp}@toktickit.local`;
+    const newUserEmail = `e2e.op.${timestamp}@toktickit.local`;
+    const userInitialPassword = "InitUserPass-2026!";
 
     await createDialog.getByLabel(/Full Name/i).fill(newUserName);
     await createDialog.getByLabel(/Email Address/i).fill(newUserEmail);
-    await createDialog.getByLabel("Department").fill("E2E Department");
+    await createDialog.getByLabel(/Initial Password/i).fill(userInitialPassword);
     await createDialog.getByLabel(/Role/i).selectOption("REQUESTER");
 
     await createSubmitBtn.click();
@@ -123,12 +171,9 @@ test.describe("E2E-ADMIN-01: Administrator User Management Workflow", () => {
     const editDialog = page.getByRole("dialog");
     await expect(editDialog).toBeVisible();
 
-    // Verify self-protection restrictions
-    const selfRoleSelect = editDialog.getByLabel(/Role/i);
+    // Verify self-deactivation is disabled
     const selfActiveCheckbox = editDialog.getByLabel(/Active Account/i);
-    await expect(selfRoleSelect).toBeDisabled();
     await expect(selfActiveCheckbox).toBeDisabled();
-    await expect(editDialog.getByText("You cannot change your own administrator role.")).toBeVisible();
     await expect(editDialog.getByText("You cannot deactivate your own account.")).toBeVisible();
 
     // Cancel self-edit
@@ -140,22 +185,13 @@ test.describe("E2E-ADMIN-01: Administrator User Management Workflow", () => {
     await editOtherBtn.click();
     await expect(editDialog).toBeVisible();
 
-    // Role and active checkbox should NOT be disabled for other users
+    // Promote to IT Staff
     const otherRoleSelect = editDialog.getByLabel(/Role/i);
-    const otherActiveCheckbox = editDialog.getByLabel(/Active Account/i);
-    await expect(otherRoleSelect).not.toBeDisabled();
-    await expect(otherActiveCheckbox).not.toBeDisabled();
-
-    // Update department and promote to IT Staff
-    await editDialog.getByLabel("Department").fill("Advanced IT");
     await otherRoleSelect.selectOption("IT_STAFF");
     await editDialog.getByRole("button", { name: "Save Changes" }).click();
 
     await expect(page.locator(".alert-success")).toContainText(`User "${newUserName}" was updated successfully.`);
     await expect(editDialog).toBeHidden();
-
-    // Verify updated values in table
-    await expect(table.getByText("Advanced IT")).toBeVisible();
 
     // 7. Reset Password Workflow
     const resetPasswordBtn = table.getByRole("button", { name: `Reset password for ${newUserName}` });
@@ -163,13 +199,14 @@ test.describe("E2E-ADMIN-01: Administrator User Management Workflow", () => {
 
     const resetDialog = page.getByRole("dialog");
     await expect(resetDialog).toBeVisible();
-    await expect(resetDialog.getByRole("heading", { name: "Reset User Password?" })).toBeVisible();
-    await expect(resetDialog.getByText(/The password will be reset to ChangeMe-2026!/i)).toBeVisible();
+    await expect(resetDialog.getByRole("heading", { name: "Set Initial Password" })).toBeVisible();
 
-    await resetDialog.getByRole("button", { name: "Confirm Reset Password" }).click();
+    const newResetPassword = "ResetSecretPass-2026!";
+    await resetDialog.getByLabel(/New Initial Password/i).fill(newResetPassword);
+    await resetDialog.getByRole("button", { name: "Set Initial Password" }).click();
 
     await expect(page.locator(".alert-success")).toContainText(
-      `Password for "${newUserName}" has been reset to ChangeMe-2026!. User must change password upon next login.`
+      `Initial password for "${newUserName}" has been set. The user must change password upon next login.`
     );
     await expect(resetDialog).toBeHidden();
 
@@ -184,5 +221,27 @@ test.describe("E2E-ADMIN-01: Administrator User Management Workflow", () => {
     await expect(userCard).toBeVisible();
     await expect(userCard.getByRole("button", { name: `Edit ${newUserName}` })).toBeVisible();
     await expect(userCard.getByRole("button", { name: `Reset password for ${newUserName}` })).toBeVisible();
+
+    // Restore viewport
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    // 9. Log out Admin and verify New User can login and is forced to change password
+    await page.getByRole("button", { name: "Log out" }).click();
+    await expect(page).toHaveURL(/\/login$/);
+
+    await page.getByLabel("Email").fill(newUserEmail);
+    await page.getByLabel("Password", { exact: true }).fill(newResetPassword);
+    await page.getByRole("button", { name: "Sign in" }).click();
+
+    // Must be redirected to change password
+    await expect(page).toHaveURL(/\/change-password$/);
+    await page.getByLabel("Current or initial password", { exact: true }).fill(newResetPassword);
+    const permanentNewPass = "PermanentSecret-2026!";
+    await page.getByLabel("New password", { exact: true }).fill(permanentNewPass);
+    await page.getByLabel("Confirm new password", { exact: true }).fill(permanentNewPass);
+    await page.getByRole("button", { name: "Change password" }).click();
+
+    // Since role was changed to IT_STAFF, should land on /staff/tickets
+    await expect(page).toHaveURL(/\/staff\/tickets$/);
   });
 });

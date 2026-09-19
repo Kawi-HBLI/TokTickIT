@@ -854,28 +854,33 @@ export interface AdminUser {
   id: number;
   name: string;
   email: string;
-  department: string | null;
   role: UserRole;
   isActive: boolean;
   mustChangePassword: boolean;
   createdAt: string;
   updatedAt: string;
+  unassignedTicketCount?: number;
 }
 
 export interface CreateAdminUserInput {
   name: string;
   email: string;
-  department?: string | null;
   role: UserRole;
-  isActive?: boolean;
+  isActive: boolean;
+  initialPassword: string;
 }
 
 export interface UpdateAdminUserInput {
   name?: string;
   email?: string;
-  department?: string | null;
   role?: UserRole;
   isActive?: boolean;
+  expectedUpdatedAt?: string;
+}
+
+export interface UpdateAdminUserResponse {
+  data: AdminUser;
+  unassignedTicketCount?: number;
 }
 
 export async function fetchAdminUsers(params?: {
@@ -914,7 +919,7 @@ export async function createAdminUser(
 export async function updateAdminUser(
   userId: number,
   payload: UpdateAdminUserInput
-): Promise<{ data: AdminUser }> {
+): Promise<UpdateAdminUserResponse> {
   const response = await fetch(`${API_URL}/api/admin/users/${userId}`, {
     method: "PATCH",
     credentials: "include",
@@ -927,19 +932,22 @@ export async function updateAdminUser(
   return response.json();
 }
 
-export async function resetAdminUserPassword(
-  userId: number
-): Promise<{ data: { message: string } }> {
-  const response = await fetch(`${API_URL}/api/admin/users/${userId}/reset-password`, {
+export async function setAdminUserInitialPassword(
+  userId: number,
+  initialPassword: string
+): Promise<{ data: AdminUser }> {
+  const response = await fetch(`${API_URL}/api/admin/users/${userId}/initial-password`, {
     method: "POST",
     credentials: "include",
     headers: requestHeaders({ "Content-Type": "application/json" }, true),
+    body: JSON.stringify({ initialPassword }),
   });
   if (!response.ok) {
-    return readError(response, "Could not reset user password.");
+    return readError(response, "Could not set initial password.");
   }
   return response.json();
 }
+
 
 
 
