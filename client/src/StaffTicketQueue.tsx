@@ -60,7 +60,7 @@ export default function StaffTicketQueue({ onNavigate }: StaffTicketQueueProps) 
   const [pageSize, setPageSize] = useState<10 | 20 | 50>(20);
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ status?: number; code?: string; message: string } | null>(null);
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
   const searchId = useId();
@@ -118,7 +118,13 @@ export default function StaffTicketQueue({ onNavigate }: StaffTicketQueueProps) 
       .catch((err) => {
         if (!active) return;
         console.error(err);
-        setError(err.message || "Failed to load ticket queue.");
+        const status = err?.status;
+        const code = err?.code;
+        const message =
+          status === 403
+            ? "You do not have permission to view the staff ticket queue. Only IT Staff and Administrators may access this queue."
+            : err?.message || "Failed to load ticket queue.";
+        setError({ status, code, message });
         setLoading(false);
       });
 
@@ -378,17 +384,31 @@ export default function StaffTicketQueue({ onNavigate }: StaffTicketQueueProps) 
           <p className="state-message">Loading ticket queue…</p>
         </div>
       ) : error ? (
-        <div className="queue-state-box error-box" role="alert">
-          <h2>Failed to load ticket queue</h2>
-          <p className="state-message state-message-error">{error}</p>
-          <button
-            type="button"
-            className="btn btn-success"
-            onClick={() => setReloadTrigger((t) => t + 1)}
-          >
-            Retry
-          </button>
-        </div>
+        error.status === 403 ? (
+          <div className="queue-state-box forbidden-box" role="alert">
+            <h2>Access denied</h2>
+            <p className="state-message state-message-error">{error.message}</p>
+            <button
+              type="button"
+              className="btn btn-outline-success"
+              onClick={() => onNavigate("/tickets")}
+            >
+              Go to My Tickets
+            </button>
+          </div>
+        ) : (
+          <div className="queue-state-box error-box" role="alert">
+            <h2>Failed to load ticket queue</h2>
+            <p className="state-message state-message-error">{error.message}</p>
+            <button
+              type="button"
+              className="btn btn-success"
+              onClick={() => setReloadTrigger((t) => t + 1)}
+            >
+              Retry
+            </button>
+          </div>
+        )
       ) : tickets.length === 0 ? (
         hasActiveFilters ? (
           <div className="queue-state-box no-results-box" role="status">

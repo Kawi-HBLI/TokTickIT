@@ -887,6 +887,15 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
   margin-bottom: 8px;
 }
 
+.queue-state-box.forbidden-box {
+  background: #fdf5f5;
+  border-color: #f1c2c2;
+}
+
+.queue-state-box.forbidden-box h2 {
+  color: #922626;
+}
+
 .queue-pagination {
   display: flex;
   justify-content: space-between;

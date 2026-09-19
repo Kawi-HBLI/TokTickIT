@@ -214,4 +214,29 @@ describe("UI-QUEUE-01: Staff Ticket Queue", () => {
       expect(screen.getAllByText("TKT-2026-000101").length).toBeGreaterThan(0);
     });
   });
+
+  it("renders distinct forbidden state with recovery action when API returns 403", async () => {
+    const forbiddenError = new api.ApiError(
+      "You do not have permission to view the staff ticket queue.",
+      403,
+      "FORBIDDEN"
+    );
+    vi.mocked(api.fetchStaffTickets).mockRejectedValueOnce(forbiddenError);
+
+    const onNavigate = vi.fn();
+    render(<StaffTicketQueue onNavigate={onNavigate} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /Access denied/i })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/You do not have permission to view the staff ticket queue/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Retry/i })).not.toBeInTheDocument();
+
+    const homeButton = screen.getByRole("button", { name: /Go to My Tickets/i });
+    expect(homeButton).toBeInTheDocument();
+
+    await userEvent.click(homeButton);
+    expect(onNavigate).toHaveBeenCalledWith("/tickets");
+  });
 });
