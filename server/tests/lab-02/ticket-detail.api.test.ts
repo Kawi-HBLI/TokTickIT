@@ -1,6 +1,6 @@
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { randomUUID } from "node:crypto";
+import { randomBytes, createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -14,10 +14,34 @@ const admin = new PrismaClient();
 let db: PrismaClient;
 let requesterAId: number;
 let requesterBId: number;
+let requesterACookie: string;
+let requesterBCookie: string;
 let categoryId: number;
 let systemId: number;
 let ticketAId: number;
 let ticketBId: number;
+
+function tokenHash(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+async function createTestSession(prisma: PrismaClient, userId: number) {
+  const rawToken = randomBytes(32).toString("base64url");
+  const csrfToken = randomBytes(32).toString("base64url");
+  await prisma.session.create({
+    data: {
+      tokenHash: tokenHash(rawToken),
+      csrfToken,
+      userId,
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+    },
+  });
+  return {
+    cookie: `toktickit_session=${rawToken}`,
+    csrfToken,
+    rawToken,
+  };
+}
 
 beforeAll(async () => {
   const url = new URL(process.env.DATABASE_URL!);
@@ -34,10 +58,13 @@ beforeAll(async () => {
   );
   db = new PrismaClient({ datasources: { db: { url: url.toString() } } });
   await seedDatabase(db);
+  await db.user.updateMany({ data: { mustChangePassword: false } });
 
-  const activeRequesters = await db.user.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
+  const activeRequesters = await db.user.findMany({ where: { isActive: true, role: "REQUESTER" }, orderBy: { id: "asc" } });
   requesterAId = activeRequesters[0].id;
   requesterBId = activeRequesters[1].id;
+  requesterACookie = (await createTestSession(db, requesterAId)).cookie;
+  requesterBCookie = (await createTestSession(db, requesterBId)).cookie;
 
   const categories = await db.category.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
   categoryId = categories[0].id;
@@ -118,7 +145,7 @@ describe("Ticket Detail API (API-DETAIL-01 to API-DETAIL-02)", () => {
   it("API-DETAIL-01: retrieves complete owned read-only ticket details and attachment metadata", async () => {
     const res = await request(app)
       .get(`/api/tickets/${ticketAId}`)
-      .set("x-requester-id", String(requesterAId));
+      .set("Cookie", requesterACookie);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
@@ -157,10 +184,15 @@ describe("Ticket Detail API (API-DETAIL-01 to API-DETAIL-02)", () => {
   });
 
   it("API-DETAIL-02: returns safe 404 for missing ticket or differently owned ticket without disclosure", async () => {
+    // 0. Unauthenticated
+    const unauthRes = await request(app).get(`/api/tickets/${ticketAId}`);
+    expect(unauthRes.status).toBe(401);
+    expect(unauthRes.body.error.code).toBe("AUTHENTICATION_REQUIRED");
+
     // 1. Missing ticket
     const missingRes = await request(app)
       .get("/api/tickets/999999")
-      .set("x-requester-id", String(requesterAId));
+      .set("Cookie", requesterACookie);
 
     expect(missingRes.status).toBe(404);
     expect(missingRes.body.error).toEqual({
@@ -173,7 +205,7 @@ describe("Ticket Detail API (API-DETAIL-01 to API-DETAIL-02)", () => {
     // 2. Cross-requester ticket (Requester A attempting to view Requester B's ticket)
     const crossRes = await request(app)
       .get(`/api/tickets/${ticketBId}`)
-      .set("x-requester-id", String(requesterAId));
+      .set("Cookie", requesterACookie);
 
     expect(crossRes.status).toBe(404);
     // Crucial: Exact same error shape and message, no disclosure of ticket existence
@@ -187,7 +219,7 @@ describe("Ticket Detail API (API-DETAIL-01 to API-DETAIL-02)", () => {
     // 3. Malformed ticket ID returns 400
     const malformedRes = await request(app)
       .get("/api/tickets/abc")
-      .set("x-requester-id", String(requesterAId));
+      .set("Cookie", requesterACookie);
     expect(malformedRes.status).toBe(400);
     expect(malformedRes.body.error.code).toBe("VALIDATION_ERROR");
   });

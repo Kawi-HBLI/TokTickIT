@@ -1,30 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { loginUser } from "./helpers.js";
 
 const adminEmail = "harper.morgan@toktickit.local";
 const initialAdminPassword = "ChangeMe-2026!";
 const permanentAdminPassword = "Harper-Admin-2026!";
 
 async function loginAsAdmin(page: import("@playwright/test").Page) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(adminEmail);
-  await page.getByLabel("Password", { exact: true }).fill(initialAdminPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
-
-  // If initial password was already changed in a previous run or test, retry with permanentAdminPassword
-  const hasAlert = await page.getByRole("alert").isVisible().catch(() => false);
-  if (hasAlert) {
-    await page.getByLabel("Password", { exact: true }).fill(permanentAdminPassword);
-    await page.getByRole("button", { name: "Sign in" }).click();
-  }
-
-  await page.waitForURL(/\/(change-password|admin\/users|staff\/tickets)$/);
-
-  if (page.url().includes("/change-password")) {
-    await page.getByLabel("Current or initial password", { exact: true }).fill(initialAdminPassword);
-    await page.getByLabel("New password", { exact: true }).fill(permanentAdminPassword);
-    await page.getByLabel("Confirm new password", { exact: true }).fill(permanentAdminPassword);
-    await page.getByRole("button", { name: "Change password" }).click();
-  }
+  await loginUser(page, adminEmail, initialAdminPassword, permanentAdminPassword);
 
   await expect(page).toHaveURL(/\/(admin\/users|staff\/tickets)/);
   if (!page.url().includes("/admin/users")) {
@@ -38,25 +20,7 @@ async function loginAsRequester(page: import("@playwright/test").Page) {
   const initialPassword = "ChangeMe-2026!";
   const newPassword = "Chalida-Pass-2026!";
 
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(initialPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
-
-  await page.waitForTimeout(500);
-  const hasAlert = await page.getByRole("alert").isVisible().catch(() => false);
-  if (hasAlert) {
-    await page.getByLabel("Password", { exact: true }).fill(newPassword);
-    await page.getByRole("button", { name: "Sign in" }).click();
-  }
-
-  await page.waitForURL(/\/(change-password|tickets)$/);
-  if (page.url().includes("/change-password")) {
-    await page.getByLabel("Current or initial password", { exact: true }).fill(initialPassword);
-    await page.getByLabel("New password", { exact: true }).fill(newPassword);
-    await page.getByLabel("Confirm new password", { exact: true }).fill(newPassword);
-    await page.getByRole("button", { name: "Change password" }).click();
-  }
+  await loginUser(page, email, initialPassword, newPassword);
   await expect(page).toHaveURL(/\/tickets$/);
 }
 

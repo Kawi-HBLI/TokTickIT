@@ -29,7 +29,7 @@ beforeAll(async () => {
   console.info(output);
   db = new PrismaClient({ datasources: { db: { url: url.toString() } } });
   await seedDatabase(db);
-  requesterId = (await db.user.findFirstOrThrow({ where: { isActive: true } })).id;
+  requesterId = (await db.user.findFirstOrThrow({ where: { isActive: true, role: "REQUESTER" } })).id;
   categoryId = (await db.category.findFirstOrThrow()).id;
   relatedSystemId = (await db.relatedSystem.findFirstOrThrow()).id;
   const rows = await db.$queryRaw<{ year: string }[]>`SELECT to_char(CURRENT_DATE, 'YYYY') AS year`;
@@ -66,7 +66,7 @@ describe("Lab 2 database migrations and persistence", () => {
     const snapshot = async () => ({
       categories: await db!.category.findMany({ orderBy: { id: "asc" }, select: { id: true, name: true, isActive: true } }),
       systems: await db!.relatedSystem.findMany({ orderBy: { id: "asc" }, select: { id: true, name: true, isActive: true } }),
-      requesters: await db!.user.findMany({ orderBy: { id: "asc" }, select: { id: true, email: true, isActive: true } }),
+      requesters: await db!.user.findMany({ where: { role: "REQUESTER" }, orderBy: { id: "asc" }, select: { id: true, email: true, isActive: true } }),
     });
     const first = await snapshot();
     await seedDatabase(db!);
@@ -84,6 +84,9 @@ describe("Lab 2 database migrations and persistence", () => {
     [100001n, "100001"],
     [9223372036854775807n, "9223372036854775807"],
   ])("preserves every digit at sequence value %s", async (value, suffix) => {
+    await db!.internalNote.deleteMany();
+    await db!.publicComment.deleteMany();
+    await db!.ticket.deleteMany();
     await db!.$queryRaw`SELECT setval(${`${schemaName}.ticket_number_seq`}::regclass, ${value}::bigint, false)`;
     const ticket = await createTicket();
     expect(ticket.ticketNumber).toBe(`TKT-${year}-${suffix}`);

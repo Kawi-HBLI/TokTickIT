@@ -1,6 +1,6 @@
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { randomUUID } from "node:crypto";
+import { randomBytes, createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -18,12 +18,36 @@ const admin = new PrismaClient();
 let db: PrismaClient;
 let requesterAId: number;
 let requesterBId: number;
+let requesterASession: { cookie: string; csrfToken: string };
+let requesterBSession: { cookie: string; csrfToken: string };
 let categoryId: number;
 let systemId: number;
 let ticketAId: number;
 let ticketBId: number;
 let tempUploadDir: string;
 const originalUploadDir = process.env.UPLOAD_DIR;
+
+function tokenHash(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+async function createTestSession(prisma: PrismaClient, userId: number) {
+  const rawToken = randomBytes(32).toString("base64url");
+  const csrfToken = randomBytes(32).toString("base64url");
+  await prisma.session.create({
+    data: {
+      tokenHash: tokenHash(rawToken),
+      csrfToken,
+      userId,
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+    },
+  });
+  return {
+    cookie: `toktickit_session=${rawToken}`,
+    csrfToken,
+    rawToken,
+  };
+}
 
 beforeAll(async () => {
   tempUploadDir = await mkdtemp(join(tmpdir(), "toktickit-att-test-"));
@@ -43,10 +67,13 @@ beforeAll(async () => {
   );
   db = new PrismaClient({ datasources: { db: { url: url.toString() } } });
   await seedDatabase(db);
+  await db.user.updateMany({ data: { mustChangePassword: false } });
 
-  const activeRequesters = await db.user.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
+  const activeRequesters = await db.user.findMany({ where: { isActive: true, role: "REQUESTER" }, orderBy: { id: "asc" } });
   requesterAId = activeRequesters[0].id;
   requesterBId = activeRequesters[1].id;
+  requesterASession = await createTestSession(db, requesterAId);
+  requesterBSession = await createTestSession(db, requesterBId);
 
   const categories = await db.category.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
   categoryId = categories[0].id;
@@ -110,7 +137,8 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
 
     const res = await request(app)
       .post(`/api/tickets/${ticketAId}/attachments`)
-      .set("x-requester-id", String(requesterAId))
+      .set("Cookie", requesterASession.cookie)
+      .set("X-CSRF-Token", requesterASession.csrfToken)
       .attach("attachments", pngBuffer, "toner-leak.png");
 
     expect(res.status).toBe(201);
@@ -131,7 +159,7 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     // Also verify GET /api/tickets/:id/attachments returns it
     const listRes = await request(app)
       .get(`/api/tickets/${ticketAId}/attachments`)
-      .set("x-requester-id", String(requesterAId));
+      .set("Cookie", requesterASession.cookie);
 
     expect(listRes.status).toBe(200);
     expect(listRes.body.activeCount).toBe(1);
@@ -166,7 +194,8 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     // Attempt to upload 6th active attachment
     const res = await request(app)
       .post(`/api/tickets/${ticketAId}/attachments`)
-      .set("x-requester-id", String(requesterAId))
+      .set("Cookie", requesterASession.cookie)
+      .set("X-CSRF-Token", requesterASession.csrfToken)
       .attach("attachments", dummyPng, "overflow.png");
 
     expect(res.status).toBe(409);
@@ -181,7 +210,7 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     // 1. Preview
     const previewRes = await request(app)
       .get(`/api/attachments/${createdAttachmentId}/preview`)
-      .set("x-requester-id", String(requesterAId));
+      .set("Cookie", requesterASession.cookie);
 
     expect(previewRes.status).toBe(200);
     expect(previewRes.headers["content-type"]).toBe("image/png");
@@ -193,7 +222,7 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     // 2. Download
     const downloadRes = await request(app)
       .get(`/api/attachments/${createdAttachmentId}/download`)
-      .set("x-requester-id", String(requesterAId));
+      .set("Cookie", requesterASession.cookie);
 
     expect(downloadRes.status).toBe(200);
     expect(downloadRes.headers["content-type"]).toBe("image/png");
@@ -209,7 +238,8 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     );
     const thaiUploadRes = await request(app)
       .post(`/api/tickets/${ticketBId}/attachments`)
-      .set("x-requester-id", String(requesterBId))
+      .set("Cookie", requesterBSession.cookie)
+      .set("X-CSRF-Token", requesterBSession.csrfToken)
       .attach("attachments", pngBuffer, "หลักฐาน.png");
 
     expect(thaiUploadRes.status).toBe(201);
@@ -217,7 +247,7 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
 
     const thaiDownloadRes = await request(app)
       .get(`/api/attachments/${thaiAttId}/download`)
-      .set("x-requester-id", String(requesterBId));
+      .set("Cookie", requesterBSession.cookie);
 
     expect(thaiDownloadRes.status).toBe(200);
     expect(thaiDownloadRes.headers["content-disposition"]).toContain("filename*=UTF-8''");
@@ -228,7 +258,8 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     // 1. Invalid reason: too short (< 5 chars)
     const shortRes = await request(app)
       .delete(`/api/attachments/${createdAttachmentId}`)
-      .set("x-requester-id", String(requesterAId))
+      .set("Cookie", requesterASession.cookie)
+      .set("X-CSRF-Token", requesterASession.csrfToken)
       .send({ reason: "bad" });
 
     expect(shortRes.status).toBe(400);
@@ -237,7 +268,8 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     // 2. Invalid reason: missing
     const missingRes = await request(app)
       .delete(`/api/attachments/${createdAttachmentId}`)
-      .set("x-requester-id", String(requesterAId))
+      .set("Cookie", requesterASession.cookie)
+      .set("X-CSRF-Token", requesterASession.csrfToken)
       .send({});
 
     expect(missingRes.status).toBe(400);
@@ -246,7 +278,8 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     const validReason = "The photo is blurry and does not show the leak clearly.";
     const removeRes = await request(app)
       .delete(`/api/attachments/${createdAttachmentId}`)
-      .set("x-requester-id", String(requesterAId))
+      .set("Cookie", requesterASession.cookie)
+      .set("X-CSRF-Token", requesterASession.csrfToken)
       .send({ reason: `  ${validReason}  ` });
 
     expect(removeRes.status).toBe(200);
@@ -269,7 +302,7 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     // 1. Preview returns 410
     const previewRes = await request(app)
       .get(`/api/attachments/${createdAttachmentId}/preview`)
-      .set("x-requester-id", String(requesterAId));
+      .set("Cookie", requesterASession.cookie);
 
     expect(previewRes.status).toBe(410);
     expect(previewRes.body.error.code).toBe("ATTACHMENT_REMOVED");
@@ -277,7 +310,7 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     // 2. Download returns 410
     const downloadRes = await request(app)
       .get(`/api/attachments/${createdAttachmentId}/download`)
-      .set("x-requester-id", String(requesterAId));
+      .set("Cookie", requesterASession.cookie);
 
     expect(downloadRes.status).toBe(410);
     expect(downloadRes.body.error.code).toBe("ATTACHMENT_REMOVED");
@@ -285,7 +318,8 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     // 3. Repeated removal returns 409 ATTACHMENT_ALREADY_REMOVED
     const repeatRes = await request(app)
       .delete(`/api/attachments/${createdAttachmentId}`)
-      .set("x-requester-id", String(requesterAId))
+      .set("Cookie", requesterASession.cookie)
+      .set("X-CSRF-Token", requesterASession.csrfToken)
       .send({ reason: "Attempting duplicate removal" });
 
     expect(repeatRes.status).toBe(409);
@@ -302,7 +336,8 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     );
     const freshRes = await request(app)
       .post(`/api/tickets/${ticketBId}/attachments`)
-      .set("x-requester-id", String(requesterBId))
+      .set("Cookie", requesterBSession.cookie)
+      .set("X-CSRF-Token", requesterBSession.csrfToken)
       .attach("attachments", pngBuffer, "concurrent-test.png");
 
     const freshAttId = freshRes.body.data[0].id;
@@ -311,11 +346,13 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     const [c1, c2] = await Promise.all([
       request(app)
         .delete(`/api/attachments/${freshAttId}`)
-        .set("x-requester-id", String(requesterBId))
+        .set("Cookie", requesterBSession.cookie)
+        .set("X-CSRF-Token", requesterBSession.csrfToken)
         .send({ reason: "First concurrent removal attempt" }),
       request(app)
         .delete(`/api/attachments/${freshAttId}`)
-        .set("x-requester-id", String(requesterBId))
+        .set("Cookie", requesterBSession.cookie)
+        .set("X-CSRF-Token", requesterBSession.csrfToken)
         .send({ reason: "Second concurrent removal attempt" }),
     ]);
 
@@ -330,21 +367,22 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     // 1. Preview
     const prevRes = await request(app)
       .get(`/api/attachments/${createdAttachmentId}/preview`)
-      .set("x-requester-id", String(requesterBId));
+      .set("Cookie", requesterBSession.cookie);
     expect(prevRes.status).toBe(404);
     expect(prevRes.body.error.code).toBe("ATTACHMENT_NOT_FOUND");
 
     // 2. Download
     const downRes = await request(app)
       .get(`/api/attachments/${createdAttachmentId}/download`)
-      .set("x-requester-id", String(requesterBId));
+      .set("Cookie", requesterBSession.cookie);
     expect(downRes.status).toBe(404);
     expect(downRes.body.error.code).toBe("ATTACHMENT_NOT_FOUND");
 
     // 3. Delete
     const delRes = await request(app)
       .delete(`/api/attachments/${createdAttachmentId}`)
-      .set("x-requester-id", String(requesterBId))
+      .set("Cookie", requesterBSession.cookie)
+      .set("X-CSRF-Token", requesterBSession.csrfToken)
       .send({ reason: "Unauthorized attempt" });
     expect(delRes.status).toBe(404);
     expect(delRes.body.error.code).toBe("ATTACHMENT_NOT_FOUND");
@@ -353,7 +391,8 @@ describe("Attachment Lifecycle API (API-ATT-03 to API-ATT-08)", () => {
     const pngBuffer = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
     const uploadRes = await request(app)
       .post(`/api/tickets/${ticketAId}/attachments`)
-      .set("x-requester-id", String(requesterBId))
+      .set("Cookie", requesterBSession.cookie)
+      .set("X-CSRF-Token", requesterBSession.csrfToken)
       .attach("attachments", pngBuffer, "hacker.png");
     expect(uploadRes.status).toBe(404);
     expect(uploadRes.body.error.code).toBe("TICKET_NOT_FOUND");
