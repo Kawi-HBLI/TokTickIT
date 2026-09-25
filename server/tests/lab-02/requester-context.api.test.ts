@@ -1,8 +1,49 @@
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getPrisma } from "../../src/prisma.js";
-import { requireRequester } from "../../src/requester-context.js";
+
+vi.mock("../../src/prisma.js", () => ({ getPrisma: vi.fn() }));
+
+const { getPrisma } = await import("../../src/prisma.js");
+const { requireRequester } = await import("../../src/requester-context.js");
+
+const activeRequester = {
+  id: 101,
+  name: "Active Requester",
+  email: "active.requester@toktickit.test",
+  normalizedEmail: "active.requester@toktickit.test",
+  department: "Testing",
+  passwordHash: "unused",
+  role: "REQUESTER" as const,
+  isActive: true,
+  mustChangePassword: false,
+  passwordChangedAt: null,
+  createdAt: new Date("2026-09-01T00:00:00.000Z"),
+  updatedAt: new Date("2026-09-01T00:00:00.000Z"),
+};
+
+const staffUser = { ...activeRequester, id: 102, role: "IT_STAFF" as const };
+const inactiveRequester = { ...activeRequester, id: 103, isActive: false };
+
+const db = {
+  session: {
+    findUnique: vi.fn(),
+    update: vi.fn(),
+  },
+};
+
+function sessionFor(user: typeof activeRequester | typeof staffUser | typeof inactiveRequester) {
+  return {
+    id: user.id + 1000,
+    tokenHash: "stored-token-hash",
+    csrfToken: "test-csrf-token",
+    userId: user.id,
+    expiresAt: new Date(Date.now() + 60_000),
+    createdAt: new Date(),
+    lastSeenAt: new Date(),
+    user,
+  };
+}
 
 function createProbe() {
   const probe = express();
@@ -13,66 +54,74 @@ function createProbe() {
   return probe;
 }
 
-describe("Development Requester context", () => {
-  beforeEach(() => vi.restoreAllMocks());
+describe("Requester context verification", () => {
+  beforeEach(() => {
+    db.session.findUnique.mockReset();
+    db.session.update.mockReset().mockResolvedValue(undefined);
+    vi.mocked(getPrisma).mockReturnValue(db as never);
+  });
 
-  it.each([undefined, "", "0", "-1", "1.5", "abc", "1x", "2147483648"])(
-    "rejects a missing or malformed requester header (%s)",
-    async (header) => {
-      const call = request(createProbe()).post("/probe").send({ requesterId: 1 });
-      if (header !== undefined) call.set("x-requester-id", header);
+  it("rejects unauthenticated requests without session with 401", async () => {
+    const response = await request(createProbe()).post("/probe").send({ requesterId: 1 });
 
-      const response = await call;
-
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe("REQUESTER_CONTEXT_REQUIRED");
-      expect(response.body).not.toHaveProperty("requester");
-    },
-  );
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("AUTHENTICATION_REQUIRED");
+    expect(response.body).not.toHaveProperty("requester");
+  });
 
   it("accepts an active requester and exposes the verified record downstream", async () => {
-    const active = await getPrisma().user.findFirstOrThrow({ where: { isActive: true } });
+    db.session.findUnique.mockResolvedValue(sessionFor(activeRequester));
 
     const response = await request(createProbe())
       .post("/probe")
-      .set("x-requester-id", String(active.id));
+      .set("Cookie", "toktickit_session=test-session-token");
 
     expect(response.status).toBe(200);
     expect(response.body.requester).toEqual(expect.objectContaining({
-      id: active.id,
-      email: active.email,
+      id: activeRequester.id,
+      email: activeRequester.email,
       isActive: true,
+    }));
+    expect(db.session.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ tokenHash: expect.any(String) }),
     }));
   });
 
-  it("rejects unknown and inactive requester IDs", async () => {
-    const inactive = await getPrisma().user.findFirstOrThrow({ where: { isActive: false } });
-
-    for (const id of [inactive.id, 2_147_483_647]) {
-      const response = await request(createProbe())
-        .post("/probe")
-        .set("x-requester-id", String(id));
-
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
-    }
-  });
-
-  it("returns a safe retryable error when context verification fails", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.spyOn(getPrisma().user, "findFirst").mockRejectedValueOnce(
-      new Error("private DB detail"),
-    );
+  it("rejects non-requester roles with 403 FORBIDDEN", async () => {
+    db.session.findUnique.mockResolvedValue(sessionFor(staffUser));
 
     const response = await request(createProbe())
       .post("/probe")
-      .set("x-requester-id", "1");
+      .set("Cookie", "toktickit_session=test-session-token");
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe("FORBIDDEN");
+  });
+
+  it("rejects inactive requester with 403 ACCOUNT_INACTIVE", async () => {
+    db.session.findUnique.mockResolvedValue(sessionFor(inactiveRequester));
+
+    const response = await request(createProbe())
+      .post("/probe")
+      .set("Cookie", "toktickit_session=test-session-token");
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe("ACCOUNT_INACTIVE");
+  });
+
+  it("returns a safe 500 error when session lookup encounters unexpected failure", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    db.session.findUnique.mockRejectedValueOnce(new Error("private DB detail"));
+
+    const response = await request(createProbe())
+      .post("/probe")
+      .set("Cookie", "toktickit_session=invalid-or-failing-session");
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({
       error: {
-        code: "REQUESTER_CONTEXT_UNAVAILABLE",
-        message: "The Requester context could not be verified.",
+        code: "AUTHENTICATION_UNAVAILABLE",
+        message: "Authentication is temporarily unavailable.",
         retryable: true,
       },
     });
