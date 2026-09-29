@@ -1,156 +1,150 @@
-import { test, expect } from "@playwright/test";
-import { selectRequester } from "./helpers.js";
-import path from "node:path";
 import fs from "node:fs";
+import path from "node:path";
+import { expect, test } from "@playwright/test";
+import { loginUser } from "../lab-03/helpers.js";
+import { checkNoHorizontalScroll, fillTicketForm, loginRequester } from "./helpers.js";
 
-test.describe("Visual & Responsive Layout Verification (Desktop, Tablet, Mobile)", () => {
-  test("renders zero horizontal scroll and captures full checklist screenshots", async ({
-    page,
-  }, testInfo) => {
-    test.setTimeout(90000);
-    const projectName = testInfo.project.name; // desktop | tablet | mobile
-    const screenshotRoot = path.resolve(process.cwd(), "artifacts/lab-02/screenshots");
-    const screenshotDirs = {
-      createTicket: path.join(screenshotRoot, "create-ticket"),
-      myTickets: path.join(screenshotRoot, "my-tickets"),
-      ticketDetail: path.join(screenshotRoot, "ticket-detail"),
-    };
-    Object.values(screenshotDirs).forEach((directory) => fs.mkdirSync(directory, { recursive: true }));
+const viewports = [
+  { name: "desktop", width: 1440, height: 900 },
+  { name: "tablet", width: 834, height: 1112 },
+  { name: "mobile", width: 390, height: 844 },
+];
 
-    const capture = async (directory: string, state: string, fullPage = true) => {
-      await page.screenshot({
-        path: path.join(directory, `${state}-${projectName}.png`),
-        fullPage,
+test.describe("E2E-LAB2-VIS-01: authenticated requester responsive regression", () => {
+  test("captures requester list, form, detail, dialog, and safe error states at each breakpoint", async ({ page, browser }) => {
+    test.setTimeout(120_000);
+    const screenshotDir = path.resolve(process.cwd(), "artifacts/lab-03/screenshots/requester-regression");
+    fs.mkdirSync(screenshotDir, { recursive: true });
+    const capture = (name: string) => page.screenshot({ path: path.join(screenshotDir, name), fullPage: true });
+    const adminContext = await browser.newContext();
+    const emptyContext = await browser.newContext();
+    try {
+      const adminPage = await adminContext.newPage();
+      await loginUser(adminPage, "harper.morgan@toktickit.local", "ChangeMe-2026!", "Harper-Admin-2026!");
+      const session = await adminPage.request.get("http://localhost:8000/api/auth/me");
+      expect(session.status()).toBe(200);
+      const csrfToken = (await session.json()).data.csrfToken;
+      const emptyAccount = {
+        email: `empty-requester-${Date.now()}@toktickit.local`,
+        name: "Empty Visual Requester",
+        password: "Empty-Requester-2026!",
+      };
+      const created = await adminPage.request.post("http://localhost:8000/api/admin/users", {
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+        // Use the seeded initial password so loginRequester performs the same
+        // first-login password change as every other requester fixture.
+        data: { name: emptyAccount.name, email: emptyAccount.email, role: "REQUESTER", isActive: true, initialPassword: "ChangeMe-2026!" },
       });
-    };
+      expect(created.status()).toBe(201);
+      const emptyPage = await emptyContext.newPage();
+      await loginRequester(emptyPage, emptyAccount);
+      for (const viewport of viewports) {
+        await emptyPage.setViewportSize({ width: viewport.width, height: viewport.height });
+        await expect(emptyPage.getByRole("heading", { name: "No tickets yet", exact: true })).toBeVisible();
+        await checkNoHorizontalScroll(emptyPage);
+        await emptyPage.screenshot({ path: path.join(screenshotDir, `empty-list-${viewport.name}.png`), fullPage: true });
+      }
+    } finally {
+      await emptyContext.close();
+      await adminContext.close();
+    }
+    await loginRequester(page, "amina");
 
-    const checkNoHorizontalScroll = async () => {
-      const hasOverflow = await page.evaluate(() => {
-        return document.documentElement.scrollWidth > document.documentElement.clientWidth;
-      });
-      expect(hasOverflow).toBeFalsy();
-    };
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.goto("/tickets");
+      await expect(page.getByRole("heading", { name: "My Tickets" })).toBeVisible();
+      await checkNoHorizontalScroll(page);
+      if (viewport.name === "desktop") await expect(page.locator(".ticket-table-container")).toBeVisible();
+      else await expect(page.locator(".ticket-card-list")).toBeVisible();
+      await capture(`list-${viewport.name}.png`);
 
-    // --- 1. My Tickets List View ---
-    await selectRequester(page, "Amina Rahman");
-    await page.goto("/tickets");
-    await expect(page.locator("#my-tickets")).toBeVisible({ timeout: 10000 });
-    await checkNoHorizontalScroll();
-    await capture(screenshotDirs.myTickets, "01-my-tickets-list");
+      await page.getByLabel("Search by Ticket Number or Summary").fill("VISUAL_NO_RESULTS_99999");
+      await expect(page.getByRole("heading", { name: "No matching tickets found", exact: true })).toBeVisible();
+      await checkNoHorizontalScroll(page);
+      await capture(`no-results-${viewport.name}.png`);
+      await page.getByRole("button", { name: "Clear Filters", exact: true }).last().click();
 
-    // --- 2. Empty Tickets State ---
-    // Switch to Diego Santos who has no tickets seeded
-    await selectRequester(page, "Diego Santos");
-    await page.goto("/tickets");
-    await expect(page.locator(".empty-state h2:has-text('No tickets yet')")).toBeVisible({ timeout: 10000 });
-    await checkNoHorizontalScroll();
-    await capture(screenshotDirs.myTickets, "02-my-tickets-empty");
+      await page.locator("nav[aria-label='Primary navigation']").getByRole("button", { name: "Create Ticket", exact: true }).click();
+      await page.getByRole("button", { name: "Submit Ticket", exact: true }).click();
+      await expect(page.locator("#category-error")).toBeVisible();
+      await checkNoHorizontalScroll(page);
+      await capture(`validation-${viewport.name}.png`);
+      await page.getByLabel("Summary").fill(`Discard ${viewport.name}`);
+      await page.locator("nav[aria-label='Primary navigation']").getByRole("button", { name: "My Tickets", exact: true }).click();
+      await expect(page.getByRole("dialog", { name: "Discard unsaved Ticket?", exact: true })).toBeVisible();
+      await capture(`discard-dialog-${viewport.name}.png`);
+      await page.getByRole("button", { name: "Discard changes", exact: true }).click();
+    }
 
-    // Switch back to Amina Rahman
-    await selectRequester(page, "Amina Rahman");
-    await page.goto("/tickets");
-    await expect(page.locator("#my-tickets")).toBeVisible({ timeout: 10000 });
-
-    // --- 3. No Results Search State ---
-    const searchInput = page.locator("input[type='search']");
-    await searchInput.fill("NONEXISTENT_FILTER_KEYWORD_XYZ");
-    await expect(page.locator(".empty-state.no-results-state h2:has-text('No matching tickets found')")).toBeVisible({
-      timeout: 10000,
-    });
-    await checkNoHorizontalScroll();
-    await capture(screenshotDirs.myTickets, "03-my-tickets-no-results");
-    await page.locator(".empty-state button:has-text('Clear Filters')").click();
-
-    // --- 4. Create Ticket Clean Form ---
-    await page.goto("/tickets/new");
-    await expect(page.locator("#create-ticket-title")).toBeVisible({ timeout: 10000 });
-    await checkNoHorizontalScroll();
-    await capture(screenshotDirs.createTicket, "01-create-ticket-clean");
-
-    // --- 5. Create Ticket Validation Errors ---
-    await page.locator("button[type='submit']:has-text('Submit Ticket')").click();
-    await expect(page.locator("#category-error")).toBeVisible({ timeout: 5000 });
-    await checkNoHorizontalScroll();
-    await capture(screenshotDirs.createTicket, "02-create-ticket-validation");
-
-    // --- 6. Discard Dialog Modal ---
-    await page.locator("#summary").fill("Draft work that will be discarded");
-    await page.locator("nav[aria-label='Primary navigation'] button:has-text('My Tickets')").click();
-    await expect(page.locator("#discard-title:has-text('Discard unsaved Ticket?')")).toBeVisible({ timeout: 5000 });
-    await capture(screenshotDirs.createTicket, "03-create-ticket-discard-dialog", false);
-    // Click Keep editing to close modal
-    await page.locator("button:has-text('Keep editing')").click();
-    await expect(page.locator("#discard-title")).toBeHidden();
-
-    // --- 7. Ticket Detail View with Active Attachment ---
-    await page.locator("#category").selectOption({ index: 1 });
-    await page.locator("#related-system").selectOption({ index: 1 });
-    await page.locator("#priority").selectOption("HIGH");
-    await page.locator("#summary").fill(`Visual Responsive Ticket ${Date.now()}`);
-    await page.locator("#description").fill("Detail verification for responsive layout and attachments rendering.");
-
-    let releaseSubmission!: () => void;
-    const submissionGate = new Promise<void>((resolve) => { releaseSubmission = resolve; });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.locator("nav[aria-label='Primary navigation']").getByRole("button", { name: "Create Ticket", exact: true }).click();
+    await fillTicketForm(page, `Visual detail ${Date.now()}`, "A responsive requester detail ticket captures submission, attachment, and safe failure states.");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
     await page.route("**/api/tickets", async (route) => {
-      if (route.request().method() === "POST") await submissionGate;
+      if (route.request().method() === "POST") await gate;
       await route.continue();
     });
-    await page.locator("button[type='submit']:has-text('Submit Ticket')").click();
-
-    await expect(page.locator("button[type='submit']:has-text('Submitting ticket...')")).toBeVisible();
-    await capture(screenshotDirs.createTicket, "04-create-ticket-submitting");
-    releaseSubmission();
-
-    await expect(page.locator("#ticket-created-title")).toBeVisible({ timeout: 15000 });
-    await page.unroute("**/api/tickets");
-    await capture(screenshotDirs.createTicket, "05-create-ticket-success");
-    await page.locator("button:has-text('View Ticket')").click();
-    await expect(page.locator("#ticket-detail-title")).toBeVisible({ timeout: 10000 });
-
-    const fileInput = page.locator("#detail-file-input");
-    await fileInput.setInputFiles({
-      name: "layout-sample.png",
-      mimeType: "image/png",
-      buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"),
-    });
-    await expect(page.locator(".attachment-name:has-text('layout-sample.png')")).toBeVisible({ timeout: 10000 });
-    await checkNoHorizontalScroll();
-    await capture(screenshotDirs.ticketDetail, "01-ticket-detail-active-attachment");
-
-    // --- 8. Removal Confirmation Dialog ---
-    const removeBtn = page.locator(".remove-btn:has-text('Remove')").first();
-    await removeBtn.click();
-    await expect(page.locator("#removal-dialog-title")).toBeVisible({ timeout: 5000 });
-    await capture(screenshotDirs.ticketDetail, "02-ticket-detail-removal-dialog", false);
-
-    // --- 9. Attachment Removed History ---
-    await page.locator("#removal-reason-input").fill("Visual test soft removal reason record");
-    await page.locator(".remove-confirm-btn").click();
-    await expect(page.locator("#removal-dialog-title")).toBeHidden({ timeout: 10000 });
-    await expect(page.locator(".removed-attachments-area")).toBeVisible({ timeout: 10000 });
-    await checkNoHorizontalScroll();
-    await capture(screenshotDirs.ticketDetail, "03-ticket-detail-attachment-removed");
-
-    // --- 10. Five Active Attachments Limit Reached ---
-    // Upload 5 active files
-    for (let i = 1; i <= 5; i++) {
-      await fileInput.setInputFiles({
-        name: `active-file-${i}.png`,
-        mimeType: "image/png",
-        buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"),
-      });
-      await expect(page.locator(`.attachment-name:has-text('active-file-${i}.png')`)).toBeVisible({ timeout: 10000 });
+    await page.getByRole("button", { name: "Submit Ticket", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Submitting ticket...", exact: true })).toBeVisible();
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await expect(page.getByRole("button", { name: "Submitting ticket...", exact: true })).toBeVisible();
+      await capture(`submitting-${viewport.name}.png`);
     }
-    await expect(page.locator(".file-count")).toHaveText("5 of 5 active files");
-    await expect(page.locator(".alert-info.limit-notice")).toBeVisible({ timeout: 5000 });
-    await expect(fileInput).toBeHidden();
-    await checkNoHorizontalScroll();
-    await capture(screenshotDirs.ticketDetail, "04-ticket-detail-five-active-limit");
+    release();
+    await expect(page.getByRole("heading", { name: "Your Ticket has been submitted" })).toBeVisible();
+    await page.unroute("**/api/tickets");
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await capture(`success-${viewport.name}.png`);
+    }
+    await page.getByRole("button", { name: "View Ticket", exact: true }).click();
+    const upload = page.waitForResponse((response) => response.request().method() === "POST" && /\/api\/tickets\/\d+\/attachments$/.test(new URL(response.url()).pathname));
+    await page.locator("#detail-file-input").setInputFiles({ name: "visual-detail.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64") });
+    expect((await upload).status()).toBe(201);
 
-    // --- 11. Safe 404 View ---
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await expect(page.locator(".attachment-name").filter({ hasText: "visual-detail.png" })).toBeVisible();
+      await checkNoHorizontalScroll(page);
+      await capture(`detail-${viewport.name}.png`);
+    }
+    const remove = page.getByRole("button", { name: "Remove", exact: true });
+    await remove.click();
+    await expect(page.getByRole("dialog", { name: "Remove Attachment", exact: true })).toBeVisible();
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await capture(`removal-dialog-${viewport.name}.png`);
+    }
+    await page.getByLabel("Removal Reason").fill("Responsive regression removal audit record.");
+    await page.getByRole("button", { name: "Remove Attachment", exact: true }).click();
+    await expect(page.locator(".removed-attachments-area")).toBeVisible();
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await checkNoHorizontalScroll(page);
+      await capture(`removed-${viewport.name}.png`);
+    }
+    for (let index = 1; index <= 5; index += 1) {
+      const uploaded = page.waitForResponse((response) => response.request().method() === "POST" && /\/api\/tickets\/\d+\/attachments$/.test(new URL(response.url()).pathname));
+      await page.locator("#detail-file-input").setInputFiles({ name: `limit-${index}.png`, mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64") });
+      expect((await uploaded).status()).toBe(201);
+      await expect(page.getByLabel(`Download limit-${index}.png`, { exact: true })).toBeVisible();
+    }
+    await expect(page.locator(".file-count")).toContainText("5 of 5 active files");
+    await expect(page.locator(".limit-notice")).toBeVisible();
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await checkNoHorizontalScroll(page);
+      await capture(`five-file-limit-${viewport.name}.png`);
+    }
     await page.goto("/tickets/999999");
-    await expect(page.locator("#detail-error-heading:has-text('Ticket not found')")).toBeVisible({ timeout: 10000 });
-    await checkNoHorizontalScroll();
-    await capture(screenshotDirs.ticketDetail, "05-ticket-detail-safe-404");
+    await expect(page.getByRole("heading", { name: "Ticket not found", exact: true })).toBeVisible();
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await checkNoHorizontalScroll(page);
+      await capture(`safe-404-${viewport.name}.png`);
+    }
   });
 });

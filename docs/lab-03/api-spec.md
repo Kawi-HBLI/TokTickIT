@@ -2,7 +2,7 @@
 
 ## 1. Purpose and Conventions
 
-This contract extends the existing unversioned `/api` Lab 2 API. JSON property names remain `camelCase`; timestamps are UTC ISO 8601 strings. Existing resource identifiers remain positive JSON integers for Lab 2 compatibility (`id`, `requesterId`, `categoryId`, `relatedSystemId`, `ownerId`, and `attachmentId`); clients must treat them as opaque values and must not infer meaning from their sequence. `ticketNumber` remains a string. Session, CSRF, and idempotency tokens are opaque strings and are not resource identifiers. Authentication uses a server-side opaque session in an `HttpOnly` cookie. Success responses use a `data` envelope and optional `meta`; errors use the shared envelope below.
+This contract extends the existing unversioned `/api` Lab 2 API. JSON property names remain `camelCase`; timestamps are UTC ISO 8601 strings. Existing resource identifiers remain positive JSON integers for Lab 2 compatibility (`id`, `requesterId`, `categoryId`, `relatedSystemId`, `ownerId`, and `attachmentId`); clients must treat them as opaque values and must not infer meaning from their sequence. `ticketNumber` remains a string. Session, CSRF, and idempotency tokens are opaque strings and are not resource identifiers. Authentication uses a server-side opaque session in an `HttpOnly` cookie. Success responses use `data`, with endpoint-specific pagination fields documented below; errors use the shared envelope below.
 
 All endpoints except `GET /api/health` and `POST /api/auth/login` require an authenticated Session, subject to the idempotent absent/expired-session Logout behavior in section 4.4. `GET /api/categories` and `GET /api/related-systems` remain available to authenticated users after the mandatory-password-change gate and return active records only. The Lab 2 `GET /api/requesters` endpoint is removed.
 
@@ -17,14 +17,32 @@ All endpoints except `GET /api/health` and `POST /api/auth/login` require an aut
 ```json
 {
   "data": [],
-  "meta": {
+  "pagination": {
     "page": 1,
     "pageSize": 20,
     "totalItems": 0,
-    "totalPages": 0
+    "totalPages": 0,
+    "hasPreviousPage": false,
+    "hasNextPage": false
+  },
+  "query": {
+    "q": "",
+    "status": null,
+    "requestedPriority": null,
+    "itPriority": null,
+    "categoryId": null,
+    "owner": null,
+    "sortBy": "updatedAt",
+    "sortDirection": "desc"
   }
 }
 ```
+
+The paginated example is the Staff Queue response (`GET /api/staff/tickets`,
+also available as `/api/staff/queue`). It uses top-level `pagination` and
+normalized `query`, not `meta`. Requester list and user-management pagination
+follow their endpoint definitions; clients must not assume one universal
+pagination envelope.
 
 ### 1.2 Shared error envelope
 

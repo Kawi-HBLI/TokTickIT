@@ -47,6 +47,12 @@ Lab 3 extends, rather than replaces, the tokens established in
   `#9A3412/#FFEDD5`, Medium `#92400E/#FEF3C7`, and Low `#1E40AF/#DBEAFE`.
   Status badges must likewise give each status a text label and a
   high-contrast foreground/background pairing.
+  The retained Requester status badge uses `#01579B` on `#E1F5FE`;
+  read-only Ticket metadata labels use `#2C4D3F` on `#EEF3F0`. These
+  darker foregrounds retain the existing visual system while fixing the
+  contrast failures found by the authenticated Requester axe scans.
+  The Internal Note audience badge keeps its text visible by wrapping at
+  320 CSS px rather than extending beyond the Staff Detail viewport.
 
 ### Shared components
 
@@ -57,6 +63,9 @@ required state. Invalid fields expose `aria-invalid`, reference help/error
 with `aria-describedby`, and show an error immediately below that field.
 Placeholders are examples, never labels. Read-only values use the read-only
 surface and are selectable for copying where useful.
+Administrator create/edit/reset dialog inputs are full-width block controls
+with visible labels above them and at least 44px interactive height at all
+three captured viewports.
 
 **Buttons.** Use one solid primary action per decision area. Secondary buttons
 are bordered or pale green; tertiary actions are text links; destructive

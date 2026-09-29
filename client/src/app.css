@@ -269,7 +269,7 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
 }
 .status-new {
   background: #e1f5fe;
-  color: #0277bd;
+  color: #01579b;
   border: 1px solid #b3e5fc;
 }
 .status-removed {
@@ -308,7 +308,7 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
 }
 
 .meta-dl-item dt {
-  color: #59766a;
+  color: #2c4d3f;
   font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1314,6 +1314,10 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
   padding: 4px 10px;
   border-radius: 4px;
   border: 1px solid #fcd34d;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .internal-note-card {
@@ -1477,6 +1481,33 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
 .reset-password-dialog {
   max-width: 480px;
   width: 95%;
+}
+
+:is(.user-form-dialog, .reset-password-dialog) .form-group > label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+:is(.user-form-dialog, .reset-password-dialog) .form-input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  color: #1a2e26;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+:is(.user-form-dialog, .reset-password-dialog) .form-input.is-invalid {
+  border-color: #b91c1c;
+}
+
+:is(.user-form-dialog, .reset-password-dialog) .form-input:focus-visible {
+  outline: 3px solid #81c9a8;
+  outline-offset: 2px;
 }
 
 .dialog-header {

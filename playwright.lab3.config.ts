@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { E2E_DATABASE_URL, E2E_UPLOAD_DIR } from "./e2e/test-environment.js";
 
 export default defineConfig({
   testDir: "./e2e/lab-03",
@@ -16,8 +17,8 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 120_000,
       env: {
-        DATABASE_URL: "postgresql://toktickit:toktickit@localhost:5433/toktickit?schema=e2e_test",
-        UPLOAD_DIR: "uploads_e2e",
+        DATABASE_URL: E2E_DATABASE_URL,
+        UPLOAD_DIR: E2E_UPLOAD_DIR,
       },
     },
     { command: "npm --prefix client run dev", url: "http://localhost:5173", reuseExistingServer: false, timeout: 120_000 },

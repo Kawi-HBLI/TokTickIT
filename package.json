@@ -8,6 +8,7 @@
     "test:client": "npm --prefix client test",
     "test:e2e": "playwright test",
     "test:e2e:lab3": "playwright test -c playwright.lab3.config.ts",
+    "test:e2e:regression": "playwright test -c playwright.lab2-regression.config.ts",
     "build:server": "npm --prefix server run build",
     "build:client": "npm --prefix client run build"
   },

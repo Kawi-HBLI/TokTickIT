@@ -1,118 +1,69 @@
-import { test, expect } from "@playwright/test";
-import { selectRequester } from "./helpers.js";
+import { expect, test } from "@playwright/test";
+import { createTicket, loginRequester } from "./helpers.js";
 
-test.describe("E2E-01: Requester Full Ticket & Attachment Flow", () => {
-  test("creates ticket, searches in My Tickets, views detail, uploads attachment, downloads, and removes it", async ({
-    page,
-  }) => {
-    // 1. Select Requester
-    await selectRequester(page, "Amina Rahman");
+test.describe("E2E-LAB2-REQ-01: authenticated requester ticket lifecycle", () => {
+  test("creates, searches, views, downloads, and removes an owned attachment", async ({ page }) => {
+    await loginRequester(page, "amina");
+    const unique = Date.now();
+    const summary = `Lab 2 requester regression ${unique}`;
+    const description = "Authenticated requester lifecycle coverage for ticket creation and attachment handling.";
+    const { ticketNumber } = await createTicket(page, summary, description);
 
-    // 2. Navigate to Create Ticket
-    const createNavBtn = page.locator("nav[aria-label='Primary navigation'] button:has-text('Create Ticket')");
-    await createNavBtn.click();
-    await expect(page).toHaveURL(/\/tickets\/new/);
-    await expect(page.locator("#create-ticket-title")).toBeVisible();
+    await expect(page.getByRole("heading", { name: ticketNumber })).toBeVisible();
+    await expect(page.getByText(summary, { exact: true })).toBeVisible();
+    await expect(page.getByText(description, { exact: true })).toBeVisible();
 
-    // 3. Fill Create Ticket form
-    await page.locator("#category").selectOption({ index: 1 });
-    await page.locator("#related-system").selectOption({ index: 1 });
-    await page.locator("#priority").selectOption("HIGH");
-
-    const uniqueTag = Date.now();
-    const summaryText = `E2E Flow Ticket ${uniqueTag}`;
-    const descriptionText = `Automated end-to-end test ticket created at ${new Date().toISOString()} for full lifecycle testing.`;
-
-    await page.locator("#summary").fill(summaryText);
-    await page.locator("#description").fill(descriptionText);
-
-    // 4. Submit Ticket
-    await page.locator("button[type='submit']:has-text('Submit Ticket')").click();
-
-    // Verify Success Screen
-    await expect(page.locator("#ticket-created-title")).toBeVisible({ timeout: 15000 });
-    const ticketNumber = await page.locator(".success-details dd").first().textContent();
-    expect(ticketNumber).toMatch(/^TKT-\d{4}-\d{5}$/);
-
-    // 5. Navigate to My Tickets and Search
-    await page.locator(".success-card button:has-text('My Tickets')").click();
-    await expect(page).toHaveURL(/\/tickets$/);
-    await expect(page.locator("#my-tickets")).toBeVisible();
-
-    const searchInput = page.locator("input[type='search']");
-    await searchInput.fill(summaryText);
-
-    // Wait for search results to show the ticket (visible in desktop table or mobile card)
-    const ticketSummaryEl = page.locator(".ticket-summary-text:visible, .card-summary:visible").filter({ hasText: summaryText });
-    await expect(ticketSummaryEl.first()).toBeVisible({ timeout: 10000 });
-
-    // 6. Click "View Details"
-    const viewDetailsBtn = page.locator(".view-details-btn:visible").first();
-    await viewDetailsBtn.click();
-
-    await expect(page).toHaveURL(/\/tickets\/\d+/);
-    await expect(page.locator("#ticket-detail-title")).toBeVisible({ timeout: 10000 });
-    await expect(page.locator("#ticket-detail-title")).toHaveText(ticketNumber!.trim());
-
-    // Verify Read-only details
-    await expect(page.locator(".summary-value")).toHaveText(summaryText);
-    await expect(page.locator(".description-value")).toHaveText(descriptionText);
-    await expect(page.locator(".meta-dl-item:has-text('Requester')")).toContainText("Amina Rahman");
-    await expect(page.locator(".priority-badge")).toContainText("HIGH");
-
-    // 7. Upload Attachment
     const fileInput = page.locator("#detail-file-input");
+    const attachmentUpload = page.waitForResponse((response) =>
+      response.url().includes("/attachments") && response.request().method() === "POST"
+    );
     await fileInput.setInputFiles({
-      name: "diagnostic-report.png",
+      name: "requester-regression.png",
       mimeType: "image/png",
       buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"),
     });
+    const uploaded = await attachmentUpload;
+    expect(uploaded.status()).toBe(201);
+    const attachmentId = (await uploaded.json()).data[0].id;
+    await expect(page.getByText("Uploaded 1 file(s) successfully.")).toBeVisible();
+    await expect(page.getByLabel("Download requester-regression.png")).toBeEnabled();
+    const download = page.waitForEvent("download");
+    await page.getByLabel("Download requester-regression.png").click();
+    expect((await download).suggestedFilename()).toBe("requester-regression.png");
+    const preview = page.waitForEvent("popup");
+    await page.getByLabel("Preview requester-regression.png").click();
+    const previewPage = await preview;
+    await previewPage.waitForURL(/blob:/);
+    await previewPage.close();
 
-    // Verify success banner and active attachments list
-    await expect(page.locator(".alert-success:has-text('Uploaded 1 file(s) successfully')")).toBeVisible({ timeout: 15000 });
-    await expect(page.locator(".file-count")).toHaveText("1 of 5 active files");
-    await expect(page.locator(".attachment-name:has-text('diagnostic-report.png')")).toBeVisible();
+    await page.locator("nav[aria-label='Primary navigation']").getByRole("button", { name: "My Tickets", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "My Tickets" })).toBeVisible();
+    const priorityFilterResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return response.request().method() === "GET" && url.pathname === "/api/tickets" && url.searchParams.get("requestedPriority") === "MEDIUM";
+    });
+    await page.getByLabel("Requested Priority").selectOption("MEDIUM");
+    expect((await priorityFilterResponse).status()).toBe(200);
+    const visibleTicketRow = page.locator(".ticket-table-container .ticket-row").filter({ hasText: summary });
+    await expect(visibleTicketRow).toBeVisible();
+    const searchResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return response.request().method() === "GET" && url.pathname === "/api/tickets" && url.searchParams.get("search") === summary;
+    });
+    await page.getByLabel("Search by Ticket Number or Summary").fill(summary);
+    expect((await searchResponse).status()).toBe(200);
+    await expect(visibleTicketRow).toBeVisible();
+    await visibleTicketRow.getByRole("button", { name: "View Details", exact: true }).click();
 
-    // 8. Test Download & Preview real browser events
-    const downloadBtn = page.locator(".download-btn:has-text('Download')").first();
-    await expect(downloadBtn).toBeVisible();
-    await expect(downloadBtn).toBeEnabled();
-
-    const downloadPromise = page.waitForEvent("download");
-    await downloadBtn.click();
-    const download = await downloadPromise;
-    expect(download.suggestedFilename()).toBe("diagnostic-report.png");
-
-    const previewBtn = page.locator(".preview-btn:has-text('Preview')").first();
-    await expect(previewBtn).toBeVisible();
-    await expect(previewBtn).toBeEnabled();
-
-    const popupPromise = page.waitForEvent("popup");
-    await previewBtn.click();
-    const popup = await popupPromise;
-    await popup.waitForURL(/blob:/, { timeout: 10000 });
-    expect(popup.url()).toContain("blob:");
-    await popup.close();
-
-    // 9. Soft-remove Attachment
-    const removeBtn = page.locator(".remove-btn:has-text('Remove')").first();
-    await removeBtn.click();
-
-    // Modal opens
-    await expect(page.locator("#removal-dialog-title")).toBeVisible();
-    const reasonInput = page.locator("#removal-reason-input");
-    await expect(reasonInput).toBeFocused();
-
-    // Submit with valid removal reason
-    const reasonText = "File uploaded by mistake during automated testing";
-    await reasonInput.fill(reasonText);
-    await page.locator(".remove-confirm-btn").click();
-
-    // Modal closes, file moved to removed list
-    await expect(page.locator("#removal-dialog-title")).toBeHidden({ timeout: 10000 });
-    await expect(page.locator(".file-count")).toHaveText("0 of 5 active files");
-    await expect(page.locator(".removed-attachments-area")).toBeVisible();
-    await expect(page.locator(".removed-item .attachment-name")).toContainText("diagnostic-report.png");
-    await expect(page.locator(".removal-reason-text")).toContainText(reasonText);
+    await page.getByRole("button", { name: "Remove", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Remove Attachment" })).toBeVisible();
+    await page.getByLabel("Removal Reason").fill("Automated regression cleanup of a temporary attachment.");
+    await page.getByRole("button", { name: "Remove Attachment", exact: true }).click();
+    const removed = page.locator(".removed-attachments-area");
+    await expect(removed).toContainText("requester-regression.png");
+    await expect(removed.getByText("Removed", { exact: true })).toBeVisible();
+    const removedPreview = await page.request.get(`http://localhost:8000/api/attachments/${attachmentId}/preview`);
+    expect(removedPreview.status()).toBe(410);
+    expect((await removedPreview.json()).error.code).toBe("ATTACHMENT_REMOVED");
   });
 });

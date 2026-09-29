@@ -54,17 +54,14 @@ test.describe("E2E-SEC-01: Authorization and Security Boundaries", () => {
     expect(adminStatus).toBe(403);
 
     // Requester cannot view someone else's ticket (safe 404 shape, identical to non-existent)
-    const foreignTicketStatus = await page.evaluate(async () => {
-      const res = await fetch("http://localhost:8000/api/tickets/1", { credentials: "include" });
-      return res.status;
-    });
-    expect(foreignTicketStatus).toBe(404);
-
-    const nonExistentTicketStatus = await page.evaluate(async () => {
-      const res = await fetch("http://localhost:8000/api/tickets/999999", { credentials: "include" });
-      return res.status;
-    });
-    expect(nonExistentTicketStatus).toBe(404);
+    const foreignTicket = await page.request.get("http://localhost:8000/api/tickets/1");
+    const missingTicket = await page.request.get("http://localhost:8000/api/tickets/999999");
+    expect(foreignTicket.status()).toBe(404);
+    expect(missingTicket.status()).toBe(404);
+    expect(await foreignTicket.json()).toEqual(await missingTicket.json());
+    const privateNotes = await page.request.get("http://localhost:8000/api/staff/tickets/4/internal-notes");
+    expect(privateNotes.status()).toBe(403);
+    expect(JSON.stringify(await privateNotes.json())).not.toContain("Vendor status page");
 
     // Log out
     await page.getByRole("button", { name: "Log out" }).click();
