@@ -24,6 +24,7 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
 .password-toggle input { min-height: 24px; width: 24px; }
 .auth-submit { width: 100%; margin-top: 24px; font-weight: 750; }
 .auth-heading-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.auth-heading-row > .link-button { flex: 0 0 auto; white-space: nowrap; }
 .app-page { width: min(1380px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 48px; }
 .requester-card, .workspace-card, .diagnostics, .app-shell {
   background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
@@ -752,8 +753,9 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
   display: flex;
   flex-direction: column;
   gap: 6px;
-  flex: 1 1 160px;
 }
+
+.filter-row > .filter-group { flex: 1 1 240px; }
 
 .filter-group label {
   color: var(--zen-900);

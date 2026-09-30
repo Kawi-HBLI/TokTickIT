@@ -146,11 +146,14 @@ verification run on final `main`.
 
 ## 6. Issue #45 candidate verification (2026-09-30, Asia/Bangkok)
 
-The commands below were executed from the repository root on the uncommitted
-`feature/lab3-final-evidence-docs` working tree based on staging commit
+The commands below were executed from the repository root on
+`feature/lab3-final-evidence-docs`, based on staging commit
 `cf6b681880fe9ef4503cc7470baab7b6d49ff3ac`. That SHA identifies the
-**base**, not this Issue #45 change. These are local candidate results, not CI
-results or verification of the eventual release merge on final `main`.
+**base**, not this Issue #45 change. The initial candidate was committed as
+`553c1094d7847f9a094c22ce0a489f593b63f76f`; subsequent visual
+corrections were verified on the feature-branch working tree. These are local candidate
+results, not CI results or verification of the eventual release merge on
+final `main`.
 
 | Scope | Command | Observed result |
 |---|---|---|
@@ -158,8 +161,8 @@ results or verification of the eventual release merge on final `main`.
 | All client tests | `npm --prefix client test` | Passed: 19 files, 101 tests. React `act(...)` and expected negative-path console warnings were emitted; no test failed. |
 | Server build | `npm --prefix server run build` | Passed (`tsc`, exit 0). |
 | Client build after final CSS fix | `npm --prefix client run build` | Passed (`tsc && vite build`, exit 0). |
-| Lab 3 browser, accessibility and visual suite | `npm run test:e2e:lab3` | Passed: 19/19, including real authenticated role flows, axe WCAG A/AA scans, keyboard dialogs, 320 CSS-pixel reflow and three viewport capture scenarios. |
-| Retained Lab 2 Requester browser regression | `npm run test:e2e:regression` | Passed: 10/10 with authenticated sessions and real attachment lifecycle, isolation, failure/validation, accessibility and three-breakpoint visual states. |
+| Lab 3 browser, accessibility and visual suite | `npm run test:e2e:lab3` | Passed: 19/19 after the latest visual and CSS corrections, including real authenticated role flows, axe WCAG A/AA scans, keyboard dialogs, 320 CSS-pixel reflow and three viewport capture scenarios. |
+| Retained Lab 2 Requester browser regression | `npm run test:e2e:regression` | Passed: 10/10 after the latest CSS correction, with authenticated sessions and real attachment lifecycle, isolation, failure/validation, accessibility and three-breakpoint visual states. |
 
 The two browser commands ran **sequentially** in Chromium's desktop project.
 Their visual specs explicitly iterate Desktop `1440x900`, Tablet `834x1112`
@@ -178,6 +181,19 @@ new images was manually inspected; that is not a claim that every final-main
 capture has been visually signed off. The 45 new state names have no committed
 same-state visual baselines, so pixel-diff regression is **inconclusive**;
 these captures prove the named state was rendered, not unchanged pixels.
+
+Visual inspection after the initial commit found that Requester conversation
+and resolution captures could show the same state across viewports, and that
+full-page captures of modal dialogs showed an undimmed region below the
+viewport. The capture test now creates a fresh Ticket per viewport and uses
+viewport-sized modal screenshots. Further CSS adjustments keep the Change
+Password logout control on one line and give Staff Queue filters enough room
+without stretching the search field vertically. After the final correction,
+client tests and build passed, Lab 3 E2E passed 19/19, and retained Lab 2
+browser regression passed 10/10. The 45 required PNGs were regenerated;
+the corrected Requester, queue, authentication, and modal states were
+manually inspected. These are candidate-branch captures, not final-main
+sign-off.
 
 After the peer-reviewed staging and release merges, rerun the documented
 commands on `main`, check all 45 required captures and the complete visual

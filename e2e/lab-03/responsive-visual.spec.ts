@@ -13,12 +13,12 @@ test.describe("VIS-01–03: approved 45-state responsive evidence", () => {
   for (const vp of viewports) {
     test(`${vp.name}: authenticated workflows and safe states`, async ({ page }) => {
       await page.setViewportSize(vp);
-      const capture = async (area: string, state: string) => {
+      const capture = async (area: string, state: string, fullPage = true) => {
         await page.evaluate(() => document.fonts.ready);
         await checkNoHorizontalScroll(page);
         const dir = path.resolve("artifacts/lab-03/screenshots", area);
         fs.mkdirSync(dir, { recursive: true });
-        await page.screenshot({ path: path.join(dir, `${state}-${vp.name}.png`), fullPage: true });
+        await page.screenshot({ path: path.join(dir, `${state}-${vp.name}.png`), fullPage });
       };
       const responsiveList = async (table: string, cards: string) => {
         await expect(page.locator(vp.name === "desktop" ? table : cards)).toBeVisible();
@@ -51,6 +51,7 @@ test.describe("VIS-01–03: approved 45-state responsive evidence", () => {
       const restorePasswordFlag = await openForcedPasswordChange(page);
       try {
         await expect(page.getByRole("heading", { name: "Change your password" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Log out" })).toHaveCSS("white-space", "nowrap");
         await capture("authentication", "03-change-password");
         await page.getByRole("button", { name: "Log out" }).click();
       } finally {
@@ -65,14 +66,14 @@ test.describe("VIS-01–03: approved 45-state responsive evidence", () => {
       await page.getByRole("button", { name: "Create User", exact: true }).click();
       await expect(page.getByRole("dialog")).toBeVisible();
       await checkDialogFields();
-      await capture("user-management", "02-create-or-edit-user");
+      await capture("user-management", "02-create-or-edit-user", false);
       await page.keyboard.press("Escape");
       await expect(page.getByRole("dialog")).toBeHidden();
       await page.getByRole("button", { name: "Edit Harper Morgan", exact: true }).filter({ visible: true }).click();
       await expect(page.getByLabel("Active Account")).toBeDisabled();
       await checkDialogFields();
       await expect(page.getByText("You cannot deactivate your own account.")).toBeVisible();
-      await capture("user-management", "03-deactivation-safety-or-forbidden");
+      await capture("user-management", "03-deactivation-safety-or-forbidden", false);
       await page.keyboard.press("Escape");
 
       await page.goto("/staff/tickets");
@@ -111,13 +112,28 @@ test.describe("VIS-01–03: approved 45-state responsive evidence", () => {
       await expect(detailButton).toBeVisible();
       if (vp.name === "desktop") await checkNoTableOverflow(page, ".ticket-table-container");
       await capture("requester", "01-my-tickets-authenticated");
-      await detailButton.click();
+
+      // Use a fresh Ticket for each viewport so the comment and resolution
+      // captures show genuinely different states, independent of test order.
+      await page.locator("nav").getByRole("button", { name: "Create Ticket" }).click();
+      await page.getByLabel("Summary").fill(`Visual evidence requester conversation ${vp.name}`);
+      await page.getByLabel("Category").selectOption({ label: "Hardware" });
+      await page.getByLabel("Related System").selectOption({ label: "Corporate Laptop" });
+      await page.getByLabel("Description").fill("The keyboard intermittently stops responding during work.");
+      await page.getByRole("button", { name: "Submit Ticket" }).click();
+      await expect(page.getByRole("heading", { name: "Your Ticket has been submitted" })).toBeVisible();
+      await page.getByRole("button", { name: "View Ticket" }).click();
       await expect(page.getByLabel("Add a comment", { exact: true })).toBeVisible();
       await expect(page.getByText("Loading comments…", { exact: true })).toBeHidden();
       await expect(page.getByRole("heading", { name: "Internal Notes" })).toHaveCount(0);
+      const comment = `Public requester update for ${vp.name} evidence.`;
+      await page.getByLabel("Add a comment", { exact: true }).fill(comment);
+      await page.getByRole("button", { name: "Post public comment", exact: true }).click();
+      await expect(page.getByText(comment, { exact: true })).toBeVisible();
+      await expect(page.getByText("Problem indicated as resolved", { exact: true })).toBeHidden();
       await capture("requester", "02-ticket-detail-public-comment");
       const indicated = page.getByText("Problem indicated as resolved", { exact: true });
-      if (!await indicated.isVisible()) await page.getByRole("button", { name: "Problem appears resolved", exact: true }).click();
+      await page.getByRole("button", { name: "Problem appears resolved", exact: true }).click();
       await expect(indicated).toBeVisible();
       await capture("requester", "03-problem-appears-resolved");
     });
