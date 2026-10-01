@@ -4,7 +4,7 @@
 
 ## Selected Key Prompts
 
-The following 10 key prompts summarize the technical work.
+The following 9 key prompts summarize the technical work.
 
 | # | Selected Prompt | What I Did With the Result |
 |---|---|---|
@@ -17,12 +17,9 @@ The following 10 key prompts summarize the technical work.
 | 7 | "Review administrator user management for invariant failures: self-deactivation, last active administrator, role change, password reset, session revocation, and tickets owned by a user who becomes inactive or a Requester." | I used this as a checklist for the administrative contract. Review feedback then corrected hard-coded initial passwords, the reset endpoint, owner unassignment, session revocation, optimistic locking, and the removal of out-of-scope department management. |
 | 8 | "Make a focused verification plan for the migrated application. Include server authorization tests, migration/regression checks, client states, responsive and keyboard checks, and end-to-end workflows. Keep planned work separate from results actually run." | This helped keep traceability evidence separate from implementation intentions. The final verification review caught that migration integration tests had been skipped and that `tests.md` still showed planned status; the checks were then executed and the record updated. |
 | 9 | "Read the review discussions and turn them into a short peer-review record. Keep direct links, distinguish requested changes from approval, and describe only the correction and outcome that the discussion supports." | I used it to prepare the reviewer record without copying long conversations or claiming test results and approvals that were not in the review history. |
-| 10 | "Inspect the candidate screenshots against the visual checklist. Check keyboard behavior separately, try long user data, and record what was actually verified. Keep final-release checks separate." | I used an independent screenshot audit to find missing mobile navigation, raw status labels, long-account overflow and clipped dialog actions. I corrected the UI and capture flow, added browser checks for menu state, text bounds and error focus, then recorded candidate observations and current evidence paths without claiming final-main approval. |
 
 ## My Reflection
 
 AI helped align the specification, API, UI and tests before implementation, then accelerate small code increments. I still checked scope and failure cases myself. The clearest technical lesson was that a session establishes identity, CSRF protects authenticated browser writes, and server authorization controls which records that identity may access; hiding a UI control is not enough.
 
 Peer review exposed migration, authentication, workflow and administrator-safety gaps. Reviewing my partner's requester-safe 404s showed how even an error response can leak resource existence. I learned to verify claims with real migration and browser runs: skipped tests, low-contrast text, cramped forms and a 320-pixel overflow were only clear when I checked the executable evidence.
-
-The final visual review also showed that having screenshots is not the same as checking them. A passing browser suite had not checked the mobile conflict dialog's full frame, so I added explicit control-bound checks after fixing it. I now separate image observations, keyboard/automated evidence, and checks that still need a real screen reader or final release build.
