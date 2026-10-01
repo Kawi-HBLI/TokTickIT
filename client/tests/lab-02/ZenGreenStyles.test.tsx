@@ -94,7 +94,7 @@ describe("UI-STYLE-01: Zen Green Styles and Responsive Design Tokens", () => {
       expect(screen.getByText("TKT-2026-00001")).toBeInTheDocument();
     });
 
-    const statusBadge = screen.getByText("NEW");
+    const statusBadge = screen.getByText("New");
     expect(statusBadge).toHaveClass("status-badge", "status-new");
 
     const priorityBadge = screen.getByText("HIGH Priority");

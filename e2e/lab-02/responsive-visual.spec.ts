@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { loginUser } from "../lab-03/helpers.js";
-import { checkNoHorizontalScroll, fillTicketForm, loginRequester } from "./helpers.js";
+import { checkNoHorizontalScroll, fillTicketForm, loginRequester, selectRequesterDestination } from "./helpers.js";
 
 const viewports = [
   { name: "desktop", width: 1440, height: 900 },
@@ -15,7 +15,18 @@ test.describe("E2E-LAB2-VIS-01: authenticated requester responsive regression", 
     test.setTimeout(120_000);
     const screenshotDir = path.resolve(process.cwd(), "artifacts/lab-03/screenshots/requester-regression");
     fs.mkdirSync(screenshotDir, { recursive: true });
-    const capture = (name: string) => page.screenshot({ path: path.join(screenshotDir, name), fullPage: true });
+    const capture = async (name: string, fullPage = true) => {
+      if (!fullPage) {
+        const frame = await page.getByRole("dialog").boundingBox();
+        const viewport = page.viewportSize()!;
+        expect(frame).not.toBeNull();
+        expect(frame!.x).toBeGreaterThanOrEqual(0);
+        expect(frame!.y).toBeGreaterThanOrEqual(0);
+        expect(frame!.x + frame!.width).toBeLessThanOrEqual(viewport.width);
+        expect(frame!.y + frame!.height).toBeLessThanOrEqual(viewport.height);
+      }
+      await page.screenshot({ path: path.join(screenshotDir, name), fullPage });
+    };
     const adminContext = await browser.newContext();
     const emptyContext = await browser.newContext();
     try {
@@ -65,15 +76,15 @@ test.describe("E2E-LAB2-VIS-01: authenticated requester responsive regression", 
       await capture(`no-results-${viewport.name}.png`);
       await page.getByRole("button", { name: "Clear Filters", exact: true }).last().click();
 
-      await page.locator("nav[aria-label='Primary navigation']").getByRole("button", { name: "Create Ticket", exact: true }).click();
+      await selectRequesterDestination(page, "Create Ticket");
       await page.getByRole("button", { name: "Submit Ticket", exact: true }).click();
       await expect(page.locator("#category-error")).toBeVisible();
       await checkNoHorizontalScroll(page);
       await capture(`validation-${viewport.name}.png`);
       await page.getByLabel("Summary").fill(`Discard ${viewport.name}`);
-      await page.locator("nav[aria-label='Primary navigation']").getByRole("button", { name: "My Tickets", exact: true }).click();
+      await selectRequesterDestination(page, "My Tickets");
       await expect(page.getByRole("dialog", { name: "Discard unsaved Ticket?", exact: true })).toBeVisible();
-      await capture(`discard-dialog-${viewport.name}.png`);
+      await capture(`discard-dialog-${viewport.name}.png`, false);
       await page.getByRole("button", { name: "Discard changes", exact: true }).click();
     }
 
@@ -116,7 +127,7 @@ test.describe("E2E-LAB2-VIS-01: authenticated requester responsive regression", 
     await expect(page.getByRole("dialog", { name: "Remove Attachment", exact: true })).toBeVisible();
     for (const viewport of viewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await capture(`removal-dialog-${viewport.name}.png`);
+      await capture(`removal-dialog-${viewport.name}.png`, false);
     }
     await page.getByLabel("Removal Reason").fill("Responsive regression removal audit record.");
     await page.getByRole("button", { name: "Remove Attachment", exact: true }).click();

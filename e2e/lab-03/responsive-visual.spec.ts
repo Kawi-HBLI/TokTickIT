@@ -115,6 +115,7 @@ test.describe("VIS-01–03: approved 45-state responsive evidence", () => {
 
       // Use a fresh Ticket for each viewport so the comment and resolution
       // captures show genuinely different states, independent of test order.
+      if (vp.name === "mobile") await page.getByRole("button", { name: "Navigation", exact: true }).click();
       await page.locator("nav").getByRole("button", { name: "Create Ticket" }).click();
       await page.getByLabel("Summary").fill(`Visual evidence requester conversation ${vp.name}`);
       await page.getByLabel("Category").selectOption({ label: "Hardware" });

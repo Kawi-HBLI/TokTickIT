@@ -48,7 +48,7 @@ export async function fillTicketForm(page: Page, summary: string, description: s
 }
 
 export async function createTicket(page: Page, summary: string, description: string) {
-  await page.locator("nav[aria-label='Primary navigation']").getByRole("button", { name: "Create Ticket", exact: true }).click();
+  await selectRequesterDestination(page, "Create Ticket");
   await expect(page).toHaveURL(/\/tickets\/new$/);
   await fillTicketForm(page, summary, description);
   await page.getByRole("button", { name: "Submit Ticket", exact: true }).click();
@@ -58,6 +58,12 @@ export async function createTicket(page: Page, summary: string, description: str
   await page.getByRole("button", { name: "View Ticket", exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   return { ticketNumber: ticketNumber!.trim(), url: page.url() };
+}
+
+export async function selectRequesterDestination(page: Page, label: "My Tickets" | "Create Ticket") {
+  const navigation = page.getByRole("navigation", { name: "Primary navigation" });
+  if (!await navigation.isVisible()) await page.getByRole("button", { name: "Navigation", exact: true }).click();
+  await navigation.getByRole("button", { name: label, exact: true }).click();
 }
 
 export async function checkNoHorizontalScroll(page: Page) {

@@ -350,6 +350,12 @@ name. Exact planned paths:
 | User management | `artifacts/lab-03/screenshots/user-management/01-users-list-{viewport}.png`; `02-create-or-edit-user-{viewport}.png`; `03-deactivation-safety-or-forbidden-{viewport}.png` |
 | Requester regression | `artifacts/lab-03/screenshots/requester/01-my-tickets-authenticated-{viewport}.png`; `02-ticket-detail-public-comment-{viewport}.png`; `03-problem-appears-resolved-{viewport}.png` |
 
+These 45 standardized paths are the required current candidate evidence.
+Older retained filenames do not substitute for them. `tests.md` Section 7
+records the candidate inspection, supplemental long-account/menu/error
+captures, current Requester regression paths, and separately pending
+final-main checks.
+
 For each capture, verify Zen Green color/surface continuity; visible role and
 active navigation; readable labels and errors; distinguishable public/internal
 content; no clipping/overlap/horizontal overflow; reachable actions; explicit

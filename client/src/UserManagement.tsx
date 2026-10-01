@@ -238,6 +238,30 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
     }
   }, [resettingUser]);
 
+  // Disabling the submit button can move browser focus out of the dialog.
+  // After a rejected submission, focus the invalid field (or a safe control)
+  // so correction and Escape remain available without another pointer click.
+  function focusDialogError(dialog: HTMLElement | null) {
+    const target = dialog?.querySelector<HTMLElement>(".is-invalid")
+      ?? dialog?.querySelector<HTMLElement>("button:not([disabled])");
+    target?.focus();
+  }
+  useEffect(() => {
+    if (showCreateModal && !createSubmitting && (createError || Object.keys(createFieldErrors).length)) {
+      focusDialogError(createModalRef.current);
+    }
+  }, [showCreateModal, createSubmitting, createError, createFieldErrors]);
+  useEffect(() => {
+    if (editingUser && !editSubmitting && (editError || Object.keys(editFieldErrors).length)) {
+      focusDialogError(editModalRef.current);
+    }
+  }, [editingUser, editSubmitting, editError, editFieldErrors]);
+  useEffect(() => {
+    if (resettingUser && !resetSubmitting && (resetError || resetFieldError)) {
+      focusDialogError(resetModalRef.current);
+    }
+  }, [resettingUser, resetSubmitting, resetError, resetFieldError]);
+
   // Submit Create User
   async function handleCreateSubmit(e: FormEvent) {
     e.preventDefault();
@@ -571,11 +595,13 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
               <tbody>
                 {users.map((u) => (
                   <tr key={u.id} className={!u.isActive ? "user-row-inactive" : undefined}>
-                    <td className="user-name-cell">
-                      <strong>{u.name}</strong>
-                      {currentUser && currentUser.id === u.id && (
-                        <span className="badge badge-current-user">You</span>
-                      )}
+                    <td>
+                      <div className="user-name-cell">
+                        <strong>{u.name}</strong>
+                        {currentUser && currentUser.id === u.id && (
+                          <span className="badge badge-current-user">You</span>
+                        )}
+                      </div>
                     </td>
                     <td className="user-email-cell">{u.email}</td>
                     <td>
@@ -708,6 +734,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
             )}
 
             <form onSubmit={handleCreateSubmit} noValidate>
+              <div className="user-dialog-body">
               <div className="form-group mb-3">
                 <label htmlFor="create-name">
                   Full Name <span className="text-danger">*</span>
@@ -814,6 +841,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                 </p>
               </div>
 
+              </div>
               <div className="dialog-actions">
                 <button
                   type="button"
@@ -866,6 +894,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
             )}
 
             <form onSubmit={handleEditSubmit} noValidate>
+              <div className="user-dialog-body">
               <div className="form-group mb-3">
                 <label htmlFor="edit-name">
                   Full Name <span className="text-danger">*</span>
@@ -951,6 +980,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                 )}
               </div>
 
+              </div>
               <div className="dialog-actions">
                 <button
                   type="button"
@@ -1002,6 +1032,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
             </p>
 
             <form onSubmit={handleResetInitialPassword} noValidate>
+              <div className="user-dialog-body">
               <div className="form-group mb-3">
                 <label htmlFor="reset-initial-password">
                   New Initial Password <span className="text-danger">*</span>
@@ -1034,6 +1065,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                 </div>
               )}
 
+              </div>
               <div className="dialog-actions">
                 <button
                   type="button"

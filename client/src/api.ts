@@ -34,7 +34,7 @@ export interface TicketListItem {
   ticketNumber: string;
   summary: string;
   requestedPriority: RequestedPriority;
-  currentStatus: "NEW";
+  currentStatus: TicketStatus;
   createdAt: string;
   updatedAt: string;
   category: { id: number; name: string };

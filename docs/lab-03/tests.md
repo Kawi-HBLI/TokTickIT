@@ -100,7 +100,7 @@ verification run on final `main`.
 | VIS-01 | AC-13, AC-20, AC-28 | Desktop `1440x900` screenshot set: Login, password change, Requester detail/comment, Queue table/states, Staff Detail/public-v-internal notes, User Management. | `e2e/lab-03/responsive-visual.spec.ts` | Passed |
 | VIS-02 | AC-13, AC-20, AC-28 | Tablet `834x1112` captures the same 15 states; automated assertions cover no document overflow, table/card representation and dialog field geometry. Final-main manual image inspection remains separate. | `e2e/lab-03/responsive-visual.spec.ts` | Passed |
 | VIS-03 | AC-13, AC-20, AC-28 | Mobile `390x844` captures the same 15 states with automated no-horizontal-scroll, visible action and 44px/full-width dialog-field checks. Touch comfort and complete visual sign-off remain manual. | `e2e/lab-03/responsive-visual.spec.ts` | Passed |
-| E2E-A11Y-01 | AC-20, AC-28 | `@axe-core/playwright` WCAG A/AA-tagged scans on seven core views, real Tab/Shift+Tab/Enter/Escape dialog focus checks, and 320 CSS-pixel reflow/reachability checks across authenticated screens. A screen-reader run and physical 400% zoom are not claimed. | `e2e/lab-03/accessibility.spec.ts` | Passed |
+| E2E-A11Y-01 | AC-20, AC-28 | `@axe-core/playwright` WCAG A/AA-tagged scans on seven core views, real Tab/Shift+Tab/Enter/Escape dialog and mobile-menu focus checks, 320 CSS-pixel reflow, 100-character name/199-character email wrapping, sampled mobile target geometry, and viewport-contained validation/conflict dialog controls. A screen-reader run and physical 400% zoom are not claimed. | `e2e/lab-03/accessibility.spec.ts` | Passed |
 | REG-L2-01 | AC-08, AC-09, AC-18, AC-29 | Retained Lab 1/Lab 2 server/client suites and ten authenticated Requester browser scenarios pass: creation/search/filter, preview/download/remove/audit, foreign-object denial, failure/retry/draft retention, validation, axe/keyboard dialogs and three-breakpoint captures. | `server/tests/lab-0[12]/`, `client/tests/lab-0[12]/`, and `e2e/lab-02/` via `playwright.lab2-regression.config.ts` | Passed |
 
 ### 4.5 Documented manual delivery test
@@ -144,14 +144,17 @@ verification run on final `main`.
 | AC-29 | DB-L3-01/02; REG-L2-01; E2E-AUTH-01; E2E-REQ-01; E2E-STAFF-01; E2E-ADMIN-01; E2E-SEC-01; E2E-A11Y-01 |
 | AC-30 | MANUAL-DELIVERY-01 |
 
-## 6. Issue #45 candidate verification (2026-09-30, Asia/Bangkok)
+## 6. Candidate verification records
+
+### 6.1 Issue #45 candidate verification (2026-09-30, Asia/Bangkok)
 
 The commands below were executed from the repository root on
 `feature/lab3-final-evidence-docs`, based on staging commit
 `cf6b681880fe9ef4503cc7470baab7b6d49ff3ac`. That SHA identifies the
 **base**, not this Issue #45 change. The initial candidate was committed as
 `553c1094d7847f9a094c22ce0a489f593b63f76f`; subsequent visual
-corrections were verified on the feature-branch working tree. These are local candidate
+corrections were verified on the feature-branch working tree and committed as
+`0877807552ea3abe40605460dad95765526e5861`. These are local candidate
 results, not CI results or verification of the eventual release merge on
 final `main`.
 
@@ -173,7 +176,8 @@ physical 400% browser zoom; these remain manual final-delivery checks.
 
 The 45 exact screenshot paths listed in `ui-spec.md` exist under the five
 Lab 3 areas (three states x three viewports per area). The retained Requester
-regression produced 42 additional PNGs under
+regression directory contains 42 additional PNGs: 36 generated regression
+captures and six older `my-tickets-*` / `create-ticket-*` captures under
 `artifacts/lab-03/screenshots/requester-regression/`. Pre-existing captures
 in the five main areas are additional files, not part of the 45-path claim.
 No file in `artifacts/lab-02/screenshots/` was changed. A selection of the
@@ -199,24 +203,113 @@ After the peer-reviewed staging and release merges, rerun the documented
 commands on `main`, check all 45 required captures and the complete visual
 checklist, record the final commit/CI links and finish the nine-part PDF.
 
+### 6.2 PR #46 visual-checklist follow-up (2026-10-01, Asia/Bangkok)
+
+Executed on `feature/lab3-final-evidence-docs`, working tree based on
+`0877807552ea3abe40605460dad95765526e5861`. These results cover the local
+follow-up changes, not a staging/release merge, CI run, or peer approval.
+
+| Scope | Command | Observed result |
+|---|---|---|
+| Client regression | `npm --prefix client test` | Passed: 20 files, 103 tests. Existing React `act(...)` and expected negative-path warnings remain; no failures. |
+| Client build | `npm --prefix client run build` | Passed: `tsc && vite build`, exit 0. |
+| Lab 3 browser/accessibility/visual suite | `npm run test:e2e:lab3` | Passed: 21/21, including two new candidate-checklist scenarios and all 45 required captures. |
+| Retained Requester browser regression | `npm run test:e2e:regression` | Passed: 10/10, run sequentially after Lab 3 against the same isolated test schema; 36 current regression captures regenerated. |
+
+The screenshot audit found a missing mobile navigation disclosure, raw
+Requester status enums, an uncontained Administrator layout, long-account
+overflow, and lost dialog focus after a rejected submission. These were
+corrected, with real browser assertions for menu state and keyboard recovery,
+long-text bounds, error focus and mobile target size. A further visual check
+caught clipped dialog actions after an email conflict; the dialog now keeps
+its header/actions inside the viewport while the form body scrolls internally.
+The final browser run asserts this geometry in both validation and conflict
+states. Core error/warning/success and priority colours were aligned with
+`ui-spec.md` before the final capture run.
+
+Requester discard/removal dialog captures also use viewport-sized screenshots
+with explicit frame-bound assertions; full-page stitching had omitted the
+mobile removal dialog and produced partial dimming on long pages. The
+corrected captures show the actual dialog and its dimmed viewport, not a
+stitched full-page approximation of a fixed overlay.
+
+No server code, schema, or dependency changed in this follow-up. Server test
+and build results remain the dated Section 6.1 evidence and are not claimed
+as rerun on 2026-10-01. The archived Lab 2 screenshots remain unchanged.
+
 ## 7. Responsive and visual checklist
 
-Complete manually against final `main`, alongside `VIS-01` to `VIS-03`.
-The candidate has automated no-overflow/axe/keyboard checks and the required
-captures, but unchecked items below have **not** been asserted as a completed
-final-main manual review. Store captures by `authentication/`, `requester/`,
-`staff-queue/`, `staff-ticket-detail/`, and `user-management/` under
-`artifacts/lab-03/screenshots/`.
+### 7.1 Completed candidate inspection
 
-- [ ] Desktop/tablet/mobile show no horizontal page scrolling.
-- [ ] Login/change-password labels, errors, busy controls, success and safe failure states are readable and keyboard usable.
-- [ ] Queue is a readable desktop table and becomes a usable small-screen representation; search/filter/sort/page actions remain reachable.
-- [ ] Staff detail keeps owner, priorities, status, attachment actions, Public Comment, and Internal Note distinct; no control overlaps or disappears.
-- [ ] User-management list/form remains readable with long name/email and exposes validation/conflict safely.
-- [ ] All required labels, asterisks, field-level errors, focus indicators, badges, buttons, attachment names, and dialog controls are visible and non-overlapping.
-- [ ] Status, priority, active/inactive, and Public/Internal meaning have text/icon treatment and do not rely on colour alone.
-- [ ] Touch targets are practical on mobile; Tab/Shift+Tab and Escape have logical modal/focus behaviour.
-- [ ] Zen Green values and error/warning/success styling conform to `ui-spec.md`; screenshots are readable without extreme zoom.
+Inspected on **2026-10-01 (Asia/Bangkok)** against the PR #46 candidate
+working tree in Section 6.2. All 45 standardized screenshots were opened and
+checked at Desktop `1440x900`, Tablet `834x1112`, and Mobile `390x844`.
+The seven supplemental candidate captures and the referenced Requester
+regression states were also inspected. Checked items below mean candidate
+verification using the image observations and behavioral evidence recorded
+here; they do **not** mean final-main sign-off or a complete assistive-technology
+audit. Long pages and dialog bodies may scroll vertically; horizontal page
+overflow or unreachable actions are not accepted.
+
+- [x] Desktop/tablet/mobile show no horizontal page scrolling. See V7-01.
+- [x] Login/change-password labels, errors, busy controls, success and safe failure states are readable and keyboard usable. See V7-02.
+- [x] Queue is a readable desktop table and becomes a usable small-screen representation; search/filter/sort/page actions remain reachable. See V7-03.
+- [x] Staff detail keeps owner, priorities, status, attachment actions, Public Comment, and Internal Note distinct; no control overlaps or disappears. See V7-04.
+- [x] User-management list/form remains readable with long name/email and exposes validation/conflict safely. See V7-05.
+- [x] All required labels, asterisks, field-level errors, focus indicators, badges, buttons, attachment names, and dialog controls are visible and non-overlapping. See V7-06.
+- [x] Status, priority, active/inactive, and Public/Internal meaning have text/icon treatment and do not rely on colour alone. See V7-07.
+- [x] Touch targets are practical on mobile; Tab/Shift+Tab and Escape have logical modal/focus behaviour. See V7-08.
+- [x] Zen Green values and error/warning/success styling conform to `ui-spec.md`; screenshots are readable without extreme zoom. See V7-09.
+
+All paths below are relative to `artifacts/lab-03/screenshots/`.
+`{viewport}` means each of `desktop`, `tablet`, and `mobile`, not one sample.
+
+| Check | Screenshot evidence | Observed result and supporting behavior |
+|---|---|---|
+| V7-01 | The complete 45-path set in `ui-spec.md` Section 10; `candidate-checks/long-user-{viewport}.png` | Page contents remain contained at all three widths; desktop tables and small-screen cards are readable. VIS-01/02/03 assert document overflow and desktop table overflow; E2E-A11Y-01 separately verifies 320 CSS-pixel reflow. |
+| V7-02 | `authentication/01-login-ready-{viewport}.png`, `02-login-validation-or-safe-failure-{viewport}.png`, `03-change-password-{viewport}.png` | Labels, validation text, focus ring, password controls and logout are legible. UI-AUTH-01/02 and E2E-AUTH-01 cover busy, safe failure, success/redirect and first-login behavior; screenshots are not used to infer transient behavior. |
+| V7-03 | `staff-queue/01-queue-results-{viewport}.png`, `02-queue-filter-no-results-{viewport}.png`, `03-queue-loading-or-failure-{viewport}.png` | Desktop headers/data remain readable; tablet/mobile cards retain status, both priorities and owner. Search, all filters, sort, page size, pagination, Clear filters and Retry remain visible/reachable. API-QUEUE-01/02, UI-QUEUE-01 and E2E-STAFF-01 cover their behavior and distinct forbidden recovery. |
+| V7-04 | `staff-ticket-detail/01-detail-assignment-priority-status-{viewport}.png`, `02-detail-public-and-internal-notes-{viewport}.png`, `03-detail-conflict-or-validation-{viewport}.png`; `requester-regression/detail-{viewport}.png` | Owner, Requested/IT Priority and status are separate. Public and warning-tinted Internal composers have distinct headings/audience text and submit controls. Validation does not erase the unaffected Internal draft. The staff captures show an empty attachment state; populated filename/actions are additionally shown in the Requester regression. UI-DETAIL-01 separately tests staff preview/download controls and credentialed attachment helpers. |
+| V7-05 | `user-management/01-users-list-{viewport}.png`, `02-create-or-edit-user-{viewport}.png`, `03-deactivation-safety-or-forbidden-{viewport}.png`; `candidate-checks/long-user-{viewport}.png`, `user-validation-mobile.png`, `user-conflict-mobile.png` | A real 100-character name and 199-character email wrap within table cells/cards. Create/edit labels and account safety text are readable. Required-field errors and real duplicate-email conflict retain the draft and focus the relevant field; dialog heading, close and footer actions stay inside the mobile viewport. E2E-A11Y-01 measures text and control bounds. |
+| V7-06 | Authentication/admin/detail validation captures above; `requester-regression/validation-{viewport}.png`, `detail-{viewport}.png`, `removal-dialog-{viewport}.png` | Labels/asterisks, adjacent error text, focus indicators, badges and attachment names remain distinct. Attachment preview/download/removal controls are identifiable. Administrator dialog headers/actions remain visible while an over-height body scrolls; E2E-A11Y-01 and REG-L2-01 verify keyboard access and restoration. |
+| V7-07 | `requester/01-my-tickets-authenticated-{viewport}.png`, `02-ticket-detail-public-comment-{viewport}.png`, `03-problem-appears-resolved-{viewport}.png`; queue/detail/user list captures above | Status labels use readable words rather than underscored enums. Priorities, Active/Inactive, and Public/Internal have explicit text. Before/after resolution captures are distinct: the action becomes a timestamped indication while formal status stays New. Requester captures contain only Public Comments; API/DOM exclusion is separately tested by API-DISC-02, UI-REQ-01 and E2E-SEC-01. |
+| V7-08 | `candidate-checks/navigation-closed-mobile.png`, `navigation-open-mobile.png`, `user-validation-mobile.png`, `user-conflict-mobile.png`; `requester-regression/discard-dialog-mobile.png`, `removal-dialog-mobile.png` | Mobile navigation has a labelled disclosure and visible keyboard focus. E2E-A11Y-01 verifies `aria-expanded`/controlled navigation, Enter/Tab/Escape, the 767/768px boundary, focus after navigation and dirty-dialog cancellation, modal Tab/Shift+Tab/Escape, and sampled mobile controls at least 24x24 CSS px. VIS-01/02/03 verify 44px dialog inputs. No physical-device touch audit is claimed. |
+| V7-09 | Authentication, queue, detail, resolution and admin error captures above | Primary/dark/secondary/pale green match the declared Zen tokens; error, warning, success and priority treatments remain readable and textual. The duplicate-email test verifies computed error foreground/background; axe scans cover the sampled core views. No extreme zoom was needed to inspect these images. Pixel-diff regression remains inconclusive without same-state baselines. |
+
+### 7.2 Current evidence versus retained captures
+
+- **Required current set:** exactly the 45 standardized paths in `ui-spec.md`
+  Section 10 across `authentication/`, `requester/`, `staff-queue/`,
+  `staff-ticket-detail/`, and `user-management/`, regenerated on 2026-10-01.
+- **Supplemental current checklist evidence:** seven PNGs in
+  [candidate-checks/](../../artifacts/lab-03/screenshots/candidate-checks/):
+  `long-user-{viewport}.png`, `navigation-closed-mobile.png`,
+  `navigation-open-mobile.png`, `user-validation-mobile.png`, and
+  `user-conflict-mobile.png`.
+- **Supplemental current Requester regression:** 36 PNGs in
+  [requester-regression/](../../artifacts/lab-03/screenshots/requester-regression/):
+  `empty-list`, `list`, `no-results`, `validation`, `discard-dialog`,
+  `submitting`, `success`, `detail`, `removal-dialog`, `removed`,
+  `five-file-limit`, and `safe-404`, each with all three viewport suffixes.
+- **Historical only:** the 15 older non-standardized PNGs in the five main
+  areas, plus six `requester-regression/my-tickets-*` and `create-ticket-*`
+  PNGs. These are retained for history, are not the current required evidence,
+  and are not counted as regenerated in Section 6.2.
+- **Archived Lab 2 baseline:** `artifacts/lab-02/screenshots/` is unchanged;
+  authenticated regression evidence is stored under Lab 3 instead.
+
+### 7.3 Pending subsequent release checks
+
+- [ ] After the approved staging/release merges, rerun the documented suites
+  and inspect the standardized evidence on final `main`; record its SHA and
+  CI/release links. Candidate checks above must not be relabelled as this run.
+- [ ] Perform and record actual 400% browser zoom inspection. The passing
+  320 CSS-pixel reflow test is complementary evidence, not that manual run.
+- [ ] Perform and record a real screen-reader walkthrough for labels, errors,
+  live feedback, navigation and dialogs; automated axe/keyboard checks do
+  not substitute for this walkthrough.
+- [ ] Complete MANUAL-DELIVERY-01, including formal peer approval and the
+  nine-part PDF delivery evidence.
 
 ## 8. Deliberately not tested as Lab 3 features
 

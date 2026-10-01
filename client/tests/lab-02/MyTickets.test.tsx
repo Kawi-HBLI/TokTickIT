@@ -95,6 +95,15 @@ describe("My Tickets workflow (UI-LIST-01 to UI-LIST-04)", () => {
     vi.spyOn(api, "getCategories").mockResolvedValue(categories);
   });
 
+  it("uses readable workflow status labels in both table and card badges", async () => {
+    vi.spyOn(api, "getMyTickets").mockResolvedValue(makeResponse([
+      { ...ticketA1, currentStatus: "WAITING_FOR_REQUESTER" },
+    ]));
+    render(<App />);
+    expect(await screen.findAllByText("Waiting for Requester")).toHaveLength(2);
+    expect(screen.queryByText("WAITING_FOR_REQUESTER")).not.toBeInTheDocument();
+  });
+
   it.each(["success", "failure"])("ignores a stale search %s after a newer result", async (outcome) => {
     const pending: { resolve: (value: api.MyTicketsResponse) => void; reject: (reason: Error) => void }[] = [];
     vi.spyOn(api, "getMyTickets").mockResolvedValueOnce(makeResponse([ticketA1]))

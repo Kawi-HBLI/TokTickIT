@@ -1,10 +1,152 @@
 import { expect, test, type Locator } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { checkNoHorizontalScroll, loginVisualAdmin, loginVisualRequester, openForcedPasswordChange } from "./helpers.js";
+import fs from "node:fs";
+import path from "node:path";
+import { checkNoHorizontalScroll, checkNoTableOverflow, loginVisualAdmin, loginVisualRequester, openForcedPasswordChange } from "./helpers.js";
 
 const axeTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
 test.describe("E2E-A11Y-01: Accessibility and Keyboard Navigation", () => {
+  test("mobile navigation exposes its state and preserves requester discard-dialog focus", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginVisualAdmin(page);
+    const toggle = page.getByRole("button", { name: "Navigation", exact: true });
+    const navigation = page.getByRole("navigation", { name: "Primary navigation" });
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(navigation).toBeHidden();
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(navigation).toHaveAttribute("id", (await toggle.getAttribute("aria-controls"))!);
+    await page.keyboard.press("Tab");
+    await expect(navigation.getByRole("button", { name: "User Management", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(navigation.getByRole("button", { name: "Ticket Queue", exact: true })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(toggle).toBeFocused();
+    await expect(navigation).toBeHidden();
+    await toggle.click();
+    await navigation.getByRole("button", { name: "Ticket Queue", exact: true }).click();
+    await expect(page).toHaveURL(/\/staff\/tickets$/);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(toggle).toBeFocused();
+    await page.setViewportSize({ width: 767, height: 844 });
+    await expect(toggle).toBeVisible();
+    await page.setViewportSize({ width: 768, height: 844 });
+    await expect(toggle).toBeHidden();
+    await expect(navigation).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("button", { name: "Log out" }).click();
+
+    await loginVisualRequester(page);
+    const dir = path.resolve("artifacts/lab-03/screenshots/candidate-checks");
+    fs.mkdirSync(dir, { recursive: true });
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(navigation).toBeHidden();
+    await page.screenshot({ path: path.join(dir, "navigation-closed-mobile.png"), fullPage: true });
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(navigation.getByRole("button", { name: "My Tickets", exact: true })).toHaveAttribute("aria-current", "page");
+    await page.screenshot({ path: path.join(dir, "navigation-open-mobile.png"), fullPage: true });
+    await navigation.getByRole("button", { name: "Create Ticket", exact: true }).click();
+    await expect(page).toHaveURL(/\/tickets\/new$/);
+    await expect(toggle).toBeFocused();
+    await page.getByLabel("Summary").fill("Mobile keyboard draft; not submitted.");
+    await toggle.click();
+    const myTickets = navigation.getByRole("button", { name: "My Tickets", exact: true });
+    await myTickets.click();
+    const dialog = page.getByRole("dialog", { name: "Discard unsaved Ticket?", exact: true });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(myTickets).toBeVisible();
+    await expect(myTickets).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(toggle).toBeFocused();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  });
+
+  test("candidate checklist: long user data, mobile targets and contextual validation", async ({ page }) => {
+    await loginVisualAdmin(page);
+    const session = await page.request.get("http://localhost:8000/api/auth/me");
+    expect(session.status()).toBe(200);
+    const csrfToken = (await session.json()).data.csrfToken;
+    const name = `Candidate ${"N".repeat(90)}`;
+    const email = `candidate-visual-${"n".repeat(44)}@${"e".repeat(60)}.${"e".repeat(60)}.toktickit.local`;
+    const created = await page.request.post("http://localhost:8000/api/admin/users", {
+      headers: { "X-CSRF-Token": csrfToken },
+      data: { name, email, role: "REQUESTER", isActive: true, initialPassword: "ChangeMe-2026!" },
+    });
+    expect(created.status()).toBe(201);
+    const dir = path.resolve("artifacts/lab-03/screenshots/candidate-checks");
+    fs.mkdirSync(dir, { recursive: true });
+
+    for (const viewport of [
+      { name: "desktop", width: 1440, height: 900 },
+      { name: "tablet", width: 834, height: 1112 },
+      { name: "mobile", width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto("/admin/users");
+      await page.getByLabel("Search users").fill(email);
+      const list = page.locator(viewport.name === "desktop" ? ".admin-users-table" : ".admin-users-cards");
+      await expect(list.getByText(name, { exact: true })).toBeVisible();
+      await expect(list.getByText(email, { exact: true })).toBeVisible();
+      await checkNoHorizontalScroll(page);
+      if (viewport.name === "desktop") await checkNoTableOverflow(page, ".admin-users-table-container");
+      for (const text of [name, email]) {
+        const fits = await list.getByText(text, { exact: true }).evaluate(element => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const bounds = element.getBoundingClientRect();
+          return Array.from(range.getClientRects()).every(rect =>
+            rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1);
+        });
+        expect(fits, `The full ${text === name ? "name" : "email"} must wrap inside its own cell`).toBe(true);
+      }
+      if (viewport.name === "mobile") {
+        const undersized = await page.locator("button:visible, input:visible, select:visible").evaluateAll(controls =>
+          controls.flatMap(control => {
+            const rect = control.getBoundingClientRect();
+            return rect.width < 24 || rect.height < 24 ? [control.textContent || control.getAttribute("aria-label")] : [];
+          }));
+        expect(undersized, "Sampled mobile targets meet 24x24 CSS px").toEqual([]);
+      }
+      await page.screenshot({ path: path.join(dir, `long-user-${viewport.name}.png`), fullPage: true });
+    }
+
+    await page.getByRole("button", { name: "Create User", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    const checkDialogFrame = async () => {
+      for (const control of [dialog.getByRole("heading"), dialog.getByRole("button", { name: "Close dialog" }),
+        dialog.getByRole("button", { name: "Cancel", exact: true }), dialog.getByRole("button", { name: "Create User", exact: true })]) {
+        const box = await control.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.y).toBeGreaterThanOrEqual(0);
+        expect(box!.y + box!.height).toBeLessThanOrEqual(844);
+      }
+    };
+    await dialog.getByRole("button", { name: "Create User", exact: true }).click();
+    await expect(dialog.getByText("Full name must be between 2 and 100 characters.")).toBeVisible();
+    await expect(dialog.getByLabel("Full Name", { exact: false })).toBeFocused();
+    await checkDialogFrame();
+    await page.screenshot({ path: path.join(dir, "user-validation-mobile.png") });
+    await dialog.getByLabel("Full Name", { exact: false }).fill(name);
+    await dialog.getByLabel("Email Address", { exact: false }).fill(email);
+    await dialog.getByLabel("Initial Password", { exact: false }).fill("ChangeMe-2026!");
+    await dialog.getByRole("button", { name: "Create User", exact: true }).click();
+    await expect(dialog.getByText("A user with this email address already exists.", { exact: true })).toBeVisible();
+    await expect(dialog.locator(".alert-danger")).toHaveCSS("color", "rgb(185, 28, 28)");
+    await expect(dialog.locator(".alert-danger")).toHaveCSS("background-color", "rgb(254, 242, 242)");
+    await expect(dialog.getByText("This email address is already in use.", { exact: true })).toBeVisible();
+    await expect(dialog.getByLabel("Email Address", { exact: false })).toBeFocused();
+    await expect(dialog.getByLabel("Email Address", { exact: false })).toHaveValue(email);
+    await checkDialogFrame();
+    await page.screenshot({ path: path.join(dir, "user-conflict-mobile.png") });
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+  });
+
   test("automated axe accessibility scan across core Lab 3 views", async ({ page }) => {
     // 1. Login View
     await page.goto("/login");

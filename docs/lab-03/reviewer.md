@@ -6,7 +6,7 @@
 
 **Partner I reviewed:** Thanawat Suntarawattana - 67070501022 - GitHub: @Maibokdaimhai
 
-Dates below are UTC. This record covers completed Issues #28-#35. Issue #45 is a separate final documentation/regression follow-up; its local verification in `tests.md` is not a peer-review verdict.
+Dates below are UTC. This record covers completed Issues #28-#35 and the pending Issue #45 documentation/regression follow-up. Local verification in `tests.md` is not a peer-review verdict.
 
 ## Pull Requests I authored (reviewed by my partner)
 
@@ -20,6 +20,7 @@ Dates below are UTC. This record covers completed Issues #28-#35. Issue #45 is a
 | [#42](https://github.com/Kawi-HBLI/TokTickIT/pull/42) / #33 | `feature/lab3-staff-ticket-operations` | @R1NNE0 | Requested changes, then approved on 2026-09-19; merged into `lab3-staging` as `d9844eb`. |
 | [#43](https://github.com/Kawi-HBLI/TokTickIT/pull/43) / #34 | `feature/lab3-admin-users` | @R1NNE0 | Requested changes, then approved on 2026-09-19; merged into `lab3-staging` as `19c6a14`. |
 | [#44](https://github.com/Kawi-HBLI/TokTickIT/pull/44) / #35 | `feature/lab3-final-verification` | @R1NNE0 | Requested changes, then approved on 2026-09-21; merged into `lab3-staging` on 2026-09-25 as `cf6b681`. |
+| [#46](https://github.com/Kawi-HBLI/TokTickIT/pull/46) / #45 | `feature/lab3-final-evidence-docs` | @R1NNE0 | Pending formal review/re-review; open and not merged. Privately shared checklist feedback is recorded below, not as a submitted GitHub verdict. |
 
 PR [#39](https://github.com/Kawi-HBLI/TokTickIT/pull/39) was closed without merge because it linked the wrong Issue; PR #40 replaced it for Issue #32.
 
@@ -72,6 +73,12 @@ PR [#39](https://github.com/Kawi-HBLI/TokTickIT/pull/39) was closed without merg
 - **Review:** [@R1NNE0 requested changes](https://github.com/Kawi-HBLI/TokTickIT/pull/44#pullrequestreview-5261700980) because `tests.md` still reported planned tests although the PR reported verification, and the migration integration tests had been skipped.
 - **My response:** I [ran the migration integration checks and updated the evidence](https://github.com/Kawi-HBLI/TokTickIT/pull/44#issuecomment-5763240344), while leaving `REG-L2-01` explicitly Partial because the Lab 2 E2E suite was not rerun in that PR.
 - **Outcome:** The reviewer confirmed the evidence and executing migration checks, then [approved](https://github.com/Kawi-HBLI/TokTickIT/pull/44#pullrequestreview-5270521975) the PR.
+
+#### Candidate visual checklist - PR #46, pending formal review
+
+- **Feedback:** The reviewer privately requested completion of `tests.md` Section 7 with actual screenshot observations and evidence paths, rather than treating screenshot existence as a completed inspection. They also suggested recording this PR, excluding unintended local database overrides, and distinguishing current captures from older retained files. No formal GitHub review submission was recorded when this follow-up was prepared on 2026-10-01.
+- **Correction:** I inspected the candidate screenshots, corrected the visual/keyboard gaps uncovered by that inspection, added long-account and mobile-dialog evidence, completed the nine candidate checks with supporting paths, and kept final-main, physical zoom, and screen-reader checks explicitly pending. The PR changed-file list does not include `docker-compose.override.yml`.
+- **Outcome:** Local verification is recorded in `tests.md` Section 6.2. Formal re-review, approval and staging merge remain pending; this record does not claim they occurred.
 
 ## Pull Requests I reviewed for my partner
 

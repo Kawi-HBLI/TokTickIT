@@ -4,6 +4,7 @@ import ChangePassword from "./ChangePassword.js";
 import CreateTicket from "./CreateTicket.js";
 import Login from "./Login.js";
 import MyTickets from "./MyTickets.js";
+import PrimaryNavigation from "./PrimaryNavigation.js";
 import { RequesterProvider, useRequester } from "./RequesterContext.js";
 import RequesterTicketDetail from "./RequesterTicketDetail.js";
 import StaffTicketQueue from "./StaffTicketQueue.js";
@@ -58,26 +59,13 @@ function RoleWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: () => 
     <main className="app-page" id="top">
       <header className="app-shell">
         <a className="shell-brand" href="#top" aria-label="TokTickIT home">TokTickIT</a>
-        <nav aria-label="Primary navigation">
-          {user.role === "ADMINISTRATOR" && (
-            <button
-              type="button"
-              className={route === "/admin/users" ? "nav-link active" : "nav-link"}
-              aria-current={route === "/admin/users" ? "page" : undefined}
-              onClick={() => navigate("/admin/users")}
-            >
-              User Management
-            </button>
-          )}
-          <button
-            type="button"
-            className={route.startsWith("/staff/tickets") ? "nav-link active" : "nav-link"}
-            aria-current={route.startsWith("/staff/tickets") ? "page" : undefined}
-            onClick={() => navigate("/staff/tickets")}
-          >
-            Ticket Queue
-          </button>
-        </nav>
+        <PrimaryNavigation
+          route={route}
+          items={[
+            ...(user.role === "ADMINISTRATOR" ? [{ label: "User Management", active: route === "/admin/users", onNavigate: () => navigate("/admin/users") }] : []),
+            { label: "Ticket Queue", active: route.startsWith("/staff/tickets"), onNavigate: () => navigate("/staff/tickets") },
+          ]}
+        />
         <div className="requester-identity">
           <span>{user.role === "IT_STAFF" ? "IT Staff" : "Administrator"}</span>
           <strong>{user.name}</strong>
@@ -138,7 +126,7 @@ function RequesterWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: (
   const ticketDetailMatch = route.match(/^\/tickets\/(\d+)$/);
   const detailTicketId = ticketDetailMatch ? parseInt(ticketDetailMatch[1], 10) : null;
 
-  return <main className="app-page" id="top"><div ref={contentRef}><header className="app-shell"><a className="shell-brand" href="#top" aria-label="TokTickIT home">TokTickIT</a><nav aria-label="Primary navigation"><button type="button" className={route === "/tickets" ? "nav-link active" : "nav-link"} aria-current={route === "/tickets" ? "page" : undefined} disabled={isBusy} onClick={() => navigate("/tickets")}>My Tickets</button><button type="button" className={route === "/tickets/new" ? "nav-link active" : "nav-link"} aria-current={route === "/tickets/new" ? "page" : undefined} disabled={isBusy} onClick={() => navigate("/tickets/new")}>Create Ticket</button></nav><div className="requester-identity"><span>Requester</span><strong>{user.name}</strong><button className="link-button" type="button" onClick={() => void logout()}>Log out</button></div></header>{logoutMessage && <p className="form-alert" role="alert">{logoutMessage}</p>}{route === "/tickets/new" ? <CreateTicket onDirtyChange={setIsDirty} onBusyChange={setIsBusy} onNavigate={navigate} /> : detailTicketId !== null ? <RequesterTicketDetail ticketId={detailTicketId} onNavigate={navigate} /> : <MyTickets onNavigate={navigate} />}<SystemDiagnostics /></div>{confirmation && <div className="dialog-backdrop" role="presentation"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="discard-title" aria-describedby="discard-description" onKeyDown={handleDialogKeyDown}><h2 id="discard-title">Discard unsaved Ticket?</h2><p id="discard-description">Changing your destination will discard the values you entered.</p><div className="selector-actions"><button ref={keepEditingButton} type="button" className="btn btn-outline-secondary" onClick={closeConfirmation}>Keep editing</button><button ref={confirmButton} type="button" className="btn btn-danger" onClick={confirmDiscard}>Discard changes</button></div></section></div>}</main>;
+  return <main className="app-page" id="top"><div ref={contentRef}><header className="app-shell"><a className="shell-brand" href="#top" aria-label="TokTickIT home">TokTickIT</a><PrimaryNavigation route={route} disabled={isBusy} items={[{ label: "My Tickets", active: route === "/tickets", onNavigate: () => navigate("/tickets") }, { label: "Create Ticket", active: route === "/tickets/new", onNavigate: () => navigate("/tickets/new") }]} /><div className="requester-identity"><span>Requester</span><strong>{user.name}</strong><button className="link-button" type="button" onClick={() => void logout()}>Log out</button></div></header>{logoutMessage && <p className="form-alert" role="alert">{logoutMessage}</p>}{route === "/tickets/new" ? <CreateTicket onDirtyChange={setIsDirty} onBusyChange={setIsBusy} onNavigate={navigate} /> : detailTicketId !== null ? <RequesterTicketDetail ticketId={detailTicketId} onNavigate={navigate} /> : <MyTickets onNavigate={navigate} />}<SystemDiagnostics /></div>{confirmation && <div className="dialog-backdrop" role="presentation"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="discard-title" aria-describedby="discard-description" onKeyDown={handleDialogKeyDown}><h2 id="discard-title">Discard unsaved Ticket?</h2><p id="discard-description">Changing your destination will discard the values you entered.</p><div className="selector-actions"><button ref={keepEditingButton} type="button" className="btn btn-outline-secondary" onClick={closeConfirmation}>Keep editing</button><button ref={confirmButton} type="button" className="btn btn-danger" onClick={confirmDiscard}>Discard changes</button></div></section></div>}</main>;
 }
 
 function AppContent() {
