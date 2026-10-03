@@ -33,8 +33,39 @@ test.describe("E2E-STAFF-01: IT Staff Ticket Queue Workflow", () => {
 
     // 3. Search and Filter Interaction
     const searchInput = page.getByLabel("Search tickets");
+    const searched = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === "/api/staff/tickets" && url.searchParams.get("q") === "Cannot access";
+    });
     await searchInput.fill("Cannot access");
-    await page.waitForTimeout(500);
+    expect((await searched).status()).toBe(200);
+    await expect(queueTable.locator("tbody tr")).toHaveCount(1);
+    await expect(queueTable.getByText("Cannot access university email", { exact: true })).toBeVisible();
+
+    const changeQuery = async (label: string, value: string, param: string) => {
+      const changed = page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return url.pathname === "/api/staff/tickets" && url.searchParams.get(param) === value;
+      });
+      await page.getByLabel(label, { exact: true }).selectOption(value);
+      const response = await changed;
+      expect(response.status()).toBe(200);
+      return response.json();
+    };
+    const statusFiltered = await changeQuery("Status", "OPEN", "status");
+    expect(statusFiltered.data.length).toBe(1);
+    expect(statusFiltered.data[0].currentStatus).toBe("OPEN");
+    const mine = await changeQuery("Owner", "me", "owner");
+    expect(mine.data[0].owner.name).toBe("Ethan Brooks");
+    await changeQuery("Sort by", "createdAt", "sortBy");
+    const sorted = await changeQuery("Direction", "asc", "sortDirection");
+    expect(sorted.query.sortBy).toBe("createdAt");
+    expect(sorted.query.sortDirection).toBe("asc");
+    const paged = await changeQuery("Page size", "10", "pageSize");
+    expect(paged.pagination.page).toBe(1);
+    expect(paged.pagination.pageSize).toBe(10);
+    await expect(page.getByRole("button", { name: "Previous", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Next", exact: true })).toBeDisabled();
 
     // Verify live region announcement exists
     await expect(page.locator('[aria-live="polite"]')).toBeVisible();

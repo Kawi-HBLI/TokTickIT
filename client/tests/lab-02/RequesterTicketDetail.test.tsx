@@ -85,7 +85,7 @@ describe("RequesterTicketDetail", () => {
       expect(await screen.findByRole("heading", { name: "TKT-2026-00042" })).toBeInTheDocument();
 
       // Badges
-      expect(screen.getByText("NEW")).toBeInTheDocument();
+      expect(screen.getByText("New")).toBeInTheDocument();
       expect(screen.getByText("HIGH Priority")).toBeInTheDocument();
 
       // Information definition list

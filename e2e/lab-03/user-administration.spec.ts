@@ -46,8 +46,8 @@ test.describe("E2E-ADMIN-01: Administrator User Management Workflow", () => {
     await expect(page).toHaveURL(/\/login$/);
   });
 
-  test("full user management lifecycle: list, search, create with initial password, self-protection, edit, reset password, first login, and responsive view", async ({
-    page,
+  test("full user management lifecycle: create, last-admin protection, reset, first login, deactivation and revocation", async ({
+    page, browser,
   }) => {
     // 1. Sign in as Administrator and navigate to User Management
     await loginAsAdmin(page);
@@ -73,8 +73,11 @@ test.describe("E2E-ADMIN-01: Administrator User Management Workflow", () => {
 
     // 3. Search and Role Filtering
     const searchInput = page.getByLabel("Search users");
+    const searched = page.waitForResponse(response =>
+      response.url().includes("/api/admin/users?") && new URL(response.url()).searchParams.get("q") === "harper"
+    );
     await searchInput.fill("harper");
-    await page.waitForTimeout(400);
+    await searched;
 
     await expect(page.locator('[aria-live="polite"]')).toBeVisible();
     await expect(table.getByText("Harper Morgan")).toBeVisible();
@@ -88,10 +91,18 @@ test.describe("E2E-ADMIN-01: Administrator User Management Workflow", () => {
 
     // Role filter
     const roleSelect = page.getByLabel("Role", { exact: true });
+    const staffFiltered = page.waitForResponse(response =>
+      response.url().includes("/api/admin/users?") && new URL(response.url()).searchParams.get("role") === "IT_STAFF"
+    );
     await roleSelect.selectOption("IT_STAFF");
-    await page.waitForTimeout(400);
+    await staffFiltered;
+    await expect(table.getByText("Harper Morgan")).toHaveCount(0);
+    const allRoles = page.waitForResponse(response =>
+      new URL(response.url()).pathname === "/api/admin/users" && !new URL(response.url()).searchParams.has("role")
+    );
     await roleSelect.selectOption("ALL");
-    await page.waitForTimeout(400);
+    await allRoles;
+    await expect(table.getByText("Harper Morgan")).toBeVisible();
 
     // 4. Create User Workflow with Admin-Provided Initial Password
     const createBtn = page.getByRole("button", { name: "Create User" });
@@ -139,6 +150,20 @@ test.describe("E2E-ADMIN-01: Administrator User Management Workflow", () => {
     const selfActiveCheckbox = editDialog.getByLabel(/Active Account/i);
     await expect(selfActiveCheckbox).toBeDisabled();
     await expect(editDialog.getByText("You cannot deactivate your own account.")).toBeVisible();
+
+    // A real last-administrator downgrade must be rejected, not only hidden.
+    await editDialog.getByLabel(/Role/i).selectOption("REQUESTER");
+    const lastAdminRejected = page.waitForResponse(response =>
+      /\/api\/admin\/users\/\d+$/.test(response.url()) && response.request().method() === "PATCH"
+    );
+    await editDialog.getByRole("button", { name: "Save Changes" }).click();
+    const lastAdminResponse = await lastAdminRejected;
+    expect(lastAdminResponse.status()).toBe(409);
+    expect((await lastAdminResponse.json()).error.code).toBe("LAST_ACTIVE_ADMIN_REQUIRED");
+    await expect(editDialog.getByRole("alert")).toContainText("last active Administrator");
+    const retainedAdmin = await page.request.get("http://localhost:8000/api/auth/me");
+    expect(retainedAdmin.status()).toBe(200);
+    expect((await retainedAdmin.json()).data.user.role).toBe("ADMINISTRATOR");
 
     // Cancel self-edit
     await editDialog.getByRole("button", { name: "Cancel" }).click();
@@ -207,5 +232,25 @@ test.describe("E2E-ADMIN-01: Administrator User Management Workflow", () => {
 
     // Since role was changed to IT_STAFF, should land on /staff/tickets
     await expect(page).toHaveURL(/\/staff\/tickets$/);
+
+    // Deactivate this newly created account while its authenticated session exists.
+    // The real administrator form and API must revoke that session immediately.
+    const adminContext = await browser.newContext();
+    try {
+      const adminPage = await adminContext.newPage();
+      await loginAsAdmin(adminPage);
+      await adminPage.getByRole("button", { name: `Edit ${newUserName}`, exact: true }).filter({ visible: true }).click();
+      const deactivateDialog = adminPage.getByRole("dialog");
+      await deactivateDialog.getByLabel(/Active Account/i).uncheck();
+      await deactivateDialog.getByRole("button", { name: "Save Changes" }).click();
+      await expect(deactivateDialog).toBeHidden();
+      await expect(adminPage.locator(".alert-success")).toContainText("updated successfully");
+      const revoked = await page.request.get("http://localhost:8000/api/auth/me");
+      expect(revoked.status()).toBe(401);
+      await page.reload();
+      await expect(page).toHaveURL(/\/login$/);
+    } finally {
+      await adminContext.close();
+    }
   });
 });

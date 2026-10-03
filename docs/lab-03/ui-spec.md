@@ -47,6 +47,12 @@ Lab 3 extends, rather than replaces, the tokens established in
   `#9A3412/#FFEDD5`, Medium `#92400E/#FEF3C7`, and Low `#1E40AF/#DBEAFE`.
   Status badges must likewise give each status a text label and a
   high-contrast foreground/background pairing.
+  The retained Requester status badge uses `#01579B` on `#E1F5FE`;
+  read-only Ticket metadata labels use `#2C4D3F` on `#EEF3F0`. These
+  darker foregrounds retain the existing visual system while fixing the
+  contrast failures found by the authenticated Requester axe scans.
+  The Internal Note audience badge keeps its text visible by wrapping at
+  320 CSS px rather than extending beyond the Staff Detail viewport.
 
 ### Shared components
 
@@ -57,6 +63,9 @@ required state. Invalid fields expose `aria-invalid`, reference help/error
 with `aria-describedby`, and show an error immediately below that field.
 Placeholders are examples, never labels. Read-only values use the read-only
 surface and are selectable for copying where useful.
+Administrator create/edit/reset dialog inputs are full-width block controls
+with visible labels above them and at least 44px interactive height at all
+three captured viewports.
 
 **Buttons.** Use one solid primary action per decision area. Secondary buttons
 are bordered or pale green; tertiary actions are text links; destructive
@@ -340,6 +349,12 @@ name. Exact planned paths:
 | Staff ticket detail | `artifacts/lab-03/screenshots/staff-ticket-detail/01-detail-assignment-priority-status-{viewport}.png`; `02-detail-public-and-internal-notes-{viewport}.png`; `03-detail-conflict-or-validation-{viewport}.png` |
 | User management | `artifacts/lab-03/screenshots/user-management/01-users-list-{viewport}.png`; `02-create-or-edit-user-{viewport}.png`; `03-deactivation-safety-or-forbidden-{viewport}.png` |
 | Requester regression | `artifacts/lab-03/screenshots/requester/01-my-tickets-authenticated-{viewport}.png`; `02-ticket-detail-public-comment-{viewport}.png`; `03-problem-appears-resolved-{viewport}.png` |
+
+These 45 standardized paths are the required current candidate evidence.
+Older retained filenames do not substitute for them. `tests.md` Section 7
+records the candidate inspection, supplemental long-account/menu/error
+captures, current Requester regression paths, and separately pending
+final-main checks.
 
 For each capture, verify Zen Green color/surface continuity; visible role and
 active navigation; readable labels and errors; distinguishable public/internal

@@ -9,6 +9,7 @@ import {
   indicateProblemResolved,
 } from "./api.js";
 import { useRequester } from "./RequesterContext.js";
+import { formatTicketStatus } from "./ticket-status.js";
 import AttachmentSection from "./AttachmentSection.js";
 
 interface RequesterTicketDetailProps {
@@ -268,7 +269,7 @@ export default function RequesterTicketDetail({
           </h1>
         </div>
         <div className="badge-group">
-          <span className="status-badge status-new">{ticket.currentStatus}</span>
+          <span className="status-badge status-new">{formatTicketStatus(ticket.currentStatus)}</span>
           <span className={`priority-badge priority-${ticket.requestedPriority.toLowerCase()}`}>
             {ticket.requestedPriority} Priority
           </span>
