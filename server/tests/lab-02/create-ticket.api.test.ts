@@ -1,6 +1,6 @@
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { randomUUID } from "node:crypto";
+import { randomBytes, createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -25,6 +25,29 @@ let relatedSystemId: number;
 let inactiveCategory: number;
 let inactiveSystem: number;
 const previousUploadDir = process.env.UPLOAD_DIR;
+const userSessions = new Map<number, { cookie: string; csrfToken: string }>();
+
+function tokenHash(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+async function createTestSession(prisma: PrismaClient, userId: number) {
+  const rawToken = randomBytes(32).toString("base64url");
+  const csrfToken = randomBytes(32).toString("base64url");
+  await prisma.session.create({
+    data: {
+      tokenHash: tokenHash(rawToken),
+      csrfToken,
+      userId,
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+    },
+  });
+  return {
+    cookie: `toktickit_session=${rawToken}`,
+    csrfToken,
+    rawToken,
+  };
+}
 
 beforeAll(async () => {
   const url = new URL(process.env.DATABASE_URL!);
@@ -35,9 +58,13 @@ beforeAll(async () => {
   });
   db = new PrismaClient({ datasources: { db: { url: url.toString() } } });
   await seedDatabase(db);
-  const active = await db.requesterUser.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
+  await db.user.updateMany({ data: { mustChangePassword: false } });
+  const active = await db.user.findMany({ where: { isActive: true, role: "REQUESTER" }, orderBy: { id: "asc" } });
   requesterId = active[0].id; otherId = active[1].id;
-  inactiveId = (await db.requesterUser.findFirstOrThrow({ where: { isActive: false } })).id;
+  inactiveId = (await db.user.findFirstOrThrow({ where: { isActive: false, role: "REQUESTER" } })).id;
+  userSessions.set(requesterId, await createTestSession(db, requesterId));
+  userSessions.set(otherId, await createTestSession(db, otherId));
+  userSessions.set(inactiveId, await createTestSession(db, inactiveId));
   categoryId = (await db.category.findFirstOrThrow()).id;
   relatedSystemId = (await db.relatedSystem.findFirstOrThrow()).id;
   inactiveCategory = (await db.category.create({ data: { id: 1001, name: "Inactive test category", isActive: false } })).id;
@@ -71,7 +98,11 @@ function post(key: string = randomUUID(), changes: Record<string, string> = {}, 
   const values = { categoryId: String(categoryId), relatedSystemId: String(relatedSystemId),
     summary: "Cannot access email", description: "The email service shows an error every morning.",
     requestedPriority: "MEDIUM", ...changes };
-  let call = request(app).post("/api/tickets").set("x-requester-id", String(owner)).set("Idempotency-Key", key);
+  const session = userSessions.get(owner);
+  let call = request(app).post("/api/tickets").set("Idempotency-Key", key);
+  if (session) {
+    call = call.set("Cookie", session.cookie).set("X-CSRF-Token", session.csrfToken);
+  }
   for (const [field, value] of Object.entries(values)) call = call.field(field, value);
   return call;
 }
@@ -85,7 +116,7 @@ describe("Create Ticket API", () => {
     expect(response.body.data.currentStatus).toBe("NEW");
     expect(response.body.data.ticketNumber).toMatch(/^TKT-\d{4}-\d{5,}$/);
     expect(response.body.data.ticketDate).toBe(response.body.data.createdAt);
-    expect(response.body.data).toMatchObject({ requesterId, summary: "Cannot access email", itPriority: null, ticketOwner: null });
+    expect(response.body.data).toMatchObject({ requesterId, summary: "Cannot access email", itPriority: "MEDIUM", ticketOwner: null });
     expect(await db.ticket.count({ where: { requesterId, idempotencyKey: key } })).toBe(1);
     expect(JSON.stringify(response.body)).not.toMatch(/creationFingerprint|creationResponse|idempotencyKey|storedName/);
   });
@@ -131,21 +162,23 @@ describe("Create Ticket API", () => {
   });
 
   it("rejects malformed multipart data as a non-retryable validation error", async () => {
+    const session = userSessions.get(requesterId)!;
     const response = await request(app).post("/api/tickets")
-      .set("x-requester-id", String(requesterId)).set("Idempotency-Key", randomUUID())
+      .set("Cookie", session.cookie).set("X-CSRF-Token", session.csrfToken)
+      .set("Idempotency-Key", randomUUID())
       .set("Content-Type", "multipart/form-data").send("missing boundary");
     expect(response.status).toBe(400);
     expect(response.body.error).toMatchObject({ code: "VALIDATION_ERROR", retryable: false });
   });
 
   it("enforces requester and idempotency headers on the real create endpoint", async () => {
-    for (const owner of [inactiveId, 2147483647]) {
-      const response = await post(randomUUID(), {}, owner);
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
-    }
+    const inactiveRes = await post(randomUUID(), {}, inactiveId);
+    expect(inactiveRes.status).toBe(403);
+    expect(inactiveRes.body.error.code).toBe("ACCOUNT_INACTIVE");
+
     const missing = await request(app).post("/api/tickets");
-    expect(missing.body.error.code).toBe("REQUESTER_CONTEXT_REQUIRED");
+    expect(missing.status).toBe(401);
+    expect(missing.body.error.code).toBe("AUTHENTICATION_REQUIRED");
     expect((await post("not-a-uuid")).body.error.code).toBe("IDEMPOTENCY_KEY_REQUIRED");
   });
 

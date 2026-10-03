@@ -136,7 +136,7 @@ export default function CreateTicket({ onDirtyChange, onBusyChange, onNavigate }
     submissionInFlight.current = true;
     setSubmitting(true);
     try {
-      const result = await createTicket(currentRequester.id, key, {
+      const result = await createTicket(key, {
         categoryId: Number(fields.categoryId), relatedSystemId: Number(fields.relatedSystemId), summary: fields.summary,
         description: fields.description, requestedPriority: fields.requestedPriority, attachments: files,
       });

@@ -3,16 +3,15 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import App from "../../src/App.js";
 import * as api from "../../src/api.js";
-import { REQUESTER_STORAGE_KEY } from "../../src/RequesterContext.js";
 
 const requester: api.Requester = { id: 1, name: "Jennifer Anderson", email: "jennifer@example.com", department: "Marketing", isActive: true };
+const authenticatedRequester = { id: 1, name: requester.name, email: requester.email, role: "REQUESTER" as const, isActive: true, mustChangePassword: false, createdAt: "2026-09-17T00:00:00.000Z", updatedAt: "2026-09-17T00:00:00.000Z" };
 const secondRequester: api.Requester = { id: 2, name: "Marcus Chen", email: "marcus@example.com", department: "Finance", isActive: true };
 const categories: api.Category[] = [{ id: 1, name: "Hardware" }];
 const systems: api.RelatedSystem[] = [{ id: 7, name: "Corporate Laptop", description: "Managed laptop" }];
 const created: api.CreateTicketResult = { data: { id: 41, ticketNumber: "TKT-2026-00041", ticketDate: "2026-09-04T10:00:00.000Z", currentStatus: "NEW" }, warnings: [], replayed: false };
 
 async function renderTicketPage() {
-  sessionStorage.setItem(REQUESTER_STORAGE_KEY, "1");
   render(<App />);
   const user = userEvent.setup();
   const navigation = await screen.findByRole("navigation", { name: "Primary navigation" });
@@ -31,9 +30,17 @@ async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
 describe("Create Ticket", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    sessionStorage.clear();
     window.history.replaceState({}, "", "/tickets");
-    vi.spyOn(api, "getRequesters").mockResolvedValue([requester]);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/api/auth/me")) {
+        return new Response(JSON.stringify({ data: { user: authenticatedRequester, csrfToken: "csrf-test" } }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.includes("/api/tickets")) {
+        return new Response(JSON.stringify({ data: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ data: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
     vi.spyOn(api, "getCategories").mockResolvedValue(categories);
     vi.spyOn(api, "getRelatedSystems").mockResolvedValue(systems);
     vi.spyOn(api, "createTicket").mockResolvedValue(created);
@@ -71,10 +78,10 @@ describe("Create Ticket", () => {
     expect(screen.getByRole("textbox", { name: /summary/i })).toHaveValue("Laptop battery drains");
     expect(screen.getByRole("textbox", { name: /summary/i })).toBeDisabled();
     expect(screen.getByText(/draft is locked to prevent a duplicate/i)).toBeInTheDocument();
-    const firstKey = vi.mocked(api.createTicket).mock.calls[0][1];
+    const firstKey = vi.mocked(api.createTicket).mock.calls[0][0];
     await user.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(api.createTicket).toHaveBeenCalledTimes(2));
-    expect(vi.mocked(api.createTicket).mock.calls[1][1]).toBe(firstKey);
+    expect(vi.mocked(api.createTicket).mock.calls[1][0]).toBe(firstKey);
     expect(await screen.findByText("TKT-2026-00041")).toBeInTheDocument();
   });
 
@@ -151,39 +158,36 @@ describe("Create Ticket", () => {
     expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
   });
 
-  it("guards direct history navigation and clears the old form after a confirmed switch", async () => {
-    vi.spyOn(api, "getRequesters").mockResolvedValue([requester, secondRequester]);
+  it("guards direct history navigation and clears the old form after a confirmed discard", async () => {
     const user = await renderTicketPage();
     await user.type(screen.getByRole("textbox", { name: /summary/i }), "This must not disappear");
     await act(async () => { window.history.pushState({}, "", "/tickets"); window.dispatchEvent(new PopStateEvent("popstate")); });
     expect(await screen.findByRole("dialog", { name: /discard unsaved ticket/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Keep editing" }));
-    await user.click(screen.getByRole("button", { name: "Change Requester" }));
-    await user.click(screen.getByRole("button", { name: "Discard changes" }));
-    await user.selectOptions(screen.getByRole("combobox", { name: "Development Requester" }), "2");
-    await user.click(screen.getByRole("button", { name: "Continue" }));
     const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
+    await user.click(navigation.querySelector("button:first-child") as HTMLButtonElement);
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
     await user.click(navigation.querySelector("button:last-child") as HTMLButtonElement);
     expect(await screen.findByRole("heading", { name: "Create Ticket" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /summary/i })).toHaveValue("");
   });
 
-  it("treats a priority-only edit as unsaved work before changing Requester", async () => {
+  it("treats a priority-only edit as unsaved work before navigation", async () => {
     const user = await renderTicketPage();
     await user.selectOptions(screen.getByRole("combobox", { name: /requested priority/i }), "HIGH");
-    await user.click(screen.getByRole("button", { name: "Change Requester" }));
+    await user.click(screen.getByRole("button", { name: "My Tickets" }));
     expect(await screen.findByRole("dialog", { name: /discard unsaved ticket/i })).toBeInTheDocument();
   });
 
-  it("asks before switching Requester with a dirty form and discards only after confirmation", async () => {
+  it("asks before leaving a dirty form and discards only after confirmation", async () => {
     const user = await renderTicketPage();
     await user.type(screen.getByRole("textbox", { name: /summary/i }), "Still typing");
-    await user.click(screen.getByRole("button", { name: "Change Requester" }));
+    await user.click(screen.getByRole("button", { name: "My Tickets" }));
     expect(await screen.findByRole("dialog", { name: /discard unsaved ticket/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Keep editing" }));
     expect(screen.getByRole("textbox", { name: /summary/i })).toHaveValue("Still typing");
-    await user.click(screen.getByRole("button", { name: "Change Requester" }));
+    await user.click(screen.getByRole("button", { name: "My Tickets" }));
     await user.click(screen.getByRole("button", { name: "Discard changes" }));
-    expect(await screen.findByRole("heading", { name: "Select Development Requester" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "My Tickets" })).toBeInTheDocument();
   });
 });

@@ -1,59 +1,82 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
-import { getRequesters, Requester } from "./api.js";
-
-export const REQUESTER_STORAGE_KEY = "toktickit.requesterId";
-type LoadState = "loading" | "ready" | "empty" | "error";
+import {
+  AuthenticationResult,
+  CurrentUser,
+  changePassword as changePasswordRequest,
+  getCurrentUser,
+  login as loginRequest,
+  logout as logoutRequest,
+  setCsrfToken,
+} from "./api.js";
+export type LoadState = "loading" | "ready" | "unauthenticated" | "error";
 
 interface RequesterContextValue {
-  requesters: Requester[];
-  currentRequester: Requester | null;
+  currentRequester: CurrentUser | null;
+  currentUser: CurrentUser | null;
   loadState: LoadState;
-  selectRequester: (id: number) => boolean;
   retry: () => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthenticationResult>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<AuthenticationResult>;
+  logout: () => Promise<void>;
 }
 
 const RequesterContext = createContext<RequesterContextValue | null>(null);
 
-function storedRequesterId(): number | null {
-  const raw = sessionStorage.getItem(REQUESTER_STORAGE_KEY);
-  if (!raw || !/^[1-9]\d*$/.test(raw)) return null;
-  const id = Number(raw);
-  return Number.isSafeInteger(id) ? id : null;
-}
-
 export function RequesterProvider({ children }: { children: ReactNode }) {
-  const [requesters, setRequesters] = useState<Requester[]>([]);
-  const [currentRequester, setCurrentRequester] = useState<Requester | null>(null);
+  const [currentRequester, setCurrentRequester] = useState<CurrentUser | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
+
+  function applyAuthentication(result: AuthenticationResult): AuthenticationResult {
+    setCurrentRequester(result.user);
+    setLoadState("ready");
+    return result;
+  }
 
   async function load() {
     setLoadState("loading");
     try {
-      const activeRequesters = (await getRequesters()).filter((requester) => requester.isActive);
-      setRequesters(activeRequesters);
-      const storedId = storedRequesterId();
-      const storedRequester = activeRequesters.find((requester) => requester.id === storedId) ?? null;
-      setCurrentRequester(storedRequester);
-      if (!storedRequester) sessionStorage.removeItem(REQUESTER_STORAGE_KEY);
-      setLoadState(activeRequesters.length === 0 ? "empty" : "ready");
-    } catch {
-      setRequesters([]);
-      setLoadState("error");
+      const { user } = await getCurrentUser();
+      setCurrentRequester(user);
+      setLoadState("ready");
+    } catch (error) {
+      setCurrentRequester(null);
+      const status = error instanceof Error && "status" in error ? (error as { status?: number }).status : undefined;
+      setLoadState(status === 401 ? "unauthenticated" : "error");
     }
   }
 
-  useEffect(() => { void load(); }, []);
-
-  function selectRequester(id: number) {
-    const requester = requesters.find((candidate) => candidate.id === id) ?? null;
-    if (!requester) return false;
-    sessionStorage.setItem(REQUESTER_STORAGE_KEY, String(requester.id));
-    setCurrentRequester(requester);
-    return true;
+  async function login(email: string, password: string) {
+    return applyAuthentication(await loginRequest(email, password));
   }
 
+  async function changePassword(currentPassword: string, newPassword: string) {
+    return applyAuthentication(await changePasswordRequest(currentPassword, newPassword));
+  }
+
+  async function logout() {
+    await logoutRequest();
+    setCsrfToken(null);
+    setCurrentRequester(null);
+    setLoadState("unauthenticated");
+  }
+
+  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    const recover = () => { void load(); };
+    window.addEventListener("toktickit:auth-recovery", recover);
+    return () => window.removeEventListener("toktickit:auth-recovery", recover);
+  }, []);
+
   return (
-    <RequesterContext.Provider value={{ requesters, currentRequester, loadState, selectRequester, retry: load }}>
+    <RequesterContext.Provider value={{
+      currentRequester,
+      currentUser: currentRequester,
+      loadState,
+      retry: load,
+      login,
+      changePassword,
+      logout,
+    }}>
       {children}
     </RequesterContext.Provider>
   );

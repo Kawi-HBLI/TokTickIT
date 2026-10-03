@@ -1,9 +1,10 @@
 import { Router, type ErrorRequestHandler } from "express";
 import multer from "multer";
 import { randomUUID, createHash } from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { Prisma, type TicketStatus } from "@prisma/client";
 import { getPrisma } from "./prisma.js";
-import { requireRequester } from "./requester-context.js";
+import { requireRequester, requireRequesterWrite } from "./requester-context.js";
+import { requireAuth, requireCsrf } from "./auth.js";
 import { TicketError, validateTicket, positiveId } from "./ticket-validation.js";
 import { validateTicketQuery } from "./ticket-query.js";
 import { attachmentStorage, MAX_FILE_BYTES, validateFiles } from "./attachment-storage.js";
@@ -125,7 +126,7 @@ createTicketRouter.get("/", requireRequester, async (req, res, next) => {
     next(error);
   }
 });
-createTicketRouter.post("/", requireRequester, (req, _res, next) => {
+createTicketRouter.post("/", requireRequesterWrite, (req, _res, next) => {
   const key = req.header("Idempotency-Key");
   if (!key || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key))
     return next(new TicketError(400, "IDEMPOTENCY_KEY_REQUIRED", "A valid UUID Idempotency-Key is required."));
@@ -166,7 +167,15 @@ createTicketRouter.post("/", requireRequester, (req, _res, next) => {
       if (!await tx.relatedSystem.findFirst({ where: { id: payload.relatedSystemId, isActive: true } }))
         fields.push({ field: "relatedSystemId", message: "Choose an active Related System." });
       if (fields.length) throw new TicketError(400, "VALIDATION_ERROR", "Some values are invalid.", fields);
-      const ticket = await tx.ticket.create({ data: { ...payload, requesterId, idempotencyKey: key, creationFingerprint: fingerprint } });
+      const ticket = await tx.ticket.create({
+        data: {
+          ...payload,
+          requesterId,
+          idempotencyKey: key,
+          creationFingerprint: fingerprint,
+          itPriority: payload.requestedPriority,
+        },
+      });
       const warnings: { code: string; filename: string; message: string }[] = [];
       for (const { file, originalName, extension } of files) {
         const storedName = `${randomUUID()}${extension}`;
@@ -208,12 +217,12 @@ createTicketRouter.get("/:ticketId/attachments", requireRequester, async (req, r
       throw new TicketError(400, "VALIDATION_ERROR", "Invalid ticket ID.");
     }
 
-    const ticket = await getPrisma().ticket.findUnique({
-      where: { id: ticketId },
-      select: { id: true, requesterId: true },
+    const ticket = await getPrisma().ticket.findFirst({
+      where: { id: ticketId, requesterId: req.requester!.id },
+      select: { id: true },
     });
 
-    if (!ticket || ticket.requesterId !== req.requester!.id) {
+    if (!ticket) {
       throw new TicketError(404, "TICKET_NOT_FOUND", "Ticket not found.");
     }
 
@@ -256,7 +265,7 @@ createTicketRouter.get("/:ticketId/attachments", requireRequester, async (req, r
 // POST /api/tickets/:ticketId/attachments
 createTicketRouter.post(
   "/:ticketId/attachments",
-  requireRequester,
+  requireRequesterWrite,
   (req, res, next) => {
     upload.array("attachments", 5)(req, res, (error) => {
       if (
@@ -277,12 +286,12 @@ createTicketRouter.post(
         throw new TicketError(400, "VALIDATION_ERROR", "Invalid ticket ID.");
       }
 
-      const ticket = await getPrisma().ticket.findUnique({
-        where: { id: ticketId },
-        select: { id: true, requesterId: true },
+      const ticket = await getPrisma().ticket.findFirst({
+        where: { id: ticketId, requesterId: req.requester!.id },
+        select: { id: true },
       });
 
-      if (!ticket || ticket.requesterId !== req.requester!.id) {
+      if (!ticket) {
         throw new TicketError(404, "TICKET_NOT_FOUND", "Ticket not found.");
       }
 
@@ -368,8 +377,8 @@ createTicketRouter.get("/:ticketId", requireRequester, async (req, res, next) =>
       throw new TicketError(400, "VALIDATION_ERROR", "Invalid ticket ID.");
     }
 
-    const ticket = await getPrisma().ticket.findUnique({
-      where: { id: ticketId },
+    const ticket = await getPrisma().ticket.findFirst({
+      where: { id: ticketId, requesterId: req.requester!.id },
       select: {
         id: true,
         ticketNumber: true,
@@ -382,10 +391,17 @@ createTicketRouter.get("/:ticketId", requireRequester, async (req, res, next) =>
         itPriority: true,
         currentStatus: true,
         ticketOwner: true,
+        requesterResolutionIndicatedAt: true,
         createdAt: true,
         updatedAt: true,
         requester: {
           select: { id: true, name: true, email: true, department: true },
+        },
+        owner: {
+          select: { id: true, name: true, email: true },
+        },
+        requesterResolutionIndicatedBy: {
+          select: { id: true, name: true },
         },
         category: {
           select: { id: true, name: true },
@@ -409,7 +425,7 @@ createTicketRouter.get("/:ticketId", requireRequester, async (req, res, next) =>
       },
     });
 
-    if (!ticket || ticket.requesterId !== req.requester!.id) {
+    if (!ticket) {
       throw new TicketError(404, "TICKET_NOT_FOUND", "Ticket not found.");
     }
 
@@ -423,7 +439,16 @@ createTicketRouter.get("/:ticketId", requireRequester, async (req, res, next) =>
         requestedPriority: ticket.requestedPriority,
         itPriority: ticket.itPriority,
         currentStatus: ticket.currentStatus,
-        ticketOwner: ticket.ticketOwner,
+        ticketOwner: ticket.owner ? ticket.owner.name : ticket.ticketOwner,
+        requesterResolutionIndicatedAt: ticket.requesterResolutionIndicatedAt
+          ? ticket.requesterResolutionIndicatedAt.toISOString()
+          : null,
+        requesterResolutionIndicatedBy: ticket.requesterResolutionIndicatedBy
+          ? {
+              id: ticket.requesterResolutionIndicatedBy.id,
+              name: ticket.requesterResolutionIndicatedBy.name,
+            }
+          : null,
         createdAt: ticket.createdAt.toISOString(),
         updatedAt: ticket.updatedAt.toISOString(),
         requester: ticket.requester,
@@ -446,36 +471,312 @@ createTicketRouter.get("/:ticketId", requireRequester, async (req, res, next) =>
   }
 });
 
+// GET /api/tickets/:ticketId/public-comments
+createTicketRouter.get("/:ticketId/public-comments", requireAuth, async (req, res, next) => {
+  try {
+    const ticketId = positiveId(req.params.ticketId);
+    if (!ticketId) {
+      throw new TicketError(400, "VALIDATION_ERROR", "Invalid ticket ID.");
+    }
+
+    const user = req.auth!.user;
+    const ticket = await getPrisma().ticket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, requesterId: true },
+    });
+
+    if (!ticket) {
+      throw new TicketError(404, "TICKET_NOT_FOUND", "Ticket not found.");
+    }
+
+    if (user.role === "REQUESTER" && ticket.requesterId !== user.id) {
+      throw new TicketError(404, "TICKET_NOT_FOUND", "Ticket not found.");
+    }
+
+    const comments = await getPrisma().publicComment.findMany({
+      where: { ticketId },
+      select: {
+        id: true,
+        ticketId: true,
+        content: true,
+        createdAt: true,
+        author: {
+          select: { id: true, name: true, role: true },
+        },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+
+    res.status(200).json({
+      data: comments.map((c) => ({
+        id: c.id,
+        ticketId: c.ticketId,
+        content: c.content,
+        createdAt: c.createdAt.toISOString(),
+        author: c.author,
+      })),
+      meta: { count: comments.length },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/tickets/:ticketId/public-comments
+createTicketRouter.post("/:ticketId/public-comments", requireAuth, requireCsrf, async (req, res, next) => {
+  try {
+    const ticketId = positiveId(req.params.ticketId);
+    if (!ticketId) {
+      throw new TicketError(400, "VALIDATION_ERROR", "Invalid ticket ID.");
+    }
+
+    const user = req.auth!.user;
+    const ticket = await getPrisma().ticket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, requesterId: true },
+    });
+
+    if (!ticket) {
+      throw new TicketError(404, "TICKET_NOT_FOUND", "Ticket not found.");
+    }
+
+    if (user.role === "REQUESTER" && ticket.requesterId !== user.id) {
+      throw new TicketError(404, "TICKET_NOT_FOUND", "Ticket not found.");
+    }
+
+    const content = typeof req.body?.content === "string" ? req.body.content.trim() : "";
+    if (content.length < 1 || content.length > 2000) {
+      throw new TicketError(400, "VALIDATION_ERROR", "Comment must contain 1-2,000 characters.", [
+        { field: "content", message: "Comment must contain 1-2,000 characters." },
+      ]);
+    }
+
+    const created = await getPrisma().publicComment.create({
+      data: {
+        ticketId,
+        authorId: user.id,
+        content,
+      },
+      select: {
+        id: true,
+        ticketId: true,
+        content: true,
+        createdAt: true,
+        author: {
+          select: { id: true, name: true, role: true },
+        },
+      },
+    });
+
+    res.location(`/api/tickets/${ticketId}/public-comments/${created.id}`);
+    res.status(201).json({
+      data: {
+        id: created.id,
+        ticketId: created.ticketId,
+        content: created.content,
+        createdAt: created.createdAt.toISOString(),
+        author: created.author,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const ELIGIBLE_RESOLUTION_STATUSES: TicketStatus[] = [
+  "NEW",
+  "OPEN",
+  "IN_PROGRESS",
+  "WAITING_FOR_REQUESTER",
+];
+
+// POST /api/tickets/:ticketId/resolution-indication
+createTicketRouter.post(
+  "/:ticketId/resolution-indication",
+  requireRequesterWrite,
+  async (req, res, next) => {
+    try {
+      const ticketId = positiveId(req.params.ticketId);
+      if (!ticketId) {
+        throw new TicketError(400, "VALIDATION_ERROR", "Invalid ticket ID.");
+      }
+
+      const requesterId = req.requester!.id;
+      const ticket = await getPrisma().ticket.findFirst({
+        where: { id: ticketId, requesterId },
+        include: {
+          requesterResolutionIndicatedBy: { select: { id: true, name: true } },
+        },
+      });
+
+      if (!ticket) {
+        throw new TicketError(404, "TICKET_NOT_FOUND", "Ticket not found.");
+      }
+
+      if (!ELIGIBLE_RESOLUTION_STATUSES.includes(ticket.currentStatus)) {
+        throw new TicketError(
+          409,
+          "RESOLUTION_INDICATION_NOT_ALLOWED",
+          "Problem appears resolved is only available for active tickets."
+        );
+      }
+
+      const expectedUpdatedAtRaw = req.body?.expectedUpdatedAt;
+      if (!expectedUpdatedAtRaw || typeof expectedUpdatedAtRaw !== "string") {
+        throw new TicketError(400, "VALIDATION_ERROR", "expectedUpdatedAt is required.", [
+          { field: "expectedUpdatedAt", message: "expectedUpdatedAt timestamp is required." },
+        ]);
+      }
+
+      const expectedDate = new Date(expectedUpdatedAtRaw);
+      if (
+        isNaN(expectedDate.getTime()) ||
+        Math.abs(expectedDate.getTime() - ticket.updatedAt.getTime()) > 1000
+      ) {
+        throw new TicketError(
+          409,
+          "TICKET_VERSION_CONFLICT",
+          "The ticket was modified by another user. Please refresh and try again."
+        );
+      }
+
+      // Idempotent return if already indicated with matching version
+      if (ticket.requesterResolutionIndicatedAt) {
+        res.status(200).json({
+          data: {
+            indicatedAt: ticket.requesterResolutionIndicatedAt.toISOString(),
+            indicatedBy: {
+              id: ticket.requesterResolutionIndicatedBy?.id ?? req.requester!.id,
+              name: ticket.requesterResolutionIndicatedBy?.name ?? req.requester!.name,
+            },
+            currentStatus: ticket.currentStatus,
+          },
+        });
+        return;
+      }
+
+      const updated = await getPrisma().ticket.update({
+        where: { id: ticket.id },
+        data: {
+          requesterResolutionIndicatedAt: new Date(),
+          requesterResolutionIndicatedById: requesterId,
+        },
+        include: {
+          requesterResolutionIndicatedBy: { select: { id: true, name: true } },
+        },
+      });
+
+      res.status(200).json({
+        data: {
+          indicatedAt: updated.requesterResolutionIndicatedAt!.toISOString(),
+          indicatedBy: {
+            id: updated.requesterResolutionIndicatedBy!.id,
+            name: updated.requesterResolutionIndicatedBy!.name,
+          },
+          currentStatus: updated.currentStatus,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
   if (error instanceof multer.MulterError) {
     const tooLarge = error.code === "LIMIT_FILE_SIZE";
-    res.status(tooLarge ? 413 : 400).json({ error: {
-      code: tooLarge ? "ATTACHMENT_TOO_LARGE" : "VALIDATION_ERROR",
-      message: tooLarge ? "A file exceeds 5 MiB." : "Invalid multipart form or too many fields/files.",
-      fields: [{ field: "attachments", message: "Use at most five files, each no larger than 5 MiB." }], retryable: false,
-    } });
+    res.status(tooLarge ? 413 : 400).json({
+      error: {
+        code: tooLarge ? "ATTACHMENT_TOO_LARGE" : "VALIDATION_ERROR",
+        message: tooLarge
+          ? "A file exceeds 5 MiB."
+          : "Invalid multipart form or too many fields/files.",
+        fields: [
+          {
+            field: "attachments",
+            message: "Use at most five files, each no larger than 5 MiB.",
+          },
+        ],
+        retryable: false,
+      },
+    });
   } else if (error instanceof TicketError) {
-    res.status(error.status).json({ error: { code: error.code, message: error.message,
-      ...(error.fields ? { fields: error.fields } : {}), retryable: false } });
+    res.status(error.status).json({
+      error: {
+        code: error.code,
+        message: error.message,
+        ...(error.fields ? { fields: error.fields } : {}),
+        retryable: false,
+      },
+    });
   } else {
     console.error("Ticket operation failed", error);
     if (req.method === "GET") {
       if (req.path.includes("/attachments")) {
-        res.status(500).json({ error: { code: "ATTACHMENT_LIST_FAILED",
-          message: "Attachments are temporarily unavailable. Please try again.", retryable: true } });
+        res.status(500).json({
+          error: {
+            code: "ATTACHMENT_LIST_FAILED",
+            message: "Attachments are temporarily unavailable. Please try again.",
+            retryable: true,
+          },
+        });
+      } else if (req.path.includes("/public-comments")) {
+        res.status(500).json({
+          error: {
+            code: "PUBLIC_COMMENTS_FAILED",
+            message: "Public comments are temporarily unavailable. Please try again.",
+            retryable: true,
+          },
+        });
       } else if (req.path === "/" || req.path === "") {
-        res.status(500).json({ error: { code: "TICKET_LIST_FAILED",
-          message: "Tickets are temporarily unavailable. Please try again.", retryable: true } });
+        res.status(500).json({
+          error: {
+            code: "TICKET_LIST_FAILED",
+            message: "Tickets are temporarily unavailable. Please try again.",
+            retryable: true,
+          },
+        });
       } else {
-        res.status(500).json({ error: { code: "TICKET_DETAIL_FAILED",
-          message: "Ticket detail is temporarily unavailable. Please try again.", retryable: true } });
+        res.status(500).json({
+          error: {
+            code: "TICKET_DETAIL_FAILED",
+            message: "Ticket detail is temporarily unavailable. Please try again.",
+            retryable: true,
+          },
+        });
       }
     } else if (req.method === "POST" && req.path.includes("/attachments")) {
-      res.status(500).json({ error: { code: "ATTACHMENT_UPLOAD_FAILED",
-        message: "Failed to upload attachments. Please retry.", retryable: true } });
+      res.status(500).json({
+        error: {
+          code: "ATTACHMENT_UPLOAD_FAILED",
+          message: "Failed to upload attachments. Please retry.",
+          retryable: true,
+        },
+      });
+    } else if (req.method === "POST" && req.path.includes("/public-comments")) {
+      res.status(500).json({
+        error: {
+          code: "PUBLIC_COMMENT_CREATE_FAILED",
+          message: "The public comment could not be created. Please retry.",
+          retryable: true,
+        },
+      });
+    } else if (req.method === "POST" && req.path.includes("/resolution-indication")) {
+      res.status(500).json({
+        error: {
+          code: "RESOLUTION_INDICATION_FAILED",
+          message: "Failed to record resolution indication. Please retry.",
+          retryable: true,
+        },
+      });
     } else {
-      res.status(500).json({ error: { code: "TICKET_CREATE_FAILED",
-        message: "The ticket could not be created. Please retry the same submission.", retryable: true } });
+      res.status(500).json({
+        error: {
+          code: "TICKET_CREATE_FAILED",
+          message: "The ticket could not be created. Please retry the same submission.",
+          retryable: true,
+        },
+      });
     }
   }
 };

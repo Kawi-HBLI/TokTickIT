@@ -45,6 +45,13 @@ We use Docker to run the PostgreSQL database locally to ensure a consistent envi
    npm run dev
    ```
 
+For Lab 3 local development, the repeatable seed creates Requester, IT Staff,
+and Administrator accounts. Every newly seeded or migrated account starts with
+the local-only password `ChangeMe-2026!` and must change it at first login.
+Never reuse this course credential for a real account. Set `CLIENT_ORIGIN` when
+the frontend is served from a different origin; the default is
+`http://localhost:5173`.
+
 ### 3. Frontend Setup (`client/`)
 1. Navigate to the `client` directory: `cd client`
 2. Install dependencies: `npm install`
@@ -77,25 +84,42 @@ directories and clean them after the run.
 
 ## Testing & Quality Verification
 
-Run all test suites and production builds from the repository root:
+Run the following from the repository root. PostgreSQL must be available on port
+`5433`; close separately running servers on ports `8000` and `5173` before E2E.
 
 ```powershell
 # 1. Start database container
 docker compose up -d
 
-# 2. Server unit & integration tests (147/147 tests)
+# 2. All server unit & integration tests, including retained Lab 1/2 coverage
 npm --prefix server test
 
-# 3. Client React component tests (51/51 tests)
+# 3. All client component tests, including retained Lab 1/2 coverage
 npm --prefix client test
 
-# 4. End-to-End Playwright test suite (36/36 tests across Desktop, Tablet, Mobile)
-npx playwright test
+# 4. Lab 3 authenticated workflows, authorization, accessibility and visual states
+npm run test:e2e:lab3
 
-# 5. Production builds
+# 5. Retained Lab 2 Requester regression using Lab 3 authenticated sessions
+npm run test:e2e:regression
+
+# 6. Production builds
 npm --prefix server run build
 npm --prefix client run build
 ```
+
+Run the two browser suites sequentially: both reset only the dedicated
+`e2e_test` schema, seed it, and clean their dedicated upload directory afterward.
+They do not reset the development `public` schema. The retained Lab 2 spec files
+now authenticate rather than use the removed development Requester selector.
+Use `npm run test:e2e:regression`, not the legacy default Playwright config.
+
+Lab 3 screenshots are saved under `artifacts/lab-03/screenshots/`. Requester
+regression captures use its `requester-regression/` subfolder; archived Lab 2
+screenshots remain unchanged. Current commands, results, test traceability and
+release-only checks are recorded in [the Lab 3 test plan](docs/lab-03/tests.md).
+Review history and AI reflection are in [reviewer.md](docs/lab-03/reviewer.md)
+and [ai-use.md](docs/lab-03/ai-use.md).
 
 ---
 

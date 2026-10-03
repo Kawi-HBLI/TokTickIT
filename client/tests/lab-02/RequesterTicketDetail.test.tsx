@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import RequesterTicketDetail from "../../src/RequesterTicketDetail.js";
 import * as api from "../../src/api.js";
-import { RequesterProvider, REQUESTER_STORAGE_KEY } from "../../src/RequesterContext.js";
+import { RequesterProvider } from "../../src/RequesterContext.js";
 
 const requester: api.Requester = {
   id: 1,
@@ -12,6 +12,7 @@ const requester: api.Requester = {
   department: "Marketing",
   isActive: true,
 };
+const authenticatedRequester = { id: 1, name: requester.name, email: requester.email, role: "REQUESTER" as const, isActive: true, mustChangePassword: false, createdAt: "2026-09-17T00:00:00.000Z", updatedAt: "2026-09-17T00:00:00.000Z" };
 
 const sampleTicket: api.TicketDetail = {
   id: 42,
@@ -54,7 +55,6 @@ const sampleTicket: api.TicketDetail = {
 };
 
 function renderDetail(ticketId = 42, onNavigate = vi.fn()) {
-  sessionStorage.setItem(REQUESTER_STORAGE_KEY, "1");
   return {
     ...render(
       <RequesterProvider>
@@ -68,8 +68,7 @@ function renderDetail(ticketId = 42, onNavigate = vi.fn()) {
 describe("RequesterTicketDetail", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    sessionStorage.clear();
-    vi.spyOn(api, "getRequesters").mockResolvedValue([requester]);
+    vi.spyOn(api, "getCurrentUser").mockResolvedValue({ user: authenticatedRequester, csrfToken: "csrf-test" });
     vi.spyOn(api, "getTicketDetail").mockResolvedValue(sampleTicket);
     vi.spyOn(api, "getTicketAttachments").mockResolvedValue({
       data: sampleTicket.attachments,
@@ -86,7 +85,7 @@ describe("RequesterTicketDetail", () => {
       expect(await screen.findByRole("heading", { name: "TKT-2026-00042" })).toBeInTheDocument();
 
       // Badges
-      expect(screen.getByText("NEW")).toBeInTheDocument();
+      expect(screen.getByText("New")).toBeInTheDocument();
       expect(screen.getByText("HIGH Priority")).toBeInTheDocument();
 
       // Information definition list
@@ -160,7 +159,7 @@ describe("RequesterTicketDetail", () => {
   });
 
   describe("UI-SCOPE-01: Scope Boundaries (Strict Read-Only)", () => {
-    it("does not render any IT Staff controls, status changer, comment box, or internal notes", async () => {
+    it("does not render any IT Staff controls, status changer, or internal notes", async () => {
       renderDetail(42);
       await screen.findByRole("heading", { name: "TKT-2026-00042" });
 
@@ -168,9 +167,7 @@ describe("RequesterTicketDetail", () => {
       expect(screen.queryByLabelText(/change status/i)).not.toBeInTheDocument();
       expect(screen.queryByRole("combobox", { name: /status/i })).not.toBeInTheDocument();
 
-      // No comment box or textarea (except removal dialog when opened)
-      expect(screen.queryByLabelText(/comment/i)).not.toBeInTheDocument();
-      expect(screen.queryByPlaceholderText(/add a comment/i)).not.toBeInTheDocument();
+      // No internal notes or staff controls
       expect(screen.queryByLabelText(/internal notes/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/action taken/i)).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /assign/i })).not.toBeInTheDocument();

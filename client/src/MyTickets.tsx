@@ -9,6 +9,7 @@ import {
   TicketQueryState,
 } from "./api.js";
 import { useRequester } from "./RequesterContext.js";
+import { formatTicketStatus } from "./ticket-status.js";
 
 interface MyTicketsProps {
   onNavigate: (path: string) => void;
@@ -103,7 +104,7 @@ export default function MyTickets({ onNavigate }: MyTicketsProps) {
       pageSize,
     };
 
-    getMyTickets(currentRequester.id, query)
+    getMyTickets(query)
       .then((res) => {
         if (!current) return;
         setTickets(res.data);
@@ -378,7 +379,7 @@ export default function MyTickets({ onNavigate }: MyTicketsProps) {
                     </td>
                     <td>
                       <span className="status-badge status-new">
-                        {ticket.currentStatus}
+                        {formatTicketStatus(ticket.currentStatus)}
                       </span>
                     </td>
                     <td className="ticket-date-cell">
@@ -405,7 +406,7 @@ export default function MyTickets({ onNavigate }: MyTicketsProps) {
               <article key={ticket.id} className="mobile-ticket-card">
                 <div className="card-header">
                   <span className="ticket-number">{ticket.ticketNumber}</span>
-                  <span className="status-badge status-new">{ticket.currentStatus}</span>
+                  <span className="status-badge status-new">{formatTicketStatus(ticket.currentStatus)}</span>
                 </div>
                 <h3 className="card-summary">{ticket.summary}</h3>
                 <div className="card-meta">

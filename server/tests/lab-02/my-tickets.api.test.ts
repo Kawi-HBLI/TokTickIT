@@ -1,6 +1,6 @@
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { randomUUID } from "node:crypto";
+import { randomBytes, createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -15,10 +15,35 @@ let db: PrismaClient;
 let requesterAId: number;
 let requesterBId: number;
 let inactiveRequesterId: number;
+let requesterACookie: string;
+let requesterBCookie: string;
+let inactiveRequesterCookie: string;
 let category1Id: number;
 let category2Id: number;
 let inactiveCategoryId: number;
 let systemId: number;
+
+function tokenHash(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+async function createTestSession(prisma: PrismaClient, userId: number) {
+  const rawToken = randomBytes(32).toString("base64url");
+  const csrfToken = randomBytes(32).toString("base64url");
+  await prisma.session.create({
+    data: {
+      tokenHash: tokenHash(rawToken),
+      csrfToken,
+      userId,
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+    },
+  });
+  return {
+    cookie: `toktickit_session=${rawToken}`,
+    csrfToken,
+    rawToken,
+  };
+}
 
 beforeAll(async () => {
   const url = new URL(process.env.DATABASE_URL!);
@@ -35,11 +60,16 @@ beforeAll(async () => {
   );
   db = new PrismaClient({ datasources: { db: { url: url.toString() } } });
   await seedDatabase(db);
+  await db.user.updateMany({ data: { mustChangePassword: false } });
 
-  const activeRequesters = await db.requesterUser.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
+  const activeRequesters = await db.user.findMany({ where: { isActive: true, role: "REQUESTER" }, orderBy: { id: "asc" } });
   requesterAId = activeRequesters[0].id;
   requesterBId = activeRequesters[1].id;
-  inactiveRequesterId = (await db.requesterUser.findFirstOrThrow({ where: { isActive: false } })).id;
+  inactiveRequesterId = (await db.user.findFirstOrThrow({ where: { isActive: false, role: "REQUESTER" } })).id;
+
+  requesterACookie = (await createTestSession(db, requesterAId)).cookie;
+  requesterBCookie = (await createTestSession(db, requesterBId)).cookie;
+  inactiveRequesterCookie = (await createTestSession(db, inactiveRequesterId)).cookie;
 
   const categories = await db.category.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
   category1Id = categories[0].id;
@@ -47,6 +77,11 @@ beforeAll(async () => {
   inactiveCategoryId = (await db.category.create({ data: { id: 2001, name: "Inactive Test Cat", isActive: false } })).id;
 
   systemId = (await db.relatedSystem.findFirstOrThrow({ where: { isActive: true } })).id;
+
+  await db.internalNote.deleteMany();
+  await db.publicComment.deleteMany();
+  await db.attachment.deleteMany();
+  await db.ticket.deleteMany();
 
   // Seed sample tickets for Requester A
   const t1 = await db.ticket.create({
@@ -57,6 +92,7 @@ beforeAll(async () => {
       summary: "Network VPN disconnects constantly",
       description: "VPN drops every 5 minutes when connecting from home.",
       requestedPriority: "HIGH",
+      itPriority: "HIGH",
       idempotencyKey: randomUUID(),
       createdAt: new Date("2026-09-01T10:00:00Z"),
       updatedAt: new Date("2026-09-01T10:00:00Z"),
@@ -71,6 +107,7 @@ beforeAll(async () => {
       summary: "Monitor screen flickering issue",
       description: "The second display flickers intermittently.",
       requestedPriority: "LOW",
+      itPriority: "LOW",
       idempotencyKey: randomUUID(),
       createdAt: new Date("2026-09-02T10:00:00Z"),
       updatedAt: new Date("2026-09-02T12:00:00Z"),
@@ -85,6 +122,7 @@ beforeAll(async () => {
       summary: "Server access token expired",
       description: "Cannot access development server with current token.",
       requestedPriority: "CRITICAL",
+      itPriority: "CRITICAL",
       idempotencyKey: randomUUID(),
       createdAt: new Date("2026-09-03T08:00:00Z"),
       updatedAt: new Date("2026-09-03T15:00:00Z"),
@@ -125,6 +163,7 @@ beforeAll(async () => {
       summary: "Requester B confidential ticket",
       description: "This should never be visible to Requester A.",
       requestedPriority: "MEDIUM",
+      itPriority: "MEDIUM",
       idempotencyKey: randomUUID(),
       createdAt: new Date("2026-09-04T09:00:00Z"),
       updatedAt: new Date("2026-09-04T09:00:00Z"),
@@ -151,7 +190,7 @@ describe("GET /api/tickets - My Tickets API", () => {
     it("returns only tickets owned by Requester A", async () => {
       const res = await request(app)
         .get("/api/tickets")
-        .set("x-requester-id", String(requesterAId));
+        .set("Cookie", requesterACookie);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(3);
@@ -166,7 +205,7 @@ describe("GET /api/tickets - My Tickets API", () => {
     it("returns only tickets owned by Requester B", async () => {
       const res = await request(app)
         .get("/api/tickets")
-        .set("x-requester-id", String(requesterBId));
+        .set("Cookie", requesterBCookie);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -174,19 +213,19 @@ describe("GET /api/tickets - My Tickets API", () => {
       expect(res.body.pagination.totalItems).toBe(1);
     });
 
-    it("rejects request without x-requester-id header with 400", async () => {
+    it("rejects request without session with 401", async () => {
       const res = await request(app).get("/api/tickets");
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("REQUESTER_CONTEXT_REQUIRED");
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe("AUTHENTICATION_REQUIRED");
     });
 
-    it("rejects inactive requester with 400", async () => {
+    it("rejects inactive requester with 403", async () => {
       const res = await request(app)
         .get("/api/tickets")
-        .set("x-requester-id", String(inactiveRequesterId));
+        .set("Cookie", inactiveRequesterCookie);
 
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("ACCOUNT_INACTIVE");
     });
   });
 
@@ -194,7 +233,7 @@ describe("GET /api/tickets - My Tickets API", () => {
     it("filters tickets by case-insensitive partial summary match", async () => {
       const res = await request(app)
         .get("/api/tickets?search=flickering")
-        .set("x-requester-id", String(requesterAId));
+        .set("Cookie", requesterACookie);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -205,13 +244,13 @@ describe("GET /api/tickets - My Tickets API", () => {
     it("filters tickets by partial ticketNumber match", async () => {
       const listRes = await request(app)
         .get("/api/tickets")
-        .set("x-requester-id", String(requesterAId));
+        .set("Cookie", requesterACookie);
       const firstTicketNum = listRes.body.data[0].ticketNumber;
       const partialNum = firstTicketNum.slice(-5);
 
       const res = await request(app)
         .get(`/api/tickets?search=${partialNum}`)
-        .set("x-requester-id", String(requesterAId));
+        .set("Cookie", requesterACookie);
 
       expect(res.status).toBe(200);
       expect(res.body.data.some((t: any) => t.ticketNumber === firstTicketNum)).toBe(true);
@@ -220,7 +259,7 @@ describe("GET /api/tickets - My Tickets API", () => {
     it("combines categoryId and requestedPriority filters", async () => {
       const res = await request(app)
         .get(`/api/tickets?categoryId=${category1Id}&requestedPriority=CRITICAL`)
-        .set("x-requester-id", String(requesterAId));
+        .set("Cookie", requesterACookie);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -231,7 +270,7 @@ describe("GET /api/tickets - My Tickets API", () => {
     it("rejects filter referencing inactive Category with 400", async () => {
       const res = await request(app)
         .get(`/api/tickets?categoryId=${inactiveCategoryId}`)
-        .set("x-requester-id", String(requesterAId));
+        .set("Cookie", requesterACookie);
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("INVALID_QUERY");
@@ -245,7 +284,7 @@ describe("GET /api/tickets - My Tickets API", () => {
     it("sorts by updatedAt desc by default with ticketNumber desc secondary sort", async () => {
       const res = await request(app)
         .get("/api/tickets")
-        .set("x-requester-id", String(requesterAId));
+        .set("Cookie", requesterACookie);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(3);
@@ -257,7 +296,7 @@ describe("GET /api/tickets - My Tickets API", () => {
     it("sorts by requestedPriority desc (CRITICAL -> HIGH -> MEDIUM -> LOW)", async () => {
       const res = await request(app)
         .get("/api/tickets?sortBy=requestedPriority&sortOrder=desc")
-        .set("x-requester-id", String(requesterAId));
+        .set("Cookie", requesterACookie);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(3);
@@ -269,7 +308,7 @@ describe("GET /api/tickets - My Tickets API", () => {
     it("paginates correctly with page and pageSize", async () => {
       const page1 = await request(app)
         .get("/api/tickets?page=1&pageSize=10")
-        .set("x-requester-id", String(requesterAId));
+        .set("Cookie", requesterACookie);
 
       expect(page1.status).toBe(200);
       expect(page1.body.pagination).toEqual({
@@ -284,7 +323,7 @@ describe("GET /api/tickets - My Tickets API", () => {
       // Requesting page 2 when totalPages is 1 returns empty data with accurate metadata
       const page2 = await request(app)
         .get("/api/tickets?page=2&pageSize=10")
-        .set("x-requester-id", String(requesterAId));
+        .set("Cookie", requesterACookie);
 
       expect(page2.status).toBe(200);
       expect(page2.body.data).toEqual([]);
@@ -296,13 +335,13 @@ describe("GET /api/tickets - My Tickets API", () => {
     it("rejects invalid page or pageSize with 400 Bad Request", async () => {
       const res1 = await request(app)
         .get("/api/tickets?page=0")
-        .set("x-requester-id", String(requesterAId));
+        .set("Cookie", requesterACookie);
       expect(res1.status).toBe(400);
       expect(res1.body.error.code).toBe("INVALID_QUERY");
 
       const res2 = await request(app)
         .get("/api/tickets?pageSize=15")
-        .set("x-requester-id", String(requesterAId));
+        .set("Cookie", requesterACookie);
       expect(res2.status).toBe(400);
       expect(res2.body.error.code).toBe("INVALID_QUERY");
     });
@@ -310,7 +349,7 @@ describe("GET /api/tickets - My Tickets API", () => {
     it("rejects invalid sortBy or sortOrder with 400", async () => {
       const res = await request(app)
         .get("/api/tickets?sortBy=unknown&sortOrder=diagonal")
-        .set("x-requester-id", String(requesterAId));
+        .set("Cookie", requesterACookie);
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("INVALID_QUERY");
     });
@@ -318,12 +357,13 @@ describe("GET /api/tickets - My Tickets API", () => {
 
   describe("API-LIST-04: Empty state vs no search results", () => {
     it("returns 200 with empty data when Requester owns 0 tickets", async () => {
-      const activeRequesters = await db.requesterUser.findMany({ where: { isActive: true }, orderBy: { id: "asc" } });
+      const activeRequesters = await db.user.findMany({ where: { isActive: true, role: "REQUESTER" }, orderBy: { id: "asc" } });
       const requesterC = activeRequesters[2]; // owns 0 tickets
+      const cSession = await createTestSession(db, requesterC.id);
 
       const res = await request(app)
         .get("/api/tickets")
-        .set("x-requester-id", String(requesterC.id));
+        .set("Cookie", cSession.cookie);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
@@ -334,7 +374,7 @@ describe("GET /api/tickets - My Tickets API", () => {
     it("returns 200 with empty data and preserved query when search matches nothing", async () => {
       const res = await request(app)
         .get("/api/tickets?search=nonexistent-ticket-query-12345")
-        .set("x-requester-id", String(requesterAId));
+        .set("Cookie", requesterACookie);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
@@ -350,7 +390,7 @@ describe("GET /api/tickets - My Tickets API", () => {
       try {
         const res = await request(app)
           .get("/api/tickets")
-          .set("x-requester-id", String(requesterAId));
+          .set("Cookie", requesterACookie);
 
         expect(res.status).toBe(500);
         expect(res.body.error).toMatchObject({

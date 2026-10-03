@@ -17,7 +17,7 @@ const migration = readFileSync(
 );
 
 describe("Lab 2 database schema", () => {
-  it.each(["RequesterUser", "Category", "RelatedSystem", "Ticket", "Attachment"])(
+  it.each(["User", "Category", "RelatedSystem", "Ticket", "Attachment"])(
     "defines the %s model",
     (model) => {
       expect(schema).toContain(`model ${model} {`);

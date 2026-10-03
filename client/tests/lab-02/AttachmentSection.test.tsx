@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AttachmentSection from "../../src/AttachmentSection.js";
 import * as api from "../../src/api.js";
-import { RequesterProvider, REQUESTER_STORAGE_KEY } from "../../src/RequesterContext.js";
+import { RequesterProvider } from "../../src/RequesterContext.js";
 
 const requester: api.Requester = {
   id: 1,
@@ -12,6 +12,7 @@ const requester: api.Requester = {
   department: "Marketing",
   isActive: true,
 };
+const authenticatedRequester = { id: 1, name: requester.name, email: requester.email, role: "REQUESTER" as const, isActive: true, mustChangePassword: false, createdAt: "2026-09-17T00:00:00.000Z", updatedAt: "2026-09-17T00:00:00.000Z" };
 
 const activeAttachment: api.AttachmentItem = {
   id: 101,
@@ -39,7 +40,6 @@ function renderAttachments(
   initialAttachments: api.AttachmentItem[] = [activeAttachment],
   ticketId = 42
 ) {
-  sessionStorage.setItem(REQUESTER_STORAGE_KEY, "1");
   return render(
     <RequesterProvider>
       <AttachmentSection
@@ -55,8 +55,7 @@ describe("AttachmentSection", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    sessionStorage.clear();
-    vi.spyOn(api, "getRequesters").mockResolvedValue([requester]);
+    vi.spyOn(api, "getCurrentUser").mockResolvedValue({ user: authenticatedRequester, csrfToken: "csrf-test" });
     vi.spyOn(api, "getAttachmentPreviewUrl").mockImplementation(
       (id) => `/api/attachments/${id}/preview`
     );
@@ -93,7 +92,7 @@ describe("AttachmentSection", () => {
       const previewBtn = screen.getByRole("button", { name: /preview/i });
       expect(previewBtn).toBeInTheDocument();
       await userEvent.click(previewBtn);
-      expect(api.previewAttachmentFile).toHaveBeenCalledWith(1, 101);
+      expect(api.previewAttachmentFile).toHaveBeenCalledWith(101);
       expect(window.open).toHaveBeenCalledWith("about:blank", "_blank");
       expect(mockWindow.location.href).toBe("blob:http://localhost/test-blob");
 
@@ -101,7 +100,7 @@ describe("AttachmentSection", () => {
       const downloadBtn = screen.getByRole("button", { name: /download/i });
       expect(downloadBtn).toBeInTheDocument();
       await userEvent.click(downloadBtn);
-      expect(api.downloadAttachmentFile).toHaveBeenCalledWith(1, 101);
+      expect(api.downloadAttachmentFile).toHaveBeenCalledWith(101);
 
       // Remove button
       const removeBtn = screen.getByRole("button", { name: "Remove" });
@@ -265,7 +264,6 @@ describe("AttachmentSection", () => {
       await user.click(confirmBtn);
 
       expect(api.removeAttachment).toHaveBeenCalledWith(
-        1,
         101,
         "File contained outdated credentials and had to be purged."
       );

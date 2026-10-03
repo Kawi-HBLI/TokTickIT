@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { categories, relatedSystems, requesterUsers } from "../../prisma/seed-data.js";
+import {
+  administratorUsers,
+  categories,
+  relatedSystems,
+  requesterUsers,
+  staffUsers,
+} from "../../prisma/seed-data.js";
 import { seedDatabase } from "../../prisma/seed.js";
 
 type SeedRecord = { name: string; email?: string };
@@ -48,14 +54,14 @@ describe("Lab 2 seed data", () => {
   it("can run twice without creating duplicate rows", async () => {
     const category = createUpsertDelegate("name");
     const relatedSystem = createUpsertDelegate("name");
-    const requesterUser = createUpsertDelegate("email");
-    const fakePrisma = { category, relatedSystem, requesterUser };
+    const user = createUpsertDelegate("email");
+    const fakePrisma = { category, relatedSystem, user };
 
     await seedDatabase(fakePrisma as never);
     await seedDatabase(fakePrisma as never);
 
     expect(category.rows).toHaveLength(categories.length);
     expect(relatedSystem.rows).toHaveLength(relatedSystems.length);
-    expect(requesterUser.rows).toHaveLength(requesterUsers.length);
+    expect(user.rows).toHaveLength(requesterUsers.length + staffUsers.length + administratorUsers.length);
   });
 });
