@@ -165,4 +165,80 @@ describe("Lab 4: TicketWorkflow Resolution Gate Feedback Tests", () => {
       expect(api.fetchStaffTicketDetail).toHaveBeenCalledTimes(2);
     });
   });
+
+  it("recovers from status-transition conflict (409) via Refresh Ticket and retry", async () => {
+    const user = userEvent.setup();
+
+    renderStaffTicketDetail();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "TCK-2026-00055" })).toBeInTheDocument();
+    });
+
+    const statusSelect = screen.getByLabelText("Status Transition");
+    await user.selectOptions(statusSelect, "RESOLVED");
+
+    const confirmDialog = await screen.findByRole("dialog", { name: /Change Status to Resolved/i });
+    expect(confirmDialog).toBeInTheDocument();
+
+    // Mock 409 conflict
+    vi.mocked(api.updateStaffTicketStatus).mockRejectedValueOnce(
+      new api.ApiError("Ticket was modified by another operation.", 409, "TICKET_VERSION_CONFLICT")
+    );
+
+    const confirmBtn = screen.getByRole("button", { name: "Confirm Status Change" });
+    await user.click(confirmBtn);
+
+    // Conflict banner appears
+    await waitFor(() => {
+      expect(screen.getByText("Ticket was modified by another operation.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Refresh Ticket" })).toBeInTheDocument();
+    });
+
+    // Fresh ticket state with new updatedAt
+    const freshTicket = {
+      ...openTicket,
+      updatedAt: "2026-10-27T10:30:00.000Z",
+    };
+    vi.mocked(api.fetchStaffTicketDetail).mockResolvedValueOnce({
+      data: freshTicket,
+    });
+
+    // Click Refresh Ticket
+    const refreshBtn = screen.getByRole("button", { name: "Refresh Ticket" });
+    await user.click(refreshBtn);
+
+    // Conflict banner is dismissed and fresh ticket loaded
+    await waitFor(() => {
+      expect(screen.queryByText("Ticket was modified by another operation.")).not.toBeInTheDocument();
+    });
+
+    // User can now re-attempt status transition with fresh updatedAt
+    const freshStatusSelect = screen.getByLabelText("Status Transition");
+    await user.selectOptions(freshStatusSelect, "RESOLVED");
+    const confirmDialog2 = await screen.findByRole("dialog", { name: /Change Status to Resolved/i });
+    expect(confirmDialog2).toBeInTheDocument();
+
+    vi.mocked(api.updateStaffTicketStatus).mockResolvedValueOnce({
+      data: {
+        ...freshTicket,
+        currentStatus: "RESOLVED",
+        previousStatus: "IN_PROGRESS",
+      },
+    });
+
+    const confirmBtn2 = screen.getByRole("button", { name: "Confirm Status Change" });
+    await user.click(confirmBtn2);
+
+    await waitFor(() => {
+      expect(screen.getByText("Ticket status updated to Resolved.")).toBeInTheDocument();
+    });
+
+    // Verify called with fresh updatedAt
+    expect(api.updateStaffTicketStatus).toHaveBeenLastCalledWith(
+      55,
+      "RESOLVED",
+      "2026-10-27T10:30:00.000Z"
+    );
+  });
 });

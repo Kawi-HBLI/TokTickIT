@@ -90,6 +90,18 @@ export default function ActionsTakenSection({
   const [createError, setCreateError] = useState<string | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID());
 
+  // Creation uncertain retry state
+  const [uncertainSubmission, setUncertainSubmission] = useState<{
+    key: string;
+    payload: {
+      description: string;
+      assigneeId: number | null;
+      followUpRequired: boolean;
+      followUpNote: string | null;
+      attachmentNotes: string | null;
+    };
+  } | null>(null);
+
   // Edit Modal
   const [editTarget, setEditTarget] = useState<EditActionForm | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
@@ -104,6 +116,11 @@ export default function ActionsTakenSection({
   const [cancelTarget, setCancelTarget] = useState<CancelActionForm | null>(null);
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+
+  // Stale-version conflict states
+  const [editConflict, setEditConflict] = useState<{ freshAction: ActionTakenDto; isTerminal: boolean } | null>(null);
+  const [completeConflict, setCompleteConflict] = useState<{ freshAction: ActionTakenDto; isTerminal: boolean } | null>(null);
+  const [cancelConflict, setCancelConflict] = useState<{ freshAction: ActionTakenDto; isTerminal: boolean } | null>(null);
 
   // Audit History Modal
   const [historyActionId, setHistoryActionId] = useState<number | null>(null);
@@ -186,6 +203,26 @@ export default function ActionsTakenSection({
     }
   }
 
+  async function loadFreshActionForConflict(
+    actionId: number
+  ): Promise<{ freshAction: ActionTakenDto; isTerminal: boolean } | null> {
+    try {
+      const res = await fetchTicketActions(ticketId);
+      setActions(res.data.items);
+      onActionMutated?.();
+      const fresh = res.data.items.find((a) => a.id === actionId);
+      if (!fresh) return null;
+      const isActionTerminal = fresh.status === "COMPLETED" || fresh.status === "CANCELLED";
+      const isTicketTerminal = isTerminalTicket;
+      return {
+        freshAction: fresh,
+        isTerminal: isActionTerminal || isTicketTerminal,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   // 1. CREATE ACTION
   function openCreateDialog() {
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -222,23 +259,40 @@ export default function ActionsTakenSection({
       return;
     }
 
+    const currentPayload = {
+      description: desc,
+      assigneeId: createForm.assigneeId,
+      followUpRequired: createForm.followUpRequired,
+      followUpNote: createForm.followUpRequired ? createForm.followUpNote.trim() : null,
+      attachmentNotes: createForm.attachmentNotes.trim() || null,
+    };
+
+    if (uncertainSubmission) {
+      const isUnchanged =
+        uncertainSubmission.payload.description === currentPayload.description &&
+        uncertainSubmission.payload.assigneeId === currentPayload.assigneeId &&
+        uncertainSubmission.payload.followUpRequired === currentPayload.followUpRequired &&
+        uncertainSubmission.payload.followUpNote === currentPayload.followUpNote &&
+        uncertainSubmission.payload.attachmentNotes === currentPayload.attachmentNotes;
+
+      if (!isUnchanged) {
+        setCreateError(
+          "Form values have changed since the unconfirmed submission. Click 'Start New Request' to refresh and generate a new key, or restore original values to retry."
+        );
+        return;
+      }
+    }
+
+    const keyToUse = uncertainSubmission ? uncertainSubmission.key : idempotencyKey;
+
     setCreateSubmitting(true);
     setCreateError(null);
 
     try {
-      const res = await createTicketAction(
-        ticketId,
-        {
-          description: desc,
-          assigneeId: createForm.assigneeId,
-          followUpRequired: createForm.followUpRequired,
-          followUpNote: createForm.followUpRequired ? createForm.followUpNote.trim() : null,
-          attachmentNotes: createForm.attachmentNotes.trim() || null,
-        },
-        idempotencyKey
-      );
+      await createTicketAction(ticketId, currentPayload, keyToUse);
 
       // Successfully saved - reset key for next action
+      setUncertainSubmission(null);
       setIdempotencyKey(crypto.randomUUID());
       setCreateForm({
         description: "",
@@ -253,7 +307,12 @@ export default function ActionsTakenSection({
       await loadActions();
       onActionMutated?.();
     } catch (err: unknown) {
-      // Form values preserved in createForm state!
+      // Snapshot the submitted payload together with its idempotency key
+      setUncertainSubmission({
+        key: keyToUse,
+        payload: currentPayload,
+      });
+
       if (err instanceof ApiError) {
         setCreateError(err.message || "Failed to create action taken.");
       } else {
@@ -264,9 +323,50 @@ export default function ActionsTakenSection({
     }
   }
 
+  async function handleStartNewIntent() {
+    setCreateSubmitting(true);
+    try {
+      await loadActions();
+      onActionMutated?.();
+      setUncertainSubmission(null);
+      setIdempotencyKey(crypto.randomUUID());
+      setCreateError(null);
+    } finally {
+      setCreateSubmitting(false);
+    }
+  }
+
+  function handleRestoreUncertainDraft() {
+    if (!uncertainSubmission) return;
+    setCreateForm({
+      description: uncertainSubmission.payload.description,
+      assigneeId: uncertainSubmission.payload.assigneeId,
+      followUpRequired: uncertainSubmission.payload.followUpRequired,
+      followUpNote: uncertainSubmission.payload.followUpNote || "",
+      attachmentNotes: uncertainSubmission.payload.attachmentNotes || "",
+    });
+    setCreateError(null);
+  }
+
+  function handleDiscardCreateDraft() {
+    setUncertainSubmission(null);
+    setIdempotencyKey(crypto.randomUUID());
+    setCreateForm({
+      description: "",
+      assigneeId: null,
+      followUpRequired: false,
+      followUpNote: "",
+      attachmentNotes: "",
+    });
+    setCreateError(null);
+    setShowCreateModal(false);
+    previousFocus.current?.focus();
+  }
+
   // 2. EDIT ACTION
   function openEditDialog(action: ActionTakenDto) {
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setEditConflict(null);
     setEditTarget({
       actionId: action.id,
       expectedVersion: action.version,
@@ -284,6 +384,7 @@ export default function ActionsTakenSection({
 
   function closeEditDialog() {
     setEditTarget(null);
+    setEditConflict(null);
     setEditError(null);
     previousFocus.current?.focus();
   }
@@ -324,14 +425,17 @@ export default function ActionsTakenSection({
       });
 
       setEditTarget(null);
+      setEditConflict(null);
       previousFocus.current?.focus();
       await loadActions();
       onActionMutated?.();
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 409) {
         setEditError(
-          err.message || "This action was modified by another operation. Please refresh and try again."
+          err.message || "This action was modified by another operation. Version conflict detected."
         );
+        const conflict = await loadFreshActionForConflict(editTarget.actionId);
+        setEditConflict(conflict);
       } else if (err instanceof ApiError) {
         setEditError(err.message || "Failed to update action.");
       } else {
@@ -342,9 +446,35 @@ export default function ActionsTakenSection({
     }
   }
 
+  function handleReapplyEditDraft() {
+    if (!editConflict || !editTarget) return;
+    setEditTarget({
+      ...editTarget,
+      expectedVersion: editConflict.freshAction.version,
+    });
+    setEditConflict(null);
+    setEditError(null);
+  }
+
+  function handleDiscardEditDraft() {
+    if (!editConflict || !editTarget) return;
+    setEditTarget({
+      actionId: editConflict.freshAction.id,
+      expectedVersion: editConflict.freshAction.version,
+      description: editConflict.freshAction.description,
+      assigneeId: editConflict.freshAction.assignee ? editConflict.freshAction.assignee.id : null,
+      followUpRequired: editConflict.freshAction.followUpRequired,
+      followUpNote: editConflict.freshAction.followUpNote || "",
+      attachmentNotes: editConflict.freshAction.attachmentNotes || "",
+    });
+    setEditConflict(null);
+    setEditError(null);
+  }
+
   // 3. COMPLETE ACTION
   function openCompleteDialog(action: ActionTakenDto) {
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setCompleteConflict(null);
     setCompleteTarget({
       actionId: action.id,
       expectedVersion: action.version,
@@ -358,6 +488,7 @@ export default function ActionsTakenSection({
 
   function closeCompleteDialog() {
     setCompleteTarget(null);
+    setCompleteConflict(null);
     setCompleteError(null);
     previousFocus.current?.focus();
   }
@@ -383,14 +514,17 @@ export default function ActionsTakenSection({
       });
 
       setCompleteTarget(null);
+      setCompleteConflict(null);
       previousFocus.current?.focus();
       await loadActions();
       onActionMutated?.();
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 409) {
         setCompleteError(
-          err.message || "This action was modified by another operation. Please refresh and try again."
+          err.message || "This action was modified by another operation. Version conflict detected."
         );
+        const conflict = await loadFreshActionForConflict(completeTarget.actionId);
+        setCompleteConflict(conflict);
       } else if (err instanceof ApiError) {
         setCompleteError(err.message || "Failed to complete action.");
       } else {
@@ -401,9 +535,20 @@ export default function ActionsTakenSection({
     }
   }
 
+  function handleReapplyCompleteDraft() {
+    if (!completeConflict || !completeTarget) return;
+    setCompleteTarget({
+      ...completeTarget,
+      expectedVersion: completeConflict.freshAction.version,
+    });
+    setCompleteConflict(null);
+    setCompleteError(null);
+  }
+
   // 4. CANCEL ACTION
   function openCancelDialog(action: ActionTakenDto) {
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setCancelConflict(null);
     setCancelTarget({
       actionId: action.id,
       expectedVersion: action.version,
@@ -417,6 +562,7 @@ export default function ActionsTakenSection({
 
   function closeCancelDialog() {
     setCancelTarget(null);
+    setCancelConflict(null);
     setCancelError(null);
     previousFocus.current?.focus();
   }
@@ -442,14 +588,17 @@ export default function ActionsTakenSection({
       });
 
       setCancelTarget(null);
+      setCancelConflict(null);
       previousFocus.current?.focus();
       await loadActions();
       onActionMutated?.();
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 409) {
         setCancelError(
-          err.message || "This action was modified by another operation. Please refresh and try again."
+          err.message || "This action was modified by another operation. Version conflict detected."
         );
+        const conflict = await loadFreshActionForConflict(cancelTarget.actionId);
+        setCancelConflict(conflict);
       } else if (err instanceof ApiError) {
         setCancelError(err.message || "Failed to cancel action.");
       } else {
@@ -458,6 +607,16 @@ export default function ActionsTakenSection({
     } finally {
       setCancelSubmitting(false);
     }
+  }
+
+  function handleReapplyCancelDraft() {
+    if (!cancelConflict || !cancelTarget) return;
+    setCancelTarget({
+      ...cancelTarget,
+      expectedVersion: cancelConflict.freshAction.version,
+    });
+    setCancelConflict(null);
+    setCancelError(null);
   }
 
   // 5. AUDIT HISTORY
@@ -847,6 +1006,47 @@ export default function ActionsTakenSection({
               </div>
             )}
 
+            {uncertainSubmission && (
+              <div
+                className="alert alert-warning"
+                role="alert"
+                style={{ marginBottom: "16px", fontSize: "0.88rem" }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: "4px" }}>
+                  Unconfirmed Submission Pending
+                </div>
+                <p style={{ margin: "4px 0" }}>
+                  A previous submission attempt was not confirmed. You may retry sending the exact original request, or start a new request with a fresh key.
+                </p>
+                <div style={{ display: "flex", gap: "8px", marginTop: "8px", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-primary"
+                    onClick={handleStartNewIntent}
+                    disabled={createSubmitting}
+                  >
+                    Start New Request
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={handleRestoreUncertainDraft}
+                    disabled={createSubmitting}
+                  >
+                    Restore Original Draft
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-danger"
+                    onClick={handleDiscardCreateDraft}
+                    disabled={createSubmitting}
+                  >
+                    Discard Draft
+                  </button>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleCreateSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               <div className="form-group">
                 <label htmlFor="create-action-description" className="form-label" style={{ fontWeight: 600 }}>
@@ -1030,6 +1230,81 @@ export default function ActionsTakenSection({
               </div>
             )}
 
+            {editConflict && (
+              <div
+                className="alert alert-warning conflict-review-box"
+                role="alert"
+                style={{ marginBottom: "16px", fontSize: "0.88rem" }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: "4px" }}>
+                  Version Conflict (Action #{editTarget.actionId})
+                </div>
+                {editConflict.isTerminal ? (
+                  <div>
+                    <p style={{ margin: "4px 0" }}>
+                      This action has been marked as <strong>{editConflict.freshAction.status}</strong> by another user and can no longer be edited.
+                    </p>
+                    {editConflict.freshAction.result && (
+                      <p style={{ margin: "4px 0" }}>
+                        <strong>Result:</strong> {editConflict.freshAction.result}
+                      </p>
+                    )}
+                    {editConflict.freshAction.cancellationReason && (
+                      <p style={{ margin: "4px 0" }}>
+                        <strong>Cancellation Reason:</strong> {editConflict.freshAction.cancellationReason}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      style={{ marginTop: "8px" }}
+                      onClick={closeEditDialog}
+                    >
+                      Discard Draft and Close
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ margin: "4px 0" }}>
+                      Action was updated to <strong>Version {editConflict.freshAction.version}</strong>. Your uncommitted draft is preserved below for review.
+                    </p>
+                    <div
+                      style={{
+                        background: "#fff",
+                        border: "1px solid #cbd5e1",
+                        borderRadius: "6px",
+                        padding: "8px",
+                        margin: "8px 0",
+                      }}
+                    >
+                      <div>
+                        <strong>Current Server Description:</strong> {editConflict.freshAction.description}
+                      </div>
+                      <div>
+                        <strong>Your Draft Description:</strong> {editTarget.description}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "8px" }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-warning"
+                        onClick={handleReapplyEditDraft}
+                      >
+                        Reapply My Draft to Version {editConflict.freshAction.version}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={handleDiscardEditDraft}
+                      >
+                        Discard Draft & Use Latest
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <form onSubmit={handleEditSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               <div className="form-group">
                 <label htmlFor="edit-action-description" className="form-label" style={{ fontWeight: 600 }}>
@@ -1149,7 +1424,7 @@ export default function ActionsTakenSection({
                 <button
                   type="submit"
                   className="btn btn-success"
-                  disabled={editSubmitting}
+                  disabled={editSubmitting || editConflict !== null}
                   style={{ minWidth: "120px" }}
                 >
                   {editSubmitting ? "Saving…" : "Save Changes"}
@@ -1210,6 +1485,55 @@ export default function ActionsTakenSection({
               </div>
             )}
 
+            {completeConflict && (
+              <div
+                className="alert alert-warning conflict-review-box"
+                role="alert"
+                style={{ marginBottom: "16px", fontSize: "0.88rem" }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: "4px" }}>
+                  Version Conflict (Action #{completeTarget.actionId})
+                </div>
+                {completeConflict.isTerminal ? (
+                  <div>
+                    <p style={{ margin: "4px 0" }}>
+                      This action has already reached terminal status: <strong>{completeConflict.freshAction.status}</strong>.
+                    </p>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      style={{ marginTop: "8px" }}
+                      onClick={closeCompleteDialog}
+                    >
+                      Discard Draft and Close
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ margin: "4px 0" }}>
+                      Action was modified to <strong>Version {completeConflict.freshAction.version}</strong>. Description: {completeConflict.freshAction.description}
+                    </p>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "8px" }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-warning"
+                        onClick={handleReapplyCompleteDraft}
+                      >
+                        Reapply Completion to Version {completeConflict.freshAction.version}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={closeCompleteDialog}
+                      >
+                        Discard Draft & Close
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <form onSubmit={handleCompleteSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               <div className="form-group">
                 <label htmlFor="complete-action-result" className="form-label" style={{ fontWeight: 600 }}>
@@ -1243,7 +1567,7 @@ export default function ActionsTakenSection({
                 <button
                   type="submit"
                   className="btn btn-success"
-                  disabled={completeSubmitting}
+                  disabled={completeSubmitting || completeConflict !== null}
                   style={{ minWidth: "140px" }}
                 >
                   {completeSubmitting ? "Completing…" : "Confirm Completion"}
@@ -1304,6 +1628,55 @@ export default function ActionsTakenSection({
               </div>
             )}
 
+            {cancelConflict && (
+              <div
+                className="alert alert-warning conflict-review-box"
+                role="alert"
+                style={{ marginBottom: "16px", fontSize: "0.88rem" }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: "4px" }}>
+                  Version Conflict (Action #{cancelTarget.actionId})
+                </div>
+                {cancelConflict.isTerminal ? (
+                  <div>
+                    <p style={{ margin: "4px 0" }}>
+                      This action has already reached terminal status: <strong>{cancelConflict.freshAction.status}</strong>.
+                    </p>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      style={{ marginTop: "8px" }}
+                      onClick={closeCancelDialog}
+                    >
+                      Discard Draft and Close
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ margin: "4px 0" }}>
+                      Action was modified to <strong>Version {cancelConflict.freshAction.version}</strong>. Description: {cancelConflict.freshAction.description}
+                    </p>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "8px" }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-warning"
+                        onClick={handleReapplyCancelDraft}
+                      >
+                        Reapply Cancellation to Version {cancelConflict.freshAction.version}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={closeCancelDialog}
+                      >
+                        Discard Draft & Close
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <form onSubmit={handleCancelSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               <div className="form-group">
                 <label htmlFor="cancel-action-reason" className="form-label" style={{ fontWeight: 600 }}>
@@ -1337,7 +1710,7 @@ export default function ActionsTakenSection({
                 <button
                   type="submit"
                   className="btn btn-outline-danger"
-                  disabled={cancelSubmitting}
+                  disabled={cancelSubmitting || cancelConflict !== null}
                   style={{ minWidth: "150px" }}
                 >
                   {cancelSubmitting ? "Cancelling…" : "Confirm Cancellation"}

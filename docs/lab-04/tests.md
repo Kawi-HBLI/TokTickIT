@@ -139,7 +139,7 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 | `TEST-MIGR-01` | Populated Migration | Apply Lab 4 Prisma migration on a database populated with Lab 3 users, tickets, attachments, comments, and notes. | Migration succeeds cleanly; 100% of existing rows and relationships remain intact. | Passed |
 | `TEST-MIGR-02` | Seed Idempotency | Execute `prisma db seed` three consecutive times on the migrated database. | Seed completes without unique constraint violations or duplicate tickets/actions. | Passed |
 | `TEST-MIGR-03` | Sequence Collision-Free Allocation | Verify sequence state (`last_value`, `is_called`) on `ActionTaken` and `ActionTakenHistory` sequences, ensuring subsequent allocations are collision-free. | Sequences advance cleanly; subsequent allocations generate strictly increasing unique IDs. | Passed |
-| `TEST-RECOV-01` | Recovery Rehearsal in Disposable DB | Precondition: Database contains populated Lab 4 actions and history. Dump using `pg_dump --format=custom --file=...`. Restore into separate disposable test database (`toktickit_recovery_test`) using `pg_restore`. | 100% table row counts match source; foreign keys, sequence state (`last_value`/`is_called` with collision-free subsequent allocation), and trigger immutability verified. | Passed |
+| `TEST-RECOV-01` | Recovery Rehearsal in Disposable DB | Precondition: Database contains populated Lab 4 actions and history. Dump using `pg_dump --format=custom --file=...`. Restore into separate disposable test database (`toktickit_recovery_test`) using `pg_restore`. | 100% table row counts match source; foreign keys, sequence state (`last_value`/`is_called` with collision-free subsequent allocation), and trigger immutability verified. | Planned |
 
 ---
 
@@ -147,12 +147,12 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 
 | Test ID | Component | Scenario | Expected DOM / Interaction Behavior | Status |
 | :--- | :--- | :--- | :--- | :---: |
-| `TEST-UI-01` | `ActionsTaken.test.tsx` | Renders actions list with mixed statuses. | Correct Zen Green badge colors, clock icon for pending, checkmark for completed. | Passed |
-| `TEST-UI-02` | `ActionsTaken.test.tsx` | Staff opens "Complete Action" modal, submits empty result. | In-modal error displayed; submit disabled or rejected; modal remains open and entered text preserved. | Passed |
-| `TEST-UI-03` | `ActionsTaken.test.tsx` | Staff opens "Complete Action" modal, submits valid result string. | Submit enters pending disabled state with spinner; successfully completes; closes modal; refreshes list. | Passed |
-| `TEST-UI-04` | `ActionsTaken.test.tsx` | Staff opens "Cancel Action" modal, submits valid reason. | Button enters pending disabled state; submits payload; closes modal; refreshes list. | Passed |
-| `TEST-UI-05` | `ActionsTaken.test.tsx` | Modal focus management: open modal, press Tab, press Escape. | Focus is trapped inside modal; pressing Escape closes modal and restores focus to trigger button. | Passed |
-| `TEST-UI-06` | `ActionsTaken.test.tsx` | Renders Actions Taken panel for Requester role. | Edit, complete, cancel, and add buttons are absent; read-only text is rendered. | Passed |
+| `TEST-UI-01` | `ActionsTakenSection.test.tsx` | Renders actions list with mixed statuses. | Correct Zen Green badge colors, clock icon for pending, checkmark for completed. | Passed |
+| `TEST-UI-02` | `ActionsTakenSection.test.tsx` | Staff opens "Complete Action" modal, submits empty result. | In-modal error displayed; submit disabled or rejected; modal remains open and entered text preserved. | Passed |
+| `TEST-UI-03` | `ActionsTakenSection.test.tsx` | Staff opens "Complete Action" modal, submits valid result string. | Submit enters pending disabled state with spinner; successfully completes; closes modal; refreshes list. | Passed |
+| `TEST-UI-04` | `ActionsTakenSection.test.tsx` | Staff opens "Cancel Action" modal, submits valid reason. | Button enters pending disabled state; submits payload; closes modal; refreshes list. | Passed |
+| `TEST-UI-05` | `ActionsTakenSection.test.tsx` | Modal focus management: open modal, press Tab, press Escape. | Focus is trapped inside modal; pressing Escape closes modal and restores focus to trigger button. | Passed |
+| `TEST-UI-06` | `ActionsTakenSection.test.tsx` | Renders Actions Taken panel for Requester role. | Edit, complete, cancel, and add buttons are absent; read-only text is rendered. | Passed |
 | `TEST-UI-07` | `TicketWorkflow.test.tsx` | Staff selects `RESOLVED` on ticket with pending actions. | Red alert banner renders with `role="alert"` explaining missing prerequisites. | Passed |
 | `TEST-UI-08` | `StaffDashboard.test.tsx` | Renders 4 metric cards and drill-down links. | Cards display formatted counts; clicking "Unassigned Queue" navigates to `/staff/tickets?owner=unassigned&statusGroup=active`. | Planned |
 | `TEST-UI-09` | `RequesterDashboard.test.tsx`| Renders requester summary cards and recent activity. | Displays active ticket counts; clicking "Awaiting Input" navigates to `/tickets?status=WAITING_FOR_REQUESTER`. | Planned |
@@ -163,8 +163,8 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 
 | Test ID | File | Scenario & User Journey | Expected Browser Behavior | Status |
 | :--- | :--- | :--- | :--- | :---: |
-| `TEST-E2E-01` | `actions-taken-flow.spec.ts` | Complete Actions Taken lifecycle: Staff logs in, opens ticket, adds action, assigns to teammate, edits note, completes with result. | All steps update UI in real time; audit history drawer reflects all transitions. | Passed |
-| `TEST-E2E-02` | `ticket-resolution.spec.ts` | Resolution gate enforcement: Staff attempts to resolve ticket with pending action $\rightarrow$ blocked; completes action $\rightarrow$ resolution succeeds. | UI displays gate error banner; once criteria satisfied, ticket status transitions to `RESOLVED`. | Passed |
+| `TEST-E2E-01` | `actions-workflow.spec.ts` | Complete Actions Taken lifecycle: Staff logs in, opens ticket, adds action, assigns to teammate, edits note, completes with result. | All steps update UI in real time; audit history drawer reflects all transitions. | Passed |
+| `TEST-E2E-02` | `actions-workflow.spec.ts` | Resolution gate enforcement: Staff attempts to resolve ticket with pending action $\rightarrow$ blocked; completes action $\rightarrow$ resolution succeeds. | UI displays gate error banner; once criteria satisfied, ticket status transitions to `RESOLVED`. | Passed |
 | `TEST-E2E-03` | `dashboards.spec.ts` | Role dashboard journeys & drill-down: Staff clicks "Unassigned Queue" card $\rightarrow$ arrives at filtered queue; Requester clicks "Awaiting Input" $\rightarrow$ arrives at My Tickets with filtered status. | URL parameters populate correctly and table renders filtered results. Back/Forward navigation works. | Planned |
 | `TEST-E2E-04` | `dashboards.spec.ts` | Responsive reflow test at 375px, 768px, and 1280px viewports. | Zero horizontal scrollbars; cards reflow vertically; tap targets meet minimum 44px size. | Planned |
 | `TEST-E2E-05` | `dashboards.spec.ts` | WCAG 1.4.10 400% Zoom Reflow Check at 320px equivalent width. | Content reflows into single column without horizontal document scroll and with zero clipped content. | Planned |
