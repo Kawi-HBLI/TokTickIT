@@ -151,9 +151,13 @@ ticketActionsRouter.post("/", requireStaff, requireCsrf, async (req: Request, re
     }
 
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const rawDesc = typeof body.description === "string" ? body.description.trim() : "";
-    if (rawDesc.length < 3 || rawDesc.length > 4000) {
-      res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Description must be between 3 and 4,000 characters." } });
+    if (typeof body.description !== "string") {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Description is required." } });
+      return;
+    }
+    const rawDesc = body.description.trim();
+    if (rawDesc.length < 5 || rawDesc.length > 2000) {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Description must be between 5 and 2,000 characters." } });
       return;
     }
 
@@ -166,28 +170,63 @@ ticketActionsRouter.post("/", requireStaff, requireCsrf, async (req: Request, re
       assigneeId = body.assigneeId;
     }
 
-    const followUpRequired = Boolean(body.followUpRequired);
-    const rawFollowUpNote = typeof body.followUpNote === "string" ? body.followUpNote.trim() : null;
-    const followUpNote = rawFollowUpNote && rawFollowUpNote.length > 0 ? rawFollowUpNote : null;
+    let followUpRequired = false;
+    if (body.followUpRequired !== undefined) {
+      if (typeof body.followUpRequired !== "boolean") {
+        res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "followUpRequired must be a boolean." } });
+        return;
+      }
+      followUpRequired = body.followUpRequired;
+    }
+
+    let followUpNote: string | null = null;
+    if (body.followUpNote !== undefined && body.followUpNote !== null) {
+      if (typeof body.followUpNote !== "string") {
+        res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Follow-up note must be a string." } });
+        return;
+      }
+      const trimmedFollowUp = body.followUpNote.trim();
+      if (trimmedFollowUp.length > 1000) {
+        res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Follow-up note must not exceed 1,000 characters." } });
+        return;
+      }
+      followUpNote = trimmedFollowUp.length > 0 ? trimmedFollowUp : null;
+    }
 
     if (followUpRequired && !followUpNote) {
       res.status(422).json({ error: { code: "FOLLOW_UP_NOTE_REQUIRED", message: "A follow-up note is required when followUpRequired is true." } });
       return;
     }
-    if (followUpNote && followUpNote.length > 2000) {
-      res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Follow-up note must not exceed 2,000 characters." } });
-      return;
+    if (!followUpRequired) {
+      followUpNote = null;
     }
 
-    const rawAttachmentNotes = typeof body.attachmentNotes === "string" ? body.attachmentNotes.trim() : null;
-    const attachmentNotes = rawAttachmentNotes && rawAttachmentNotes.length > 0 ? rawAttachmentNotes : null;
-    if (attachmentNotes && attachmentNotes.length > 2000) {
-      res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Attachment notes must not exceed 2,000 characters." } });
-      return;
+    let attachmentNotes: string | null = null;
+    if (body.attachmentNotes !== undefined && body.attachmentNotes !== null) {
+      if (typeof body.attachmentNotes !== "string") {
+        res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Attachment notes must be a string." } });
+        return;
+      }
+      const trimmedAttachment = body.attachmentNotes.trim();
+      if (trimmedAttachment.length > 1000) {
+        res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Attachment notes must not exceed 1,000 characters." } });
+        return;
+      }
+      attachmentNotes = trimmedAttachment.length > 0 ? trimmedAttachment : null;
     }
 
-    const rawIdempotencyKey = req.get("Idempotency-Key") || (typeof body.idempotencyKey === "string" ? body.idempotencyKey : null);
-    const idempotencyKey = rawIdempotencyKey ? rawIdempotencyKey.trim() : null;
+    let idempotencyKey: string | null = null;
+    const headerKey = req.get("Idempotency-Key");
+    if (headerKey) {
+      idempotencyKey = headerKey.trim();
+    } else if (body.idempotencyKey !== undefined && body.idempotencyKey !== null) {
+      if (typeof body.idempotencyKey !== "string") {
+        res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Idempotency key must be a string." } });
+        return;
+      }
+      const trimmedKey = body.idempotencyKey.trim();
+      idempotencyKey = trimmedKey.length > 0 ? trimmedKey : null;
+    }
 
     const normalizedPayload = {
       assigneeId,
@@ -440,19 +479,23 @@ actionsRouter.patch("/:id", requireStaff, requireCsrf, async (req: Request, res:
       }
 
       // Validate description if provided
-      let newDescription = existing.description;
+      let finalDesc = existing.description;
       if (body.description !== undefined) {
-        if (typeof body.description !== "string" || body.description.trim().length < 3 || body.description.trim().length > 4000) {
-          return { status: 400, body: { error: { code: "VALIDATION_ERROR", message: "Description must be between 3 and 4,000 characters." } } };
+        if (typeof body.description !== "string") {
+          return { status: 400, body: { error: { code: "VALIDATION_ERROR", message: "Description must be a string." } } };
         }
-        newDescription = body.description.trim();
+        const trimmed = body.description.trim();
+        if (trimmed.length < 5 || trimmed.length > 2000) {
+          return { status: 400, body: { error: { code: "VALIDATION_ERROR", message: "Description must be between 5 and 2,000 characters." } } };
+        }
+        finalDesc = trimmed;
       }
 
       // Validate assigneeId if provided
-      let newAssigneeId = existing.assigneeId;
+      let finalAssigneeId = existing.assigneeId;
       if (body.assigneeId !== undefined) {
         if (body.assigneeId === null) {
-          newAssigneeId = null;
+          finalAssigneeId = null;
         } else if (typeof body.assigneeId === "number" && Number.isInteger(body.assigneeId) && body.assigneeId > 0) {
           const assignee = await tx.user.findUnique({
             where: { id: body.assigneeId },
@@ -469,63 +512,88 @@ actionsRouter.patch("/:id", requireStaff, requireCsrf, async (req: Request, res:
               },
             };
           }
-          newAssigneeId = assignee.id;
+          finalAssigneeId = assignee.id;
         } else {
           return { status: 400, body: { error: { code: "VALIDATION_ERROR", message: "Assignee ID must be a positive integer or null." } } };
         }
       }
 
-      // Validate follow-up
-      let newFollowUpRequired = existing.followUpRequired;
-      let newFollowUpNote = existing.followUpNote;
+      // Validate followUpRequired if provided
+      let finalFollowUpRequired = existing.followUpRequired;
       if (body.followUpRequired !== undefined) {
-        newFollowUpRequired = Boolean(body.followUpRequired);
-      }
-      if (body.followUpNote !== undefined) {
-        const raw = typeof body.followUpNote === "string" ? body.followUpNote.trim() : null;
-        newFollowUpNote = raw && raw.length > 0 ? raw : null;
-      }
-      if (newFollowUpRequired && !newFollowUpNote) {
-        return {
-          status: 422,
-          body: {
-            error: {
-              code: "FOLLOW_UP_NOTE_REQUIRED",
-              message: "A follow-up note is required when followUpRequired is true.",
-            },
-          },
-        };
-      }
-      if (newFollowUpNote && newFollowUpNote.length > 2000) {
-        return { status: 400, body: { error: { code: "VALIDATION_ERROR", message: "Follow-up note must not exceed 2,000 characters." } } };
+        if (typeof body.followUpRequired !== "boolean") {
+          return { status: 400, body: { error: { code: "VALIDATION_ERROR", message: "followUpRequired must be a boolean." } } };
+        }
+        finalFollowUpRequired = body.followUpRequired;
       }
 
-      // Validate attachmentNotes
-      let newAttachmentNotes = existing.attachmentNotes;
+      // Validate followUpNote if provided
+      let newFollowUpNote = existing.followUpNote;
+      if (body.followUpNote !== undefined) {
+        if (body.followUpNote === null) {
+          newFollowUpNote = null;
+        } else if (typeof body.followUpNote === "string") {
+          const trimmedNote = body.followUpNote.trim();
+          if (trimmedNote.length > 1000) {
+            return { status: 400, body: { error: { code: "VALIDATION_ERROR", message: "Follow-up note must not exceed 1,000 characters." } } };
+          }
+          newFollowUpNote = trimmedNote.length > 0 ? trimmedNote : null;
+        } else {
+          return { status: 400, body: { error: { code: "VALIDATION_ERROR", message: "Follow-up note must be a string or null." } } };
+        }
+      }
+
+      // Follow-up consistency normalization: when followUpRequired is false, normalize followUpNote to null
+      let finalFollowUpNote: string | null;
+      if (!finalFollowUpRequired) {
+        finalFollowUpNote = null;
+      } else {
+        finalFollowUpNote = newFollowUpNote;
+        if (!finalFollowUpNote) {
+          return {
+            status: 422,
+            body: {
+              error: {
+                code: "FOLLOW_UP_NOTE_REQUIRED",
+                message: "A follow-up note is required when followUpRequired is true.",
+              },
+            },
+          };
+        }
+      }
+
+      // Validate attachmentNotes if provided
+      let finalAttachmentNotes = existing.attachmentNotes;
       if (body.attachmentNotes !== undefined) {
-        const raw = typeof body.attachmentNotes === "string" ? body.attachmentNotes.trim() : null;
-        newAttachmentNotes = raw && raw.length > 0 ? raw : null;
-        if (newAttachmentNotes && newAttachmentNotes.length > 2000) {
-          return { status: 400, body: { error: { code: "VALIDATION_ERROR", message: "Attachment notes must not exceed 2,000 characters." } } };
+        if (body.attachmentNotes === null) {
+          finalAttachmentNotes = null;
+        } else if (typeof body.attachmentNotes === "string") {
+          const trimmedAttachment = body.attachmentNotes.trim();
+          if (trimmedAttachment.length > 1000) {
+            return { status: 400, body: { error: { code: "VALIDATION_ERROR", message: "Attachment notes must not exceed 1,000 characters." } } };
+          }
+          finalAttachmentNotes = trimmedAttachment.length > 0 ? trimmedAttachment : null;
+        } else {
+          return { status: 400, body: { error: { code: "VALIDATION_ERROR", message: "Attachment notes must be a string or null." } } };
         }
       }
 
       // Check what changed
       const changes: Record<string, any> = {};
-      if (newDescription !== existing.description) {
-        changes.description = { before: existing.description, after: newDescription };
+      if (finalDesc !== existing.description) {
+        changes.description = { before: existing.description, after: finalDesc };
       }
-      if (newAssigneeId !== existing.assigneeId) {
-        changes.assignee = { beforeId: existing.assigneeId, afterId: newAssigneeId };
+      if (finalAssigneeId !== existing.assigneeId) {
+        changes.assignee = { beforeId: existing.assigneeId, afterId: finalAssigneeId };
       }
-      if (newFollowUpRequired !== existing.followUpRequired) {
-        changes.followUpRequired = { before: existing.followUpRequired, after: newFollowUpRequired };
+      if (finalFollowUpRequired !== existing.followUpRequired) {
+        changes.followUpRequired = { before: existing.followUpRequired, after: finalFollowUpRequired };
       }
-      if (newFollowUpNote !== existing.followUpNote) {
-        changes.followUpNote = { before: existing.followUpNote, after: newFollowUpNote };
+      if (finalFollowUpNote !== existing.followUpNote) {
+        changes.followUpNote = { before: existing.followUpNote, after: finalFollowUpNote };
       }
-      if (newAttachmentNotes !== existing.attachmentNotes) {
-        changes.attachmentNotes = { before: existing.attachmentNotes, after: newAttachmentNotes };
+      if (finalAttachmentNotes !== existing.attachmentNotes) {
+        changes.attachmentNotes = { before: existing.attachmentNotes, after: finalAttachmentNotes };
       }
 
       const onlyAssigneeChanged = Object.keys(changes).length === 1 && "assignee" in changes;
@@ -535,11 +603,11 @@ actionsRouter.patch("/:id", requireStaff, requireCsrf, async (req: Request, res:
       const updated = await tx.actionTaken.update({
         where: { id: actionId },
         data: {
-          description: newDescription,
-          assigneeId: newAssigneeId,
-          followUpRequired: newFollowUpRequired,
-          followUpNote: newFollowUpRequired ? newFollowUpNote : null,
-          attachmentNotes: newAttachmentNotes,
+          description: finalDesc,
+          assigneeId: finalAssigneeId,
+          followUpRequired: finalFollowUpRequired,
+          followUpNote: finalFollowUpNote,
+          attachmentNotes: finalAttachmentNotes,
           version: newVersion,
         },
         include: {

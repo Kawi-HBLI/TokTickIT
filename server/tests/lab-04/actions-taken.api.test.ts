@@ -266,23 +266,111 @@ describe("Actions Taken API (server/tests/lab-04/actions-taken.api.test.ts)", ()
       expect(historyRes.body.data.items[0].actor.id).toBe(staffA.id);
     });
 
-    it("Rejects creation with description < 3 characters or > 4000 characters", async () => {
+    it("Enforces description length of 5–2,000 characters (positive & negative boundaries)", async () => {
       const staffSession = await createTestSession(db, staffA.id);
+
+      // Negative boundary: 4 characters
       const resShort = await request(app)
         .post(`/api/tickets/${openTicketId}/actions`)
         .set("Cookie", staffSession.cookie)
         .set("X-CSRF-Token", staffSession.csrfToken)
-        .send({ description: "ab" });
+        .send({ description: "1234" });
       expect(resShort.status).toBe(400);
       expect(resShort.body.error.code).toBe("VALIDATION_ERROR");
 
+      // Negative boundary: 2,001 characters
       const resLong = await request(app)
         .post(`/api/tickets/${openTicketId}/actions`)
         .set("Cookie", staffSession.cookie)
         .set("X-CSRF-Token", staffSession.csrfToken)
-        .send({ description: "a".repeat(4001) });
+        .send({ description: "a".repeat(2001) });
       expect(resLong.status).toBe(400);
       expect(resLong.body.error.code).toBe("VALIDATION_ERROR");
+
+      // Positive boundary: exactly 5 characters
+      const resMinValid = await request(app)
+        .post(`/api/tickets/${openTicketId}/actions`)
+        .set("Cookie", staffSession.cookie)
+        .set("X-CSRF-Token", staffSession.csrfToken)
+        .send({ description: "12345" });
+      expect(resMinValid.status).toBe(201);
+      expect(resMinValid.body.data.description).toBe("12345");
+
+      // Positive boundary: exactly 2,000 characters
+      const maxDesc = "b".repeat(2000);
+      const resMaxValid = await request(app)
+        .post(`/api/tickets/${openTicketId}/actions`)
+        .set("Cookie", staffSession.cookie)
+        .set("X-CSRF-Token", staffSession.csrfToken)
+        .send({ description: maxDesc });
+      expect(resMaxValid.status).toBe(201);
+      expect(resMaxValid.body.data.description).toBe(maxDesc);
+    });
+
+    it("Rejects invalid field types and enforces 1,000 char maximum for followUpNote and attachmentNotes", async () => {
+      const staffSession = await createTestSession(db, staffA.id);
+
+      // Rejects non-boolean followUpRequired (string, number, array, object, null)
+      for (const invalidBool of ["true", 1, null, [true], { required: true }]) {
+        const resBool = await request(app)
+          .post(`/api/tickets/${openTicketId}/actions`)
+          .set("Cookie", staffSession.cookie)
+          .set("X-CSRF-Token", staffSession.csrfToken)
+          .send({ description: "Valid action description", followUpRequired: invalidBool });
+        expect(resBool.status).toBe(400);
+        expect(resBool.body.error.code).toBe("VALIDATION_ERROR");
+      }
+
+      // Rejects followUpNote > 1,000 characters
+      const resLongFollowUp = await request(app)
+        .post(`/api/tickets/${openTicketId}/actions`)
+        .set("Cookie", staffSession.cookie)
+        .set("X-CSRF-Token", staffSession.csrfToken)
+        .send({ description: "Valid action description", followUpRequired: true, followUpNote: "f".repeat(1001) });
+      expect(resLongFollowUp.status).toBe(400);
+      expect(resLongFollowUp.body.error.code).toBe("VALIDATION_ERROR");
+
+      // Rejects non-string followUpNote
+      const resNonStrFollowUp = await request(app)
+        .post(`/api/tickets/${openTicketId}/actions`)
+        .set("Cookie", staffSession.cookie)
+        .set("X-CSRF-Token", staffSession.csrfToken)
+        .send({ description: "Valid action description", followUpRequired: true, followUpNote: 12345 });
+      expect(resNonStrFollowUp.status).toBe(400);
+      expect(resNonStrFollowUp.body.error.code).toBe("VALIDATION_ERROR");
+
+      // Rejects attachmentNotes > 1,000 characters
+      const resLongAttachment = await request(app)
+        .post(`/api/tickets/${openTicketId}/actions`)
+        .set("Cookie", staffSession.cookie)
+        .set("X-CSRF-Token", staffSession.csrfToken)
+        .send({ description: "Valid action description", attachmentNotes: "n".repeat(1001) });
+      expect(resLongAttachment.status).toBe(400);
+      expect(resLongAttachment.body.error.code).toBe("VALIDATION_ERROR");
+
+      // Rejects non-string attachmentNotes
+      const resNonStrAttachment = await request(app)
+        .post(`/api/tickets/${openTicketId}/actions`)
+        .set("Cookie", staffSession.cookie)
+        .set("X-CSRF-Token", staffSession.csrfToken)
+        .send({ description: "Valid action description", attachmentNotes: ["note1"] });
+      expect(resNonStrAttachment.status).toBe(400);
+      expect(resNonStrAttachment.body.error.code).toBe("VALIDATION_ERROR");
+
+      // Positive boundaries: 1,000 chars for followUpNote and attachmentNotes
+      const resValidNotes = await request(app)
+        .post(`/api/tickets/${openTicketId}/actions`)
+        .set("Cookie", staffSession.cookie)
+        .set("X-CSRF-Token", staffSession.csrfToken)
+        .send({
+          description: "Action with max notes",
+          followUpRequired: true,
+          followUpNote: "f".repeat(1000),
+          attachmentNotes: "a".repeat(1000),
+        });
+      expect(resValidNotes.status).toBe(201);
+      expect(resValidNotes.body.data.followUpNote).toBe("f".repeat(1000));
+      expect(resValidNotes.body.data.attachmentNotes).toBe("a".repeat(1000));
     });
 
     it("Rejects inactive assignee or assignee with REQUESTER role (422 INVALID_ACTION_ASSIGNEE)", async () => {
@@ -555,6 +643,98 @@ describe("Actions Taken API (server/tests/lab-04/actions-taken.api.test.ts)", ()
 
       expect(staleRes.status).toBe(409);
       expect(staleRes.body.error.code).toBe("ACTION_VERSION_CONFLICT");
+    });
+  });
+
+  describe("Follow-Up Audit Consistency & Normalization (Defect 1)", () => {
+    it("Disabling followUpRequired normalizes followUpNote to null and logs accurate history audit", async () => {
+      const sessionA = await createTestSession(db, staffA.id);
+
+      // 1. Create an Action with follow-up required and a note
+      const createRes = await request(app)
+        .post(`/api/tickets/${openTicketId}/actions`)
+        .set("Cookie", sessionA.cookie)
+        .set("X-CSRF-Token", sessionA.csrfToken)
+        .send({
+          description: "Follow-up audit consistency test action",
+          followUpRequired: true,
+          followUpNote: "Call vendor tomorrow morning",
+        });
+
+      expect(createRes.status).toBe(201);
+      const actionId = createRes.body.data.id;
+      expect(createRes.body.data.followUpRequired).toBe(true);
+      expect(createRes.body.data.followUpNote).toBe("Call vendor tomorrow morning");
+
+      // 2. Disable follow-up without submitting replacement note
+      const editRes1 = await request(app)
+        .patch(`/api/actions/${actionId}`)
+        .set("Cookie", sessionA.cookie)
+        .set("X-CSRF-Token", sessionA.csrfToken)
+        .send({
+          version: 1,
+          followUpRequired: false,
+        });
+
+      expect(editRes1.status).toBe(200);
+      expect(editRes1.body.data.followUpRequired).toBe(false);
+      expect(editRes1.body.data.followUpNote).toBeNull();
+
+      // Check database row
+      const dbAction1 = await db.actionTaken.findUniqueOrThrow({ where: { id: actionId } });
+      expect(dbAction1.followUpRequired).toBe(false);
+      expect(dbAction1.followUpNote).toBeNull();
+
+      // Check history records
+      const historyRes1 = await request(app)
+        .get(`/api/actions/${actionId}/history`)
+        .set("Cookie", sessionA.cookie);
+
+      expect(historyRes1.status).toBe(200);
+      expect(historyRes1.body.data.total).toBe(2);
+      const updateHistory1 = historyRes1.body.data.items[1];
+      expect(updateHistory1.eventType).toBe("UPDATED");
+      expect(updateHistory1.changes.followUpRequired).toEqual({ before: true, after: false });
+      expect(updateHistory1.changes.followUpNote).toEqual({ before: "Call vendor tomorrow morning", after: null });
+
+      // 3. Re-enable follow-up with new note
+      const editRes2 = await request(app)
+        .patch(`/api/actions/${actionId}`)
+        .set("Cookie", sessionA.cookie)
+        .set("X-CSRF-Token", sessionA.csrfToken)
+        .send({
+          version: 2,
+          followUpRequired: true,
+          followUpNote: "Active follow up note v2",
+        });
+      expect(editRes2.status).toBe(200);
+
+      // 4. Disable follow-up while supplying a replacement note (which must be normalized to null)
+      const editRes3 = await request(app)
+        .patch(`/api/actions/${actionId}`)
+        .set("Cookie", sessionA.cookie)
+        .set("X-CSRF-Token", sessionA.csrfToken)
+        .send({
+          version: 3,
+          followUpRequired: false,
+          followUpNote: "Supplied note that should become null",
+        });
+
+      expect(editRes3.status).toBe(200);
+      expect(editRes3.body.data.followUpRequired).toBe(false);
+      expect(editRes3.body.data.followUpNote).toBeNull();
+
+      const dbAction3 = await db.actionTaken.findUniqueOrThrow({ where: { id: actionId } });
+      expect(dbAction3.followUpRequired).toBe(false);
+      expect(dbAction3.followUpNote).toBeNull();
+
+      const historyRes3 = await request(app)
+        .get(`/api/actions/${actionId}/history`)
+        .set("Cookie", sessionA.cookie);
+
+      const updateHistory3 = historyRes3.body.data.items[3];
+      expect(updateHistory3.changes.followUpRequired).toEqual({ before: true, after: false });
+      expect(updateHistory3.changes.followUpNote).toEqual({ before: "Active follow up note v2", after: null });
     });
   });
 

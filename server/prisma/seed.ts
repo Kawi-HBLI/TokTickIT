@@ -18,7 +18,9 @@ import {
 type SeedClient = Pick<
   PrismaClient,
   "category" | "relatedSystem" | "user" | "ticket" | "publicComment" | "internalNote" | "actionTaken" | "actionTakenHistory"
->;
+> & {
+  $transaction?: PrismaClient["$transaction"];
+};
 
 export interface SeedOptions {
   seedActions?: boolean;
@@ -142,75 +144,98 @@ export async function seedDatabase(prisma: SeedClient, options?: SeedOptions): P
 
       if (!existing) {
         const now = new Date();
-        const created = await prisma.actionTaken.create({
-          data: {
-            ticketId: ticket.id,
-            idempotencyKey: fixture.idempotencyKey,
-            createdById: creator.id,
-            assigneeId: assignee?.id ?? null,
-            completedById: completedBy?.id ?? null,
-            status: fixture.status,
-            description: fixture.description,
-            result: fixture.result ?? null,
-            cancellationReason: fixture.cancellationReason ?? null,
-            followUpRequired: fixture.followUpRequired ?? false,
-            followUpNote: fixture.followUpNote ?? null,
-            attachmentNotes: fixture.attachmentNotes ?? null,
-            completedAt: fixture.status === "COMPLETED" ? now : null,
-            cancelledAt: fixture.status === "CANCELLED" ? now : null,
-          },
-          select: { id: true },
-        });
+        const finalVersion = fixture.status === "PENDING" ? 1 : 2;
+        const normalizedFollowUpNote = fixture.followUpRequired ? (fixture.followUpNote ?? null) : null;
 
-        await prisma.actionTakenHistory.create({
-          data: {
-            actionId: created.id,
-            ticketId: ticket.id,
-            actorId: creator.id,
-            eventType: "CREATED",
-            version: 1,
-            snapshot: {
-              status: "PENDING",
-              description: fixture.description,
-              assigneeId: assignee?.id ?? null,
-              followUpRequired: fixture.followUpRequired ?? false,
-              followUpNote: fixture.followUpNote ?? null,
-            },
-          },
-        });
+        const runInTx = typeof prisma.$transaction === "function"
+          ? (fn: (tx: any) => Promise<void>) => prisma.$transaction!(fn)
+          : (fn: (tx: any) => Promise<void>) => fn(prisma);
 
-        if (fixture.status === "COMPLETED" && completedBy) {
-          await prisma.actionTakenHistory.create({
+        await runInTx(async (tx: any) => {
+          const created = await tx.actionTaken.create({
             data: {
-              actionId: created.id,
               ticketId: ticket.id,
-              actorId: completedBy.id,
-              eventType: "COMPLETED",
-              version: 2,
-              snapshot: {
-                status: "COMPLETED",
-                result: fixture.result,
-                completedById: completedBy.id,
-              },
+              idempotencyKey: fixture.idempotencyKey,
+              createdById: creator.id,
+              assigneeId: assignee?.id ?? null,
+              completedById: completedBy?.id ?? null,
+              status: fixture.status,
+              description: fixture.description,
+              result: fixture.result ?? null,
+              cancellationReason: fixture.cancellationReason ?? null,
+              followUpRequired: fixture.followUpRequired ?? false,
+              followUpNote: normalizedFollowUpNote,
+              attachmentNotes: fixture.attachmentNotes ?? null,
+              completedAt: fixture.status === "COMPLETED" ? now : null,
+              cancelledAt: fixture.status === "CANCELLED" ? now : null,
+              version: finalVersion,
             },
+            select: { id: true },
           });
-        }
 
-        if (fixture.status === "CANCELLED") {
-          await prisma.actionTakenHistory.create({
+          await tx.actionTakenHistory.create({
             data: {
               actionId: created.id,
               ticketId: ticket.id,
               actorId: creator.id,
-              eventType: "CANCELLED",
-              version: 2,
+              eventType: "CREATED",
+              version: 1,
               snapshot: {
-                status: "CANCELLED",
-                cancellationReason: fixture.cancellationReason,
+                changes: {
+                  description: { before: null, after: fixture.description },
+                  status: { before: null, after: "PENDING" },
+                  assignee: { beforeId: null, afterId: assignee?.id ?? null },
+                  followUpRequired: { before: null, after: fixture.followUpRequired ?? false },
+                  followUpNote: { before: null, after: normalizedFollowUpNote },
+                  attachmentNotes: { before: null, after: fixture.attachmentNotes ?? null },
+                },
+                versionBefore: null,
+                versionAfter: 1,
               },
             },
           });
-        }
+
+          if (fixture.status === "COMPLETED" && completedBy) {
+            await tx.actionTakenHistory.create({
+              data: {
+                actionId: created.id,
+                ticketId: ticket.id,
+                actorId: completedBy.id,
+                eventType: "COMPLETED",
+                version: 2,
+                snapshot: {
+                  changes: {
+                    status: { before: "PENDING", after: "COMPLETED" },
+                    result: { before: null, after: fixture.result },
+                    completedBy: { beforeId: null, afterId: completedBy.id },
+                  },
+                  versionBefore: 1,
+                  versionAfter: 2,
+                },
+              },
+            });
+          }
+
+          if (fixture.status === "CANCELLED") {
+            await tx.actionTakenHistory.create({
+              data: {
+                actionId: created.id,
+                ticketId: ticket.id,
+                actorId: creator.id,
+                eventType: "CANCELLED",
+                version: 2,
+                snapshot: {
+                  changes: {
+                    status: { before: "PENDING", after: "CANCELLED" },
+                    cancellationReason: { before: null, after: fixture.cancellationReason },
+                  },
+                  versionBefore: 1,
+                  versionAfter: 2,
+                },
+              },
+            });
+          }
+        });
       }
     }
   }

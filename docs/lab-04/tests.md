@@ -138,6 +138,7 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 | `TEST-HIST-03` | State Timeline Reconstruction | Retrieve history records for an action that underwent create, edit, reassign, complete. | Records ordered by `createdAt ASC, id ASC` completely reconstruct field values at each step. | Planned |
 | `TEST-MIGR-01` | Populated Migration | Apply Lab 4 Prisma migration on a database populated with Lab 3 users, tickets, attachments, comments, and notes. | Migration succeeds cleanly; 100% of existing rows and relationships remain intact. | Planned |
 | `TEST-MIGR-02` | Seed Idempotency | Execute `prisma db seed` three consecutive times on the migrated database. | Seed completes without unique constraint violations or duplicate tickets/actions. | Planned |
+| `TEST-MIGR-03` | Sequence Collision-Free Allocation | Verify sequence state (`last_value`, `is_called`) on `ActionTaken` and `ActionTakenHistory` sequences, ensuring subsequent allocations are collision-free. | Sequences advance cleanly; subsequent allocations generate strictly increasing unique IDs. | Planned |
 | `TEST-RECOV-01` | Recovery Rehearsal in Disposable DB | Precondition: Database contains populated Lab 4 actions and history. Dump using `pg_dump --format=custom --file=...`. Restore into separate disposable test database (`toktickit_recovery_test`) using `pg_restore`. | 100% table row counts match source; foreign keys, sequence state (`last_value`/`is_called` with collision-free subsequent allocation), and trigger immutability verified. | Planned |
 
 ---
