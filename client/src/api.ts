@@ -951,3 +951,156 @@ export async function setAdminUserInitialPassword(
 
 
 
+
+// Lab 4 Actions Taken Types and API Endpoints
+
+export type ActionStatus = "PENDING" | "COMPLETED" | "CANCELLED";
+export type ActionEventType = "CREATED" | "EDITED" | "ASSIGNED" | "COMPLETED" | "CANCELLED";
+
+export interface ActionTakenUser {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface ActionTakenDto {
+  id: number;
+  ticketId: number;
+  idempotencyKey?: string | null;
+  description: string;
+  result?: string | null;
+  status: ActionStatus;
+  assignee?: ActionTakenUser | null;
+  createdBy: ActionTakenUser;
+  completedBy?: ActionTakenUser | null;
+  followUpRequired: boolean;
+  followUpNote?: string | null;
+  attachmentNotes?: string | null;
+  cancellationReason?: string | null;
+  version: number;
+  completedAt?: string | null;
+  cancelledAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ActionTakenHistoryDto {
+  id: number;
+  actionTakenId: number;
+  ticketId: number;
+  eventType: ActionEventType;
+  actor: ActionTakenUser;
+  changes: Record<string, any>;
+  versionBefore: number | null;
+  versionAfter: number;
+  createdAt: string;
+}
+
+export interface CreateActionTakenInput {
+  description: string;
+  assigneeId?: number | null;
+  followUpRequired?: boolean;
+  followUpNote?: string | null;
+  attachmentNotes?: string | null;
+}
+
+export interface EditActionTakenInput {
+  version: number;
+  description?: string;
+  assigneeId?: number | null;
+  followUpRequired?: boolean;
+  followUpNote?: string | null;
+  attachmentNotes?: string | null;
+}
+
+export interface CompleteActionTakenInput {
+  version: number;
+  status: "COMPLETED";
+  result: string;
+}
+
+export interface CancelActionTakenInput {
+  version: number;
+  status: "CANCELLED";
+  cancellationReason: string;
+}
+
+export async function fetchTicketActions(
+  ticketId: number
+): Promise<{ data: { ticketId: number; total: number; items: ActionTakenDto[] } }> {
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/actions`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    return readError(response, "Could not load actions taken.");
+  }
+  return response.json();
+}
+
+export async function createTicketAction(
+  ticketId: number,
+  payload: CreateActionTakenInput,
+  idempotencyKey?: string
+): Promise<{ data: ActionTakenDto; replayed: boolean }> {
+  const headersInit: Record<string, string> = { "Content-Type": "application/json" };
+  if (idempotencyKey) {
+    headersInit["Idempotency-Key"] = idempotencyKey;
+  }
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/actions`, {
+    method: "POST",
+    credentials: "include",
+    headers: requestHeaders(headersInit, true),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    return readError(response, "Could not create action taken.");
+  }
+  const isReplayed = response.headers.get("Idempotency-Replayed") === "true";
+  const json = await response.json();
+  return { data: json.data, replayed: isReplayed };
+}
+
+export async function editTicketAction(
+  actionId: number,
+  payload: EditActionTakenInput
+): Promise<{ data: ActionTakenDto }> {
+  const response = await fetch(`${API_URL}/api/actions/${actionId}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: requestHeaders({ "Content-Type": "application/json" }, true),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    return readError(response, "Could not update action taken.");
+  }
+  return response.json();
+}
+
+export async function updateTicketActionStatus(
+  actionId: number,
+  payload: CompleteActionTakenInput | CancelActionTakenInput
+): Promise<{ data: ActionTakenDto }> {
+  const response = await fetch(`${API_URL}/api/actions/${actionId}/status`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: requestHeaders({ "Content-Type": "application/json" }, true),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    return readError(response, "Could not update action status.");
+  }
+  return response.json();
+}
+
+export async function fetchActionHistory(
+  actionId: number
+): Promise<{ data: { actionTakenId: number; ticketId: number; total: number; items: ActionTakenHistoryDto[] } }> {
+  const response = await fetch(`${API_URL}/api/actions/${actionId}/history`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    return readError(response, "Could not load action history.");
+  }
+  return response.json();
+}

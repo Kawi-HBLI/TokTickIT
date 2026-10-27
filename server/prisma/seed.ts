@@ -124,7 +124,8 @@ export async function seedDatabase(prisma: SeedClient, options?: SeedOptions): P
     const existing = await prisma.internalNote.findFirst({ where: { ticketId: ticket.id, authorId: author.id, content: fixture.content }, select: { id: true } });
     if (!existing) await prisma.internalNote.create({ data: { ticketId: ticket.id, authorId: author.id, content: fixture.content } });
   }
-  if (options?.seedActions && "actionTaken" in prisma && "actionTakenHistory" in prisma) {
+  const shouldSeedActions = Boolean(options?.seedActions);
+  if (shouldSeedActions && "actionTaken" in prisma && "actionTakenHistory" in prisma) {
     for (const fixture of actionTakenFixtures) {
       const ticket = seededTickets.get(fixture.ticketKey);
       if (!ticket) continue;
