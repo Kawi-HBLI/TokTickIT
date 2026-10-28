@@ -191,6 +191,268 @@ describe("Requester Role Dashboard & Drill-Down API", () => {
     expect(["UNAUTHENTICATED", "AUTHENTICATION_REQUIRED"]).toContain(resUnauth.body.error.code);
   });
 
+  it("promotes an older sixth ticket to the top when receiving the newest public comment", async () => {
+    const testRequester = await db.user.create({
+      data: {
+        email: `sixth.comment.${randomUUID()}@toktickit.local`,
+        normalizedEmail: `sixth.comment.${randomUUID()}@toktickit.local`,
+        name: "Sixth Comment User",
+        passwordHash: "hash",
+        role: "REQUESTER",
+        mustChangePassword: false,
+        isActive: true,
+      },
+    });
+    const session = await createTestSession(db, testRequester.id);
+    const category = await db.category.findFirstOrThrow();
+    const system = await db.relatedSystem.findFirstOrThrow();
+
+    const baseTime = Date.now();
+
+    // Create 5 newer tickets (updated 1 hour ago)
+    for (let i = 1; i <= 5; i++) {
+      await db.ticket.create({
+        data: {
+          ticketNumber: `TCK-NEWER-${i}-${randomUUID().slice(0, 6)}`,
+          requesterId: testRequester.id,
+          categoryId: category.id,
+          relatedSystemId: system.id,
+          summary: `Newer ticket ${i}`,
+          description: `Description ${i}`,
+          requestedPriority: "MEDIUM",
+          itPriority: "MEDIUM",
+          currentStatus: "OPEN",
+          idempotencyKey: randomUUID(),
+          createdAt: new Date(baseTime - 3600000 + i * 1000),
+          updatedAt: new Date(baseTime - 3600000 + i * 1000),
+        },
+      });
+    }
+
+    // Create older 6th ticket (updated 5 days ago)
+    const olderTicket = await db.ticket.create({
+      data: {
+        ticketNumber: `TCK-OLDER-6-${randomUUID().slice(0, 6)}`,
+        requesterId: testRequester.id,
+        categoryId: category.id,
+        relatedSystemId: system.id,
+        summary: "Older sixth ticket",
+        description: "Older description",
+        requestedPriority: "LOW",
+        itPriority: "LOW",
+        currentStatus: "OPEN",
+        idempotencyKey: randomUUID(),
+        createdAt: new Date(baseTime - 5 * 86400000),
+        updatedAt: new Date(baseTime - 5 * 86400000),
+      },
+    });
+
+    // Staff posts the newest public comment on olderTicket at current time
+    const commentTime = new Date(baseTime);
+    const commentContent = "Staff provided updated instructions on older ticket.";
+    await db.publicComment.create({
+      data: {
+        ticketId: olderTicket.id,
+        authorId: staffA.id,
+        content: commentContent,
+        createdAt: commentTime,
+      },
+    });
+
+    const res = await request(app)
+      .get("/api/requester/dashboard")
+      .set("Cookie", session.cookie);
+
+    expect(res.status).toBe(200);
+    const recentTickets = res.body.data.recentTickets;
+    expect(recentTickets.length).toBe(5);
+
+    // Older ticket 6 must be at index 0 (top of the preview list)
+    expect(recentTickets[0].id).toBe(olderTicket.id);
+    expect(recentTickets[0].latestPublicUpdate).toBe(`Staff commented: ${commentContent}`);
+    // Displayed message and activity timestamp must agree
+    expect(recentTickets[0].updatedAt).toBe(commentTime.toISOString());
+  });
+
+  it("promotes an older ticket to the top when receiving a new public action update", async () => {
+    const testRequester = await db.user.create({
+      data: {
+        email: `action.update.${randomUUID()}@toktickit.local`,
+        normalizedEmail: `action.update.${randomUUID()}@toktickit.local`,
+        name: "Action Update User",
+        passwordHash: "hash",
+        role: "REQUESTER",
+        mustChangePassword: false,
+        isActive: true,
+      },
+    });
+    const session = await createTestSession(db, testRequester.id);
+    const category = await db.category.findFirstOrThrow();
+    const system = await db.relatedSystem.findFirstOrThrow();
+
+    const baseTime = Date.now();
+
+    // Create 5 newer tickets (updated 1 hour ago)
+    for (let i = 1; i <= 5; i++) {
+      await db.ticket.create({
+        data: {
+          ticketNumber: `TCK-ACTION-NEWER-${i}-${randomUUID().slice(0, 6)}`,
+          requesterId: testRequester.id,
+          categoryId: category.id,
+          relatedSystemId: system.id,
+          summary: `Newer ticket ${i}`,
+          description: `Description ${i}`,
+          requestedPriority: "MEDIUM",
+          itPriority: "MEDIUM",
+          currentStatus: "OPEN",
+          idempotencyKey: randomUUID(),
+          createdAt: new Date(baseTime - 3600000 + i * 1000),
+          updatedAt: new Date(baseTime - 3600000 + i * 1000),
+        },
+      });
+    }
+
+    // Create older ticket (updated 5 days ago)
+    const olderTicket = await db.ticket.create({
+      data: {
+        ticketNumber: `TCK-ACTION-OLDER-${randomUUID().slice(0, 6)}`,
+        requesterId: testRequester.id,
+        categoryId: category.id,
+        relatedSystemId: system.id,
+        summary: "Older ticket receiving action",
+        description: "Older description",
+        requestedPriority: "LOW",
+        itPriority: "LOW",
+        currentStatus: "IN_PROGRESS",
+        idempotencyKey: randomUUID(),
+        createdAt: new Date(baseTime - 5 * 86400000),
+        updatedAt: new Date(baseTime - 5 * 86400000),
+      },
+    });
+
+    // Staff completes an action on olderTicket at current time
+    const actionTime = new Date(baseTime);
+    const actionResult = "Replaced faulty network interface card.";
+    await db.actionTaken.create({
+      data: {
+        ticketId: olderTicket.id,
+        createdById: staffA.id,
+        assigneeId: staffA.id,
+        status: "COMPLETED",
+        description: "Hardware replacement",
+        result: actionResult,
+        completedById: staffA.id,
+        completedAt: actionTime,
+        updatedAt: actionTime,
+      },
+    });
+
+    const res = await request(app)
+      .get("/api/requester/dashboard")
+      .set("Cookie", session.cookie);
+
+    expect(res.status).toBe(200);
+    const recentTickets = res.body.data.recentTickets;
+    expect(recentTickets.length).toBe(5);
+
+    // Older ticket must be at index 0
+    expect(recentTickets[0].id).toBe(olderTicket.id);
+    expect(recentTickets[0].latestPublicUpdate).toBe(`Action completed: ${actionResult}`);
+    // Displayed message and activity timestamp must agree
+    expect(recentTickets[0].updatedAt).toBe(actionTime.toISOString());
+  });
+
+  it("displays the status message when a status transition occurs after an existing comment/action", async () => {
+    const testRequester = await db.user.create({
+      data: {
+        email: `status.trans.${randomUUID()}@toktickit.local`,
+        normalizedEmail: `status.trans.${randomUUID()}@toktickit.local`,
+        name: "Status Transition User",
+        passwordHash: "hash",
+        role: "REQUESTER",
+        mustChangePassword: false,
+        isActive: true,
+      },
+    });
+    const session = await createTestSession(db, testRequester.id);
+    const category = await db.category.findFirstOrThrow();
+    const system = await db.relatedSystem.findFirstOrThrow();
+
+    const baseTime = Date.now();
+
+    // Create ticket
+    const ticket = await db.ticket.create({
+      data: {
+        ticketNumber: `TCK-TRANS-${randomUUID().slice(0, 6)}`,
+        requesterId: testRequester.id,
+        categoryId: category.id,
+        relatedSystemId: system.id,
+        summary: "Ticket with comment then status update",
+        description: "Description",
+        requestedPriority: "HIGH",
+        itPriority: "HIGH",
+        currentStatus: "OPEN",
+        idempotencyKey: randomUUID(),
+        createdAt: new Date(baseTime - 7200000),
+        updatedAt: new Date(baseTime - 7200000),
+      },
+    });
+
+    // 1. Earlier comment 2 hours ago
+    const oldCommentTime = new Date(baseTime - 7200000);
+    await db.publicComment.create({
+      data: {
+        ticketId: ticket.id,
+        authorId: staffA.id,
+        content: "Old comment 2 hours ago",
+        createdAt: oldCommentTime,
+      },
+    });
+
+    // 2. Earlier action 1 hour ago
+    const oldActionTime = new Date(baseTime - 3600000);
+    await db.actionTaken.create({
+      data: {
+        ticketId: ticket.id,
+        createdById: staffA.id,
+        assigneeId: staffA.id,
+        status: "COMPLETED",
+        description: "Older action 1 hour ago",
+        result: "Old action result",
+        completedById: staffA.id,
+        completedAt: oldActionTime,
+        updatedAt: oldActionTime,
+      },
+    });
+
+    // 3. Status transition occurs at current time (now)
+    const transitionTime = new Date(baseTime);
+    await db.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        currentStatus: "RESOLVED",
+        updatedAt: transitionTime,
+      },
+    });
+
+    const res = await request(app)
+      .get("/api/requester/dashboard")
+      .set("Cookie", session.cookie);
+
+    expect(res.status).toBe(200);
+    const recentTickets = res.body.data.recentTickets;
+    const targetItem = recentTickets.find((t: any) => t.id === ticket.id);
+    expect(targetItem).toBeDefined();
+
+    // Verify the status message is displayed, NOT overridden by the older comment/action
+    expect(targetItem.latestPublicUpdate).toBe("Ticket status is resolved.");
+    expect(targetItem.latestPublicUpdate).not.toContain("Old comment");
+    expect(targetItem.latestPublicUpdate).not.toContain("Older action");
+
+    // Displayed message and activity timestamp must agree with the transition time
+    expect(targetItem.updatedAt).toBe(transitionTime.toISOString());
+  });
+
   it("TEST-DASH-13: GET /api/tickets?statusGroup=active & statusGroup=resolved_closed", async () => {
     const session = await createTestSession(db, requesterUser.id);
 

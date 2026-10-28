@@ -137,8 +137,14 @@ export async function getStaffDashboard(req: Request, res: Response, next: NextF
         },
       }),
 
-      // 8. recentActions: up to 10 latest actions
+      // 8. recentActions: up to 10 latest actions completed by or created by current user (FR-17)
       prisma.actionTaken.findMany({
+        where: {
+          OR: [
+            { createdById: currentUserId },
+            { completedById: currentUserId },
+          ],
+        },
         take: 10,
         orderBy: [
           { updatedAt: "desc" },
@@ -253,7 +259,7 @@ export async function getRequesterDashboard(req: Request, res: Response, next: N
       activeTicketsCount,
       awaitingRequesterCount,
       resolvedClosedCount,
-      recentTicketsRaw,
+      userTicketsRaw,
     ] = await Promise.all([
       // 1. activeTicketsCount: requester-owned active tickets
       prisma.ticket.count({
@@ -279,16 +285,11 @@ export async function getRequesterDashboard(req: Request, res: Response, next: N
         },
       }),
 
-      // 4. recentTickets: up to 5 tickets owned by requester
+      // 4. Query tickets owned by requester
       prisma.ticket.findMany({
         where: {
           requesterId: currentUserId,
         },
-        take: 5,
-        orderBy: [
-          { updatedAt: "desc" },
-          { id: "desc" },
-        ],
         select: {
           id: true,
           ticketNumber: true,
@@ -298,7 +299,7 @@ export async function getRequesterDashboard(req: Request, res: Response, next: N
           createdAt: true,
           publicComments: {
             take: 1,
-            orderBy: { createdAt: "desc" },
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
             select: {
               content: true,
               createdAt: true,
@@ -312,7 +313,7 @@ export async function getRequesterDashboard(req: Request, res: Response, next: N
           },
           actionsTaken: {
             take: 1,
-            orderBy: { updatedAt: "desc" },
+            orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
             select: {
               description: true,
               result: true,
@@ -324,43 +325,66 @@ export async function getRequesterDashboard(req: Request, res: Response, next: N
       }),
     ]);
 
-    const recentTickets = recentTicketsRaw.map((t) => {
-      let latestPublicUpdate = `Ticket status is ${t.currentStatus.toLowerCase().replace(/_/g, " ")}.`;
+    // For each ticket, determine its newest public activity (ticket status/update, comment, or action)
+    const ticketsWithActivity = userTicketsRaw.map((t) => {
+      const candidates: Array<{
+        timestamp: Date;
+        message: string;
+        priority: number;
+      }> = [
+        {
+          timestamp: t.updatedAt,
+          message: `Ticket status is ${t.currentStatus.toLowerCase().replace(/_/g, " ")}.`,
+          priority: 1,
+        },
+      ];
 
       const latestComment = t.publicComments[0];
-      const latestAction = t.actionsTaken[0];
-
-      if (latestComment && latestAction) {
-        if (latestComment.createdAt >= latestAction.updatedAt) {
-          const prefix = latestComment.author.role === "REQUESTER" ? "You commented" : "Staff commented";
-          latestPublicUpdate = `${prefix}: ${latestComment.content}`;
-        } else {
-          if (latestAction.status === "COMPLETED") {
-            latestPublicUpdate = `Action completed: ${latestAction.result || latestAction.description}`;
-          } else {
-            latestPublicUpdate = `Action ${latestAction.status.toLowerCase()}: ${latestAction.description}`;
-          }
-        }
-      } else if (latestComment) {
+      if (latestComment) {
         const prefix = latestComment.author.role === "REQUESTER" ? "You commented" : "Staff commented";
-        latestPublicUpdate = `${prefix}: ${latestComment.content}`;
-      } else if (latestAction) {
-        if (latestAction.status === "COMPLETED") {
-          latestPublicUpdate = `Action completed: ${latestAction.result || latestAction.description}`;
-        } else {
-          latestPublicUpdate = `Action ${latestAction.status.toLowerCase()}: ${latestAction.description}`;
-        }
+        candidates.push({
+          timestamp: latestComment.createdAt,
+          message: `${prefix}: ${latestComment.content}`,
+          priority: 3,
+        });
       }
+
+      const latestAction = t.actionsTaken[0];
+      if (latestAction) {
+        const message = latestAction.status === "COMPLETED"
+          ? `Action completed: ${latestAction.result || latestAction.description}`
+          : `Action ${latestAction.status.toLowerCase()}: ${latestAction.description}`;
+        candidates.push({
+          timestamp: latestAction.updatedAt,
+          message,
+          priority: 2,
+        });
+      }
+
+      // Sort candidates by newest timestamp, with tie-breaker by priority
+      candidates.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime() || b.priority - a.priority);
+      const latestActivity = candidates[0];
 
       return {
         id: t.id,
         ticketNumber: t.ticketNumber,
         summary: t.summary,
         currentStatus: t.currentStatus,
-        latestPublicUpdate,
-        updatedAt: t.updatedAt.toISOString(),
+        latestPublicUpdate: latestActivity.message,
+        updatedAt: latestActivity.timestamp.toISOString(),
+        activityTimestamp: latestActivity.timestamp,
       };
     });
+
+    // Order tickets by newest public activity desc, with deterministic tie-breaker by ticket id desc
+    ticketsWithActivity.sort((a, b) => {
+      const timeDiff = b.activityTimestamp.getTime() - a.activityTimestamp.getTime();
+      if (timeDiff !== 0) return timeDiff;
+      return b.id - a.id;
+    });
+
+    // Preview limit: top 5
+    const recentTickets = ticketsWithActivity.slice(0, 5).map(({ activityTimestamp, ...rest }) => rest);
 
     res.status(200).json({
       data: {

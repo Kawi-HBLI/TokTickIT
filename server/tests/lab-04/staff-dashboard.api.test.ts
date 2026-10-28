@@ -257,6 +257,72 @@ describe("IT Staff Role Dashboard & Drill-Down API", () => {
     expect(resAdmin.status).toBe(200);
   });
 
+  it("staff activity scope excludes unrelated actions and preserves personal activity (FR-17)", async () => {
+    const session = await createTestSession(db, staffA.id);
+
+    const ticket = await db.ticket.findFirstOrThrow({
+      where: { currentStatus: "IN_PROGRESS" },
+    });
+
+    const now = Date.now();
+
+    // 1. Personal action created by staffA and completed by staffB (attribution test)
+    const personalAction = await db.actionTaken.create({
+      data: {
+        ticketId: ticket.id,
+        createdById: staffA.id,
+        assigneeId: staffA.id,
+        status: "COMPLETED",
+        description: "Personal action created by staffA completed by staffB",
+        result: "Personal result verified",
+        completedById: staffB.id,
+        completedAt: new Date(now - 100000),
+        updatedAt: new Date(now - 100000),
+      },
+    });
+
+    // 2. Insert 12 newer unrelated actions created and completed by staffB
+    const unrelatedActionIds: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      const unrelated = await db.actionTaken.create({
+        data: {
+          ticketId: ticket.id,
+          createdById: staffB.id,
+          assigneeId: staffB.id,
+          status: "COMPLETED",
+          description: `Unrelated staffB action ${i + 1}`,
+          result: `Unrelated result ${i + 1}`,
+          completedById: staffB.id,
+          completedAt: new Date(now - 50000 + i * 1000),
+          updatedAt: new Date(now - 50000 + i * 1000),
+        },
+      });
+      unrelatedActionIds.push(unrelated.id);
+    }
+
+    const res = await request(app)
+      .get("/api/staff/dashboard")
+      .set("Cookie", session.cookie);
+
+    expect(res.status).toBe(200);
+    const recentActions = res.body.data.recentActions;
+    const recentActionIds = recentActions.map((a: any) => a.id);
+
+    // Verify personal activity remains visible despite 12 newer unrelated actions
+    expect(recentActionIds).toContain(personalAction.id);
+
+    // Verify none of the 12 unrelated actions are included
+    for (const unrelatedId of unrelatedActionIds) {
+      expect(recentActionIds).not.toContain(unrelatedId);
+    }
+
+    // Verify actual completion-actor attribution is preserved
+    const returnedPersonal = recentActions.find((a: any) => a.id === personalAction.id);
+    expect(returnedPersonal.completedBy).toBeDefined();
+    expect(returnedPersonal.completedBy.id).toBe(staffB.id);
+    expect(returnedPersonal.performerName).toBe("Gavin Lee");
+  });
+
   it("TEST-DASH-09: GET /api/staff/tickets?statusGroup=active", async () => {
     const session = await createTestSession(db, staffA.id);
 
