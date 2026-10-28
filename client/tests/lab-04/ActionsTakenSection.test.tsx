@@ -741,4 +741,79 @@ describe("Lab 4: ActionsTakenSection Component Tests", () => {
     descInput = within(dialog).getByLabelText(/Description/);
     expect(descInput).toHaveValue("");
   });
+
+  it("creation idempotency: retains uncertain submission state when reconciliation fetch fails, keeping original payload/key available for retry", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ActionsTakenSection
+        ticketId={42}
+        ticketStatus="IN_PROGRESS"
+        isStaff={true}
+      />
+    );
+
+    const addBtn = await screen.findByRole("button", { name: "+ Add Action Taken" });
+    await user.click(addBtn);
+
+    const dialog = screen.getByRole("dialog", { name: "Add Action Taken" });
+    const descInput = within(dialog).getByLabelText(/Description/);
+    await user.type(descInput, "Original payload that had uncertain outcome.");
+
+    // First attempt fails with uncertain network error
+    vi.mocked(api.createTicketAction).mockRejectedValueOnce(new Error("Network failure"));
+    const saveBtn = within(dialog).getByRole("button", { name: "Save Action" });
+    await user.click(saveBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText("Unconfirmed Submission Pending")).toBeInTheDocument();
+      expect(screen.getByText("Network error. Please try again.")).toBeInTheDocument();
+    });
+
+    const firstKey = vi.mocked(api.createTicketAction).mock.calls[0][2];
+    expect(firstKey).toBeTruthy();
+
+    // User modifies text attempting to change intent
+    await user.clear(descInput);
+    await user.type(descInput, "Changed text attempting new request.");
+
+    // User clicks Start New Request, but reconciliation fetch fails!
+    vi.mocked(api.fetchTicketActions).mockRejectedValueOnce(
+      new api.ApiError("Reconciliation service unavailable", 503, "SERVICE_UNAVAILABLE")
+    );
+    const startNewBtn = screen.getByRole("button", { name: "Start New Request" });
+    await user.click(startNewBtn);
+
+    // Verify recoverable error is shown and uncertain submission state is retained
+    await waitFor(() => {
+      expect(screen.getByText("Reconciliation service unavailable")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Unconfirmed Submission Pending")).toBeInTheDocument();
+
+    // User restores original draft
+    const restoreBtn = within(dialog).getByRole("button", { name: "Restore Original Draft" });
+    await user.click(restoreBtn);
+    expect(descInput).toHaveValue("Original payload that had uncertain outcome.");
+
+    // Now exact retry succeeds
+    vi.mocked(api.createTicketAction).mockResolvedValueOnce({
+      data: {
+        ...pendingAction,
+        id: 999,
+        description: "Original payload that had uncertain outcome.",
+      },
+      replayed: true,
+    });
+
+    await user.click(saveBtn);
+
+    // Exact retry must call createTicketAction with the original payload and key
+    expect(api.createTicketAction).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(api.createTicketAction).mock.calls[1][2]).toBe(firstKey);
+    expect(vi.mocked(api.createTicketAction).mock.calls[1][1]).toEqual(
+      expect.objectContaining({
+        description: "Original payload that had uncertain outcome.",
+      })
+    );
+  });
 });

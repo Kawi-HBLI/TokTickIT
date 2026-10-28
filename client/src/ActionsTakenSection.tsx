@@ -10,6 +10,7 @@ import {
   editTicketAction,
   updateTicketActionStatus,
   fetchActionHistory,
+  fetchStaffTicketDetail,
   ApiError,
 } from "./api.js";
 
@@ -17,7 +18,7 @@ interface ActionsTakenSectionProps {
   ticketId: number;
   ticketStatus: TicketStatus;
   isStaff: boolean;
-  onActionMutated?: () => void;
+  onActionMutated?: () => void | Promise<any>;
 }
 
 interface CreateActionForm {
@@ -209,11 +210,43 @@ export default function ActionsTakenSection({
     try {
       const res = await fetchTicketActions(ticketId);
       setActions(res.data.items);
-      onActionMutated?.();
       const fresh = res.data.items.find((a) => a.id === actionId);
       if (!fresh) return null;
+
+      let parentData: unknown = null;
+      if (onActionMutated) {
+        try {
+          parentData = await onActionMutated();
+        } catch {
+          // Parent refresh failure is non-fatal for action conflict review
+        }
+      }
+
       const isActionTerminal = fresh.status === "COMPLETED" || fresh.status === "CANCELLED";
-      const isTicketTerminal = isTerminalTicket;
+
+      let effectiveTicketStatus: TicketStatus = ticketStatus;
+      if (
+        parentData &&
+        typeof parentData === "object" &&
+        "currentStatus" in parentData
+      ) {
+        effectiveTicketStatus = (parentData as { currentStatus: TicketStatus }).currentStatus;
+      } else if (isStaff) {
+        try {
+          const tRes = await fetchStaffTicketDetail(ticketId);
+          if (tRes?.data?.currentStatus) {
+            effectiveTicketStatus = tRes.data.currentStatus;
+          }
+        } catch {
+          // fallback to prop
+        }
+      }
+
+      const isTicketTerminal =
+        effectiveTicketStatus === "RESOLVED" ||
+        effectiveTicketStatus === "CLOSED" ||
+        effectiveTicketStatus === "CANCELLED";
+
       return {
         freshAction: fresh,
         isTerminal: isActionTerminal || isTicketTerminal,
@@ -325,12 +358,24 @@ export default function ActionsTakenSection({
 
   async function handleStartNewIntent() {
     setCreateSubmitting(true);
+    setCreateError(null);
     try {
-      await loadActions();
-      onActionMutated?.();
+      const res = await fetchTicketActions(ticketId);
+      setActions(res.data.items);
+      if (onActionMutated) {
+        await Promise.resolve(onActionMutated());
+      }
       setUncertainSubmission(null);
       setIdempotencyKey(crypto.randomUUID());
       setCreateError(null);
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        setCreateError(
+          err.message || "Failed to reconcile actions with server. Please try again."
+        );
+      } else {
+        setCreateError("Network error while reconciling actions. Please try again.");
+      }
     } finally {
       setCreateSubmitting(false);
     }
@@ -1242,7 +1287,15 @@ export default function ActionsTakenSection({
                 {editConflict.isTerminal ? (
                   <div>
                     <p style={{ margin: "4px 0" }}>
-                      This action has been marked as <strong>{editConflict.freshAction.status}</strong> by another user and can no longer be edited.
+                      {editConflict.freshAction.status !== "PENDING" ? (
+                        <>
+                          This action has been marked as <strong>{editConflict.freshAction.status}</strong> by another user and can no longer be edited.
+                        </>
+                      ) : (
+                        <>
+                          This ticket has been marked as <strong>terminal</strong> by another user and actions can no longer be edited.
+                        </>
+                      )}
                     </p>
                     {editConflict.freshAction.result && (
                       <p style={{ margin: "4px 0" }}>

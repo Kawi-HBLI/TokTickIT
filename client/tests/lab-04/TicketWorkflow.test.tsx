@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import StaffTicketDetail from "../../src/StaffTicketDetail.js";
 import * as api from "../../src/api.js";
@@ -16,6 +16,8 @@ vi.mock("../../src/api.js", async (importOriginal) => {
     fetchStaffAssignees: vi.fn(),
     updateStaffTicketStatus: vi.fn(),
     fetchTicketActions: vi.fn(),
+    createTicketAction: vi.fn(),
+    editTicketAction: vi.fn(),
   };
 });
 
@@ -239,6 +241,160 @@ describe("Lab 4: TicketWorkflow Resolution Gate Feedback Tests", () => {
       55,
       "RESOLVED",
       "2026-10-27T10:30:00.000Z"
+    );
+  });
+
+  it("preserves edit conflict recovery state and changed creation draft through parent StaffTicketDetail refresh", async () => {
+    const user = userEvent.setup();
+
+    const sampleAction: api.ActionTakenDto = {
+      id: 101,
+      ticketId: 55,
+      version: 1,
+      description: "Initial action awaiting investigation",
+      status: "PENDING",
+      assignee: { id: 10, name: "Ethan Brooks", email: "ethan@toktickit.local", role: "IT_STAFF" },
+      createdBy: { id: 10, name: "Ethan Brooks", email: "ethan@toktickit.local", role: "IT_STAFF" },
+      completedBy: null,
+      completedAt: null,
+      result: null,
+      cancellationReason: null,
+      followUpRequired: false,
+      followUpNote: null,
+      attachmentNotes: null,
+      createdAt: "2026-10-27T10:05:00.000Z",
+      updatedAt: "2026-10-27T10:05:00.000Z",
+    };
+
+    vi.mocked(api.fetchTicketActions).mockResolvedValue({
+      data: { ticketId: 55, total: 1, items: [sampleAction] },
+    });
+
+    renderStaffTicketDetail();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "TCK-2026-00055" })).toBeInTheDocument();
+      expect(screen.getByText("Initial action awaiting investigation")).toBeInTheDocument();
+    });
+
+    // 1. EDIT CONFLICT RECOVERY: survives parent refresh
+    const editBtn = screen.getByRole("button", { name: "Edit Details" });
+    await user.click(editBtn);
+
+    const editDialog = screen.getByRole("dialog", { name: /Edit Action Taken/ });
+    expect(editDialog).toBeInTheDocument();
+
+    const descInput = within(editDialog).getByLabelText(/Description/);
+    await user.clear(descInput);
+    await user.type(descInput, "Staff draft that must survive parent loadData refresh.");
+
+    // Submit edit, returns 409 conflict
+    vi.mocked(api.editTicketAction).mockRejectedValueOnce(
+      new api.ApiError("Version conflict detected.", 409, "ACTION_VERSION_CONFLICT")
+    );
+
+    const freshActionV2: api.ActionTakenDto = {
+      ...sampleAction,
+      version: 2,
+      description: "Concurrent server update on action.",
+    };
+    vi.mocked(api.fetchTicketActions).mockResolvedValueOnce({
+      data: { ticketId: 55, total: 1, items: [freshActionV2] },
+    });
+    vi.mocked(api.fetchStaffTicketDetail).mockResolvedValueOnce({
+      data: {
+        ...openTicket,
+        updatedAt: "2026-10-28T10:15:00.000Z",
+      },
+    });
+
+    const saveChangesBtn = within(editDialog).getByRole("button", { name: "Save Changes" });
+    await user.click(saveChangesBtn);
+
+    // Verify parent loadData was called, BUT ActionsTakenSection and Edit dialog were NOT unmounted!
+    await waitFor(() => {
+      expect(within(editDialog).getByText(/Version Conflict/)).toBeInTheDocument();
+      expect(within(editDialog).getByText("Concurrent server update on action.")).toBeInTheDocument();
+      expect(within(editDialog).getByText(/Your Draft Description:/).parentElement).toHaveTextContent(
+        "Staff draft that must survive parent loadData refresh."
+      );
+    });
+
+    // The user's draft in textarea is still preserved!
+    expect(descInput).toHaveValue("Staff draft that must survive parent loadData refresh.");
+
+    // Review controls survive and work
+    const reapplyBtn = within(editDialog).getByRole("button", { name: "Reapply My Draft to Version 2" });
+    expect(reapplyBtn).toBeInTheDocument();
+    await user.click(reapplyBtn);
+
+    // Conflict box cleared, Save Changes re-enabled
+    expect(within(editDialog).queryByText(/Version Conflict/)).not.toBeInTheDocument();
+    expect(saveChangesBtn).toBeEnabled();
+
+    // Close edit dialog via Cancel button
+    const closeBtn = within(editDialog).getByRole("button", { name: "Cancel" });
+    await user.click(closeBtn);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // 2. CREATION UNCERTAIN RETRY: Start New Request preserves user's changed draft through parent refresh
+    const addActionBtn = screen.getByRole("button", { name: "+ Add Action Taken" });
+    await user.click(addActionBtn);
+
+    const createDialog = screen.getByRole("dialog", { name: "Add Action Taken" });
+    const createDescInput = within(createDialog).getByLabelText(/Description/);
+    await user.type(createDescInput, "Initial creation payload that fails uncertainly.");
+
+    // Submit creation and fail with uncertain network error
+    vi.mocked(api.createTicketAction).mockRejectedValueOnce(new Error("Network failure"));
+    const saveActionBtn = within(createDialog).getByRole("button", { name: "Save Action" });
+    await user.click(saveActionBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText("Unconfirmed Submission Pending")).toBeInTheDocument();
+    });
+
+    // User edits the form to represent a new intent / changed draft
+    await user.clear(createDescInput);
+    await user.type(createDescInput, "Changed draft description representing new intent.");
+
+    // User clicks Start New Request -> reconciles actions and refreshes parent StaffTicketDetail
+    vi.mocked(api.fetchTicketActions).mockResolvedValueOnce({
+      data: { ticketId: 55, total: 1, items: [sampleAction] },
+    });
+    vi.mocked(api.fetchStaffTicketDetail).mockResolvedValueOnce({
+      data: {
+        ...openTicket,
+        updatedAt: "2026-10-28T10:20:00.000Z",
+      },
+    });
+
+    const startNewReqBtn = within(createDialog).getByRole("button", { name: "Start New Request" });
+    await user.click(startNewReqBtn);
+
+    // Verify parent refreshed, but dialog remained open and changed draft was preserved!
+    await waitFor(() => {
+      expect(screen.queryByText("Unconfirmed Submission Pending")).not.toBeInTheDocument();
+    });
+    expect(createDialog).toBeInTheDocument();
+    expect(createDescInput).toHaveValue("Changed draft description representing new intent.");
+
+    // Submitting now sends the changed draft with a fresh key
+    vi.mocked(api.createTicketAction).mockResolvedValueOnce({
+      data: {
+        ...sampleAction,
+        id: 102,
+        description: "Changed draft description representing new intent.",
+      },
+      replayed: false,
+    });
+
+    await user.click(saveActionBtn);
+    expect(api.createTicketAction).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(api.createTicketAction).mock.calls[1][1]).toEqual(
+      expect.objectContaining({
+        description: "Changed draft description representing new intent.",
+      })
     );
   });
 });

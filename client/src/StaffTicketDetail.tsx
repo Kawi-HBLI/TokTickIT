@@ -127,12 +127,14 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
 
   const [reloadKey, setReloadKey] = useState(0);
 
-  function loadData() {
-    setLoading(true);
+  function loadData(options?: { forceLoading?: boolean }) {
+    if (options?.forceLoading || !ticket) {
+      setLoading(true);
+    }
     setError(null);
     setConflictError(null);
 
-    Promise.all([fetchStaffTicketDetail(ticketId), fetchAssignees()])
+    return Promise.all([fetchStaffTicketDetail(ticketId), fetchAssignees()])
       .then(([ticketRes, assigneesRes]) => {
         setTicket(ticketRes.data);
         setAssignees(assigneesRes.data);
@@ -140,19 +142,30 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
         setSelectedPriority(ticketRes.data.itPriority);
         setSelectedStatus(ticketRes.data.currentStatus);
         setLoading(false);
+        return ticketRes.data;
       })
       .catch((err: unknown) => {
-        if (err instanceof ApiError) {
-          setError({ code: err.code || "ERROR", message: err.message, status: err.status });
-        } else {
-          setError({ code: "UNKNOWN_ERROR", message: "Failed to load ticket details." });
+        if (!ticket) {
+          if (err instanceof ApiError) {
+            setError({ code: err.code || "ERROR", message: err.message, status: err.status });
+          } else {
+            setError({ code: "UNKNOWN_ERROR", message: "Failed to load ticket details." });
+          }
         }
         setLoading(false);
+        throw err;
       });
   }
 
+  const prevTicketIdRef = useRef(ticketId);
   useEffect(() => {
-    loadData();
+    if (prevTicketIdRef.current !== ticketId) {
+      prevTicketIdRef.current = ticketId;
+      setTicket(null);
+      loadData({ forceLoading: true }).catch(() => {});
+    } else {
+      loadData().catch(() => {});
+    }
   }, [ticketId, reloadKey]);
 
   // Dialog focus management
@@ -544,7 +557,7 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
       <section className="state-card state-error" aria-labelledby="error-title">
         <h2 id="error-title">Unable to Load Ticket</h2>
         <p className="state-message">{error?.message || "An unexpected error occurred."}</p>
-        <button type="button" className="btn btn-outline-success" onClick={loadData}>
+        <button type="button" className="btn btn-outline-success" onClick={() => loadData()}>
           Retry
         </button>
       </section>
@@ -587,7 +600,10 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
             <button
               type="button"
               className="btn btn-sm btn-outline-danger"
-              onClick={() => setReloadKey((k) => k + 1)}
+              onClick={() => {
+                setConflictError(null);
+                loadData().catch(() => {});
+              }}
             >
               Refresh Ticket
             </button>
