@@ -46,6 +46,7 @@ function RoleWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: () => 
     if (/^\/staff\/tickets(\/\d+)?$/.test(path)) return full;
     return "/staff/tickets";
   });
+  const [navKey, setNavKey] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
   async function logout() { try { await onLogout(); } catch { setMessage("We could not sign you out right now. Try again."); } }
   function navigate(next: string) {
@@ -53,14 +54,17 @@ function RoleWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: () => 
     if (current !== next) {
       window.history.pushState({}, "", next);
       setRoute(next);
+      setNavKey((k) => k + 1);
       window.dispatchEvent(new Event("popstate"));
     } else {
+      setNavKey((k) => k + 1);
       window.dispatchEvent(new Event("popstate"));
     }
   }
   useEffect(() => {
     const onPop = () => {
       setRoute(window.location.pathname + window.location.search);
+      setNavKey((k) => k + 1);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -93,7 +97,7 @@ function RoleWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: () => 
           onNavigate={navigate}
         />
       ) : route === "/staff/tickets" || route.startsWith("/staff/tickets?") ? (
-        <StaffTicketQueue onNavigate={navigate} url={route} />
+        <StaffTicketQueue key={`${route.split("?")[0]}:${navKey}`} onNavigate={navigate} url={route} />
       ) : route === "/admin/users" && user.role === "ADMINISTRATOR" ? (
         <UserManagement onNavigate={navigate} />
       ) : (
@@ -113,6 +117,7 @@ function RequesterWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: (
     const full = path + search;
     return path === "/dashboard" || path === "/tickets/new" || /^\/tickets\/\d+$/.test(path) || path === "/tickets" ? full : "/tickets";
   });
+  const [navKey, setNavKey] = useState(0);
   const [isDirty, setIsDirty] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<"cancel" | null>(null);
@@ -134,6 +139,7 @@ function RequesterWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: (
         return;
       }
       setRoute(next);
+      setNavKey((k) => k + 1);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -148,8 +154,10 @@ function RequesterWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: (
     if (current !== next) {
       window.history.pushState({}, "", next);
       setRoute(next);
+      setNavKey((k) => k + 1);
       window.dispatchEvent(new Event("popstate"));
     } else {
+      setNavKey((k) => k + 1);
       window.dispatchEvent(new Event("popstate"));
     }
   }
@@ -158,6 +166,7 @@ function RequesterWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: (
     setIsDirty(false);
     window.history.pushState({}, "", "/tickets");
     setRoute("/tickets");
+    setNavKey((k) => k + 1);
     window.dispatchEvent(new Event("popstate"));
   }
   function handleDialogKeyDown(event: KeyboardEvent<HTMLElement>) { if (event.key === "Escape") { event.preventDefault(); closeConfirmation(); return; } if (event.key !== "Tab") return; const first = keepEditingButton.current; const last = confirmButton.current; if (!first || !last) return; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } }
@@ -193,7 +202,7 @@ function RequesterWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: (
         ) : detailTicketId !== null ? (
           <RequesterTicketDetail ticketId={detailTicketId} onNavigate={navigate} />
         ) : (
-          <MyTickets onNavigate={navigate} url={route} />
+          <MyTickets key={`${route.split("?")[0]}:${navKey}`} onNavigate={navigate} url={route} />
         )}
         <SystemDiagnostics />
       </div>

@@ -36,8 +36,13 @@ function formatStatus(status: string): string {
   return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function parseStaffSearchParams() {
-  const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+function parseStaffSearchParams(searchStr?: string) {
+  let search = typeof window !== "undefined" ? window.location.search : "";
+  if (searchStr !== undefined) {
+    const qIndex = searchStr.indexOf("?");
+    search = qIndex !== -1 ? searchStr.slice(qIndex) : (searchStr.startsWith("?") ? searchStr : "");
+  }
+  const params = new URLSearchParams(search);
   return {
     q: params.get("q") || "",
     status: params.get("status") || "",
@@ -70,21 +75,21 @@ export default function StaffTicketQueue({ onNavigate, url }: StaffTicketQueuePr
     hasNextPage: false,
   });
 
-  const [search, setSearch] = useState(() => parseStaffSearchParams().q);
-  const [status, setStatus] = useState(() => parseStaffSearchParams().status);
-  const [requestedPriority, setRequestedPriority] = useState(() => parseStaffSearchParams().requestedPriority);
-  const [itPriority, setItPriority] = useState(() => parseStaffSearchParams().itPriority);
-  const [categoryId, setCategoryId] = useState(() => parseStaffSearchParams().categoryId);
-  const [owner, setOwner] = useState(() => parseStaffSearchParams().owner);
-  const [statusGroup, setStatusGroup] = useState<"active" | "resolved_closed" | null>(() => parseStaffSearchParams().statusGroup);
-  const [actionAssignee, setActionAssignee] = useState<string | null>(() => parseStaffSearchParams().actionAssignee);
-  const [actionStatus, setActionStatus] = useState<string | null>(() => parseStaffSearchParams().actionStatus);
-  const [completedBy, setCompletedBy] = useState<string | null>(() => parseStaffSearchParams().completedBy);
-  const [completedDate, setCompletedDate] = useState<string | null>(() => parseStaffSearchParams().completedDate);
-  const [sortBy, setSortBy] = useState<StaffSortBy>(() => parseStaffSearchParams().sortBy);
-  const [sortDirection, setSortDirection] = useState<StaffSortDirection>(() => parseStaffSearchParams().sortDirection);
-  const [page, setPage] = useState<number>(() => parseStaffSearchParams().page);
-  const [pageSize, setPageSize] = useState<10 | 20 | 50>(() => parseStaffSearchParams().pageSize);
+  const [search, setSearch] = useState(() => parseStaffSearchParams(url).q);
+  const [status, setStatus] = useState(() => parseStaffSearchParams(url).status);
+  const [requestedPriority, setRequestedPriority] = useState(() => parseStaffSearchParams(url).requestedPriority);
+  const [itPriority, setItPriority] = useState(() => parseStaffSearchParams(url).itPriority);
+  const [categoryId, setCategoryId] = useState(() => parseStaffSearchParams(url).categoryId);
+  const [owner, setOwner] = useState(() => parseStaffSearchParams(url).owner);
+  const [statusGroup, setStatusGroup] = useState<"active" | "resolved_closed" | null>(() => parseStaffSearchParams(url).statusGroup);
+  const [actionAssignee, setActionAssignee] = useState<string | null>(() => parseStaffSearchParams(url).actionAssignee);
+  const [actionStatus, setActionStatus] = useState<string | null>(() => parseStaffSearchParams(url).actionStatus);
+  const [completedBy, setCompletedBy] = useState<string | null>(() => parseStaffSearchParams(url).completedBy);
+  const [completedDate, setCompletedDate] = useState<string | null>(() => parseStaffSearchParams(url).completedDate);
+  const [sortBy, setSortBy] = useState<StaffSortBy>(() => parseStaffSearchParams(url).sortBy);
+  const [sortDirection, setSortDirection] = useState<StaffSortDirection>(() => parseStaffSearchParams(url).sortDirection);
+  const [page, setPage] = useState<number>(() => parseStaffSearchParams(url).page);
+  const [pageSize, setPageSize] = useState<10 | 20 | 50>(() => parseStaffSearchParams(url).pageSize);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<{ status?: number; code?: string; message: string } | null>(null);
@@ -117,7 +122,7 @@ export default function StaffTicketQueue({ onNavigate, url }: StaffTicketQueuePr
   // Re-sync query state when navigation changes route / url
   useEffect(() => {
     if (url !== undefined) {
-      const sp = parseStaffSearchParams();
+      const sp = parseStaffSearchParams(url);
       setSearch(sp.q);
       setStatus(sp.status);
       setRequestedPriority(sp.requestedPriority);

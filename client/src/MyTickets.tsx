@@ -43,8 +43,13 @@ function formatDate(iso: string): string {
   }
 }
 
-function parseRequesterSearchParams() {
-  const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+function parseRequesterSearchParams(searchStr?: string) {
+  let search = typeof window !== "undefined" ? window.location.search : "";
+  if (searchStr !== undefined) {
+    const qIndex = searchStr.indexOf("?");
+    search = qIndex !== -1 ? searchStr.slice(qIndex) : (searchStr.startsWith("?") ? searchStr : "");
+  }
+  const params = new URLSearchParams(search);
   return {
     search: params.get("search") || "",
     categoryId: params.get("categoryId") || "",
@@ -73,15 +78,15 @@ export default function MyTickets({ onNavigate, url }: MyTicketsProps) {
     hasNextPage: false,
   });
 
-  const [search, setSearch] = useState(() => parseRequesterSearchParams().search);
-  const [categoryId, setCategoryId] = useState<string>(() => parseRequesterSearchParams().categoryId);
-  const [priority, setPriority] = useState<string>(() => parseRequesterSearchParams().priority);
-  const [statusGroup, setStatusGroup] = useState<"active" | "resolved_closed" | null>(() => parseRequesterSearchParams().statusGroup);
-  const [status, setStatus] = useState<string>(() => parseRequesterSearchParams().status);
-  const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt" | "requestedPriority">(() => parseRequesterSearchParams().sortBy);
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => parseRequesterSearchParams().sortOrder);
-  const [page, setPage] = useState<number>(() => parseRequesterSearchParams().page);
-  const [pageSize, setPageSize] = useState<10 | 20 | 50>(() => parseRequesterSearchParams().pageSize);
+  const [search, setSearch] = useState(() => parseRequesterSearchParams(url).search);
+  const [categoryId, setCategoryId] = useState<string>(() => parseRequesterSearchParams(url).categoryId);
+  const [priority, setPriority] = useState<string>(() => parseRequesterSearchParams(url).priority);
+  const [statusGroup, setStatusGroup] = useState<"active" | "resolved_closed" | null>(() => parseRequesterSearchParams(url).statusGroup);
+  const [status, setStatus] = useState<string>(() => parseRequesterSearchParams(url).status);
+  const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt" | "requestedPriority">(() => parseRequesterSearchParams(url).sortBy);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => parseRequesterSearchParams(url).sortOrder);
+  const [page, setPage] = useState<number>(() => parseRequesterSearchParams(url).page);
+  const [pageSize, setPageSize] = useState<10 | 20 | 50>(() => parseRequesterSearchParams(url).pageSize);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +113,7 @@ export default function MyTickets({ onNavigate, url }: MyTicketsProps) {
   // Re-sync query state when navigation changes route / url
   useEffect(() => {
     if (url !== undefined) {
-      const sp = parseRequesterSearchParams();
+      const sp = parseRequesterSearchParams(url);
       setSearch(sp.search);
       setCategoryId(sp.categoryId);
       setPriority(sp.priority);
