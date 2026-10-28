@@ -167,7 +167,6 @@ function RequesterWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: (
     window.history.pushState({}, "", "/tickets");
     setRoute("/tickets");
     setNavKey((k) => k + 1);
-    window.dispatchEvent(new Event("popstate"));
   }
   function handleDialogKeyDown(event: KeyboardEvent<HTMLElement>) { if (event.key === "Escape") { event.preventDefault(); closeConfirmation(); return; } if (event.key !== "Tab") return; const first = keepEditingButton.current; const last = confirmButton.current; if (!first || !last) return; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } }
   async function logout() { try { await onLogout(); } catch { setLogoutMessage("We could not sign you out right now. Try again."); } }

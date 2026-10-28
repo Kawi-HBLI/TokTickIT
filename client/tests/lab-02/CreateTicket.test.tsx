@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "../../src/App.js";
 import * as api from "../../src/api.js";
@@ -188,6 +188,14 @@ describe("Create Ticket", () => {
     expect(screen.getByRole("textbox", { name: /summary/i })).toHaveValue("Still typing");
     await user.click(screen.getByRole("button", { name: "My Tickets" }));
     await user.click(screen.getByRole("button", { name: "Discard changes" }));
-    expect(await screen.findByRole("heading", { name: "My Tickets" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: /discard unsaved ticket/i })).not.toBeInTheDocument();
+    });
+    expect(window.location.pathname).toBe("/tickets");
+    expect(document.querySelector("[inert]")).toBeNull();
+    const primaryNav = screen.getByRole("navigation", { name: "Primary navigation" });
+    await user.click(within(primaryNav).getByRole("button", { name: "Create Ticket" }));
+    const summaryInput = await screen.findByRole("textbox", { name: /summary/i });
+    expect(summaryInput).toHaveValue("");
   });
 });
