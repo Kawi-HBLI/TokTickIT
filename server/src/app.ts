@@ -7,6 +7,7 @@ import { authRouter } from "./auth.js";
 import { staffQueueRouter } from "./staff-queue.js";
 import { adminUsersRouter } from "./admin-users.js";
 import { actionsRouter, ticketActionsRouter } from "./actions-router.js";
+import { dashboardRouter } from "./dashboard-router.js";
 
 
 // The Express app is exported separately from app.listen() (see index.ts) so
@@ -66,4 +67,6 @@ app.use("/api/actions", actionsRouter);
 app.use("/api/attachments", attachmentsRouter);
 app.use("/api/staff", staffQueueRouter);
 app.use("/api/admin/users", adminUsersRouter);
+app.use("/api", dashboardRouter);
+
 export default app;
