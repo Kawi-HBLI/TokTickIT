@@ -55,6 +55,8 @@ export interface TicketQueryState {
   search?: string;
   categoryId?: number | null;
   requestedPriority?: RequestedPriority | null;
+  statusGroup?: "active" | "resolved_closed" | null;
+  status?: string | null;
   sortBy?: "createdAt" | "updatedAt" | "requestedPriority";
   sortOrder?: "asc" | "desc";
   page?: number;
@@ -68,6 +70,8 @@ export interface MyTicketsResponse {
     search: string;
     categoryId: number | null;
     requestedPriority: RequestedPriority | null;
+    statusGroup?: string | null;
+    status?: string | null;
     sortBy: "createdAt" | "updatedAt" | "requestedPriority";
     sortOrder: "asc" | "desc";
   };
@@ -323,6 +327,8 @@ export async function getMyTickets(
   if (query?.search?.trim()) params.set("search", query.search.trim());
   if (query?.categoryId) params.set("categoryId", String(query.categoryId));
   if (query?.requestedPriority) params.set("requestedPriority", query.requestedPriority);
+  if (query?.statusGroup) params.set("statusGroup", query.statusGroup);
+  if (query?.status) params.set("status", query.status);
   if (query?.sortBy) params.set("sortBy", query.sortBy);
   if (query?.sortOrder) params.set("sortOrder", query.sortOrder);
   if (query?.page && query.page > 1) params.set("page", String(query.page));
@@ -516,6 +522,11 @@ export interface StaffQueueQuery {
   itPriority?: string | null;
   categoryId?: number | null;
   owner?: string | null;
+  statusGroup?: "active" | "resolved_closed" | null;
+  actionAssignee?: string | null;
+  actionStatus?: string | null;
+  completedBy?: string | null;
+  completedDate?: string | null;
   sortBy?: StaffSortBy;
   sortDirection?: StaffSortDirection;
   page?: number;
@@ -532,6 +543,11 @@ export interface StaffQueueResponse {
     itPriority: string | null;
     categoryId: number | null;
     owner: string | null;
+    statusGroup?: string | null;
+    actionAssignee?: string | null;
+    actionStatus?: string | null;
+    completedBy?: string | null;
+    completedDate?: string | null;
     sortBy: StaffSortBy;
     sortDirection: StaffSortDirection;
   };
@@ -552,6 +568,11 @@ export async function fetchStaffTickets(query?: StaffQueueQuery): Promise<StaffQ
   if (query?.itPriority) params.set("itPriority", query.itPriority);
   if (query?.categoryId) params.set("categoryId", String(query.categoryId));
   if (query?.owner) params.set("owner", query.owner);
+  if (query?.statusGroup) params.set("statusGroup", query.statusGroup);
+  if (query?.actionAssignee) params.set("actionAssignee", query.actionAssignee);
+  if (query?.actionStatus) params.set("actionStatus", query.actionStatus);
+  if (query?.completedBy) params.set("completedBy", query.completedBy);
+  if (query?.completedDate) params.set("completedDate", query.completedDate);
   if (query?.sortBy) params.set("sortBy", query.sortBy);
   if (query?.sortDirection) params.set("sortDirection", query.sortDirection);
   if (query?.page) params.set("page", String(query.page));
@@ -1103,4 +1124,118 @@ export async function fetchActionHistory(
     return readError(response, "Could not load action history.");
   }
   return response.json();
+}
+
+export interface StaffDashboardMetrics {
+  openTicketsCount: number;
+  pendingActionsCount: number;
+  completedActionsTodayCount: number;
+  completedTodayCount?: number;
+  unassignedTicketsCount: number;
+  myAssignedTicketsCount?: number;
+}
+
+export interface StaffDashboardMyWorkItem {
+  id: number;
+  ticketNumber: string;
+  summary: string;
+  requestedPriority: RequestedPriority;
+  itPriority: RequestedPriority;
+  currentStatus: TicketStatus;
+  pendingActionsCount: number;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface StaffDashboardUnassignedItem {
+  id: number;
+  ticketNumber: string;
+  summary: string;
+  requestedPriority: RequestedPriority;
+  itPriority: RequestedPriority;
+  currentStatus: TicketStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StaffDashboardRecentAction {
+  id: number;
+  ticketId: number;
+  ticketNumber: string;
+  description: string;
+  status: ActionStatus;
+  performerName: string;
+  completedBy?: { id: number; name: string; email: string } | null;
+  completedAt?: string | null;
+  result?: string | null;
+  updatedAt: string;
+}
+
+export interface StaffDashboardData {
+  metrics: StaffDashboardMetrics;
+  myWork: {
+    assignedTicketsCount: number;
+    items: StaffDashboardMyWorkItem[];
+  };
+  myAssignedWork?: StaffDashboardMyWorkItem[];
+  unassignedQueue: {
+    total: number;
+    items: StaffDashboardUnassignedItem[];
+  };
+  recentActions: StaffDashboardRecentAction[];
+  recentActionActivity?: StaffDashboardRecentAction[];
+}
+
+export interface RequesterDashboardMetrics {
+  activeTicketsCount: number;
+  openTicketsCount?: number;
+  awaitingRequesterCount: number;
+  awaitingInputTicketsCount?: number;
+  resolvedClosedCount: number;
+  resolvedTicketsCount?: number;
+}
+
+export interface RequesterDashboardRecentTicket {
+  id: number;
+  ticketNumber: string;
+  summary: string;
+  currentStatus: TicketStatus;
+  latestPublicUpdate: string;
+  updatedAt: string;
+}
+
+export interface RequesterDashboardData {
+  metrics: RequesterDashboardMetrics;
+  recentTickets: RequesterDashboardRecentTicket[];
+  recentActivity?: RequesterDashboardRecentTicket[];
+}
+
+export async function fetchStaffDashboard(): Promise<{ data: StaffDashboardData }> {
+  const response = await fetch(`${API_URL}/api/staff/dashboard`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    return readError(response, "Staff dashboard could not be loaded.");
+  }
+  return response.json();
+}
+
+export async function getStaffDashboard(): Promise<StaffDashboardData> {
+  const result = await fetchStaffDashboard();
+  return result.data;
+}
+
+export async function fetchRequesterDashboard(): Promise<{ data: RequesterDashboardData }> {
+  const response = await fetch(`${API_URL}/api/requester/dashboard`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    return readError(response, "Requester dashboard could not be loaded.");
+  }
+  return response.json();
+}
+
+export async function getRequesterDashboard(): Promise<RequesterDashboardData> {
+  const result = await fetchRequesterDashboard();
+  return result.data;
 }

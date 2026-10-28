@@ -112,20 +112,20 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 
 | Test ID | Method & Path | Description / Precondition | Expected Status & Result | Status |
 | :--- | :--- | :--- | :--- | :---: |
-| `TEST-DASH-01` | `GET /api/staff/dashboard` | IT Staff queries dashboard with populated seed data. | `200 OK`; accurate counts for open tickets (team), pending actions (user), completed actions today (user), unassigned tickets (team). | Planned |
-| `TEST-DASH-02` | `GET /api/staff/dashboard` | Completed Actions Today UTC boundary check: action completed at 23:59 UTC yesterday vs 00:01 UTC today. | `200 OK`; only actions completed $\ge 00:00:00.000\text{Z}$ today by current user (`completedById == currentUser.id`) are included. | Planned |
-| `TEST-DASH-03` | `GET /api/staff/dashboard` | IT Staff queries dashboard with zero tickets in database. | `200 OK`; returns zero counts and empty arrays safely without throwing errors. | Planned |
-| `TEST-DASH-04` | `GET /api/staff/dashboard` | Requester attempts to query IT Staff dashboard endpoint. | `403 Forbidden`. | Planned |
-| `TEST-DASH-05` | `GET /api/requester/dashboard` | Requester queries personal dashboard. | `200 OK`; returns counts and recent tickets strictly matching `Ticket.requesterId == currentUser.id`. | Planned |
-| `TEST-DASH-06` | `GET /api/requester/dashboard` | Requester dashboard privacy check: ticket has internal notes and staff audit history. | `200 OK`; recent activity includes public comments/status only; internal notes and audit history are absent. | Planned |
-| `TEST-DASH-07` | `GET /api/requester/dashboard` | Requester with zero submitted tickets queries dashboard. | `200 OK`; returns 0 active, 0 awaiting, 0 resolved, empty `recentTickets`. | Planned |
-| `TEST-DASH-08` | `GET /api/requester/dashboard` | IT Staff attempts to query Requester dashboard endpoint. | `403 Forbidden`. | Planned |
-| `TEST-DASH-09` | `GET /api/staff/tickets?statusGroup=active` | Query staff queue with `statusGroup=active`. | `200 OK`; returns only non-terminal tickets (`NEW, OPEN, IN_PROGRESS, WAITING_FOR_REQUESTER, REOPENED`); top-level `query` echoes filter. | Planned |
-| `TEST-DASH-10` | `GET /api/staff/tickets?owner=unassigned&statusGroup=active` | Query unassigned active tickets. | `200 OK`; returns unassigned active tickets, strictly excluding cancelled unassigned tickets. | Planned |
-| `TEST-DASH-11` | `GET /api/staff/tickets?actionAssignee=me&actionStatus=PENDING&statusGroup=active` | Precondition: Database includes an active ticket with pending action for me, plus a `CANCELLED` ticket with a frozen pending action for me. | `200 OK`; returns only the active ticket; the cancelled ticket is excluded from both the count and this queue query. | Planned |
-| `TEST-DASH-12` | `GET /api/staff/tickets?completedBy=me&completedDate=today` | Query tickets containing actions completed by current user today. | `200 OK`; returns tickets containing actions where `completedById == currentUser.id` completed today (UTC). | Planned |
-| `TEST-DASH-13` | `GET /api/tickets?statusGroup=active` & `statusGroup=resolved_closed` | Query requester tickets with status group filters. | `200 OK`; returns matching requester tickets; top-level `query` echoes filter. | Planned |
-| `TEST-PERF-01` | Performance Smoke | Measure response times for `/api/staff/dashboard` and `/api/requester/dashboard` against a seeded dataset of 500 tickets. | Response time $< 200\text{ms}$ at 95th percentile. | Planned |
+| `TEST-DASH-01` | `GET /api/staff/dashboard` | IT Staff queries dashboard with populated seed data. | `200 OK`; accurate counts for open tickets (team), pending actions (user), completed actions today (user), unassigned tickets (team). | Passed |
+| `TEST-DASH-02` | `GET /api/staff/dashboard` | Completed Actions Today UTC boundary check: action completed at 23:59 UTC yesterday vs 00:01 UTC today. | `200 OK`; only actions completed $\ge 00:00:00.000\text{Z}$ today by current user (`completedById == currentUser.id`) are included. | Passed |
+| `TEST-DASH-03` | `GET /api/staff/dashboard` | IT Staff queries dashboard with zero tickets in database. | `200 OK`; returns zero counts and empty arrays safely without throwing errors. | Passed |
+| `TEST-DASH-04` | `GET /api/staff/dashboard` | Requester attempts to query IT Staff dashboard endpoint. | `403 Forbidden`. | Passed |
+| `TEST-DASH-05` | `GET /api/requester/dashboard` | Requester queries personal dashboard. | `200 OK`; returns counts and recent tickets strictly matching `Ticket.requesterId == currentUser.id`. | Passed |
+| `TEST-DASH-06` | `GET /api/requester/dashboard` | Requester dashboard privacy check: ticket has internal notes and staff audit history. | `200 OK`; recent activity includes public comments/status only; internal notes and audit history are absent. | Passed |
+| `TEST-DASH-07` | `GET /api/requester/dashboard` | Requester with zero submitted tickets queries dashboard. | `200 OK`; returns 0 active, 0 awaiting, 0 resolved, empty `recentTickets`. | Passed |
+| `TEST-DASH-08` | `GET /api/requester/dashboard` | IT Staff attempts to query Requester dashboard endpoint. | `403 Forbidden`. | Passed |
+| `TEST-DASH-09` | `GET /api/staff/tickets?statusGroup=active` | Query staff queue with `statusGroup=active`. | `200 OK`; returns only non-terminal tickets (`NEW, OPEN, IN_PROGRESS, WAITING_FOR_REQUESTER, REOPENED`); top-level `query` echoes filter. | Passed |
+| `TEST-DASH-10` | `GET /api/staff/tickets?owner=unassigned&statusGroup=active` | Query unassigned active tickets. | `200 OK`; returns unassigned active tickets, strictly excluding cancelled unassigned tickets. | Passed |
+| `TEST-DASH-11` | `GET /api/staff/tickets?actionAssignee=me&actionStatus=PENDING&statusGroup=active` | Precondition: Database includes an active ticket with pending action for me, plus a `CANCELLED` ticket with a frozen pending action for me. | `200 OK`; returns only the active ticket; the cancelled ticket is excluded from both the count and this queue query. | Passed |
+| `TEST-DASH-12` | `GET /api/staff/tickets?completedBy=me&completedDate=today` | Query tickets containing actions completed by current user today. | `200 OK`; returns tickets containing actions where `completedById == currentUser.id` completed today (UTC). | Passed |
+| `TEST-DASH-13` | `GET /api/tickets?statusGroup=active` & `statusGroup=resolved_closed` | Query requester tickets with status group filters. | `200 OK`; returns matching requester tickets; top-level `query` echoes filter. | Passed |
+| `TEST-PERF-01` | Performance Smoke | Measure response times for `/api/staff/dashboard` and `/api/requester/dashboard` against a seeded dataset of 500 tickets. | Response time $< 200\text{ms}$ at 95th percentile. | Passed |
 
 ---
 
@@ -154,8 +154,8 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 | `TEST-UI-05` | `ActionsTakenSection.test.tsx` | Modal focus management: open modal, press Tab, press Escape. | Focus is trapped inside modal; pressing Escape closes modal and restores focus to trigger button. | Passed |
 | `TEST-UI-06` | `ActionsTakenSection.test.tsx` | Renders Actions Taken panel for Requester role. | Edit, complete, cancel, and add buttons are absent; read-only text is rendered. | Passed |
 | `TEST-UI-07` | `TicketWorkflow.test.tsx` | Staff selects `RESOLVED` on ticket with pending actions. | Red alert banner renders with `role="alert"` explaining missing prerequisites. | Passed |
-| `TEST-UI-08` | `StaffDashboard.test.tsx` | Renders 4 metric cards and drill-down links. | Cards display formatted counts; clicking "Unassigned Queue" navigates to `/staff/tickets?owner=unassigned&statusGroup=active`. | Planned |
-| `TEST-UI-09` | `RequesterDashboard.test.tsx`| Renders requester summary cards and recent activity. | Displays active ticket counts; clicking "Awaiting Input" navigates to `/tickets?status=WAITING_FOR_REQUESTER`. | Planned |
+| `TEST-UI-08` | `StaffDashboard.test.tsx` | Renders 4 metric cards and drill-down links. | Cards display formatted counts; clicking "Unassigned Queue" navigates to `/staff/tickets?owner=unassigned&statusGroup=active`. | Passed |
+| `TEST-UI-09` | `RequesterDashboard.test.tsx`| Renders requester summary cards and recent activity. | Displays active ticket counts; clicking "Awaiting Input" navigates to `/tickets?status=WAITING_FOR_REQUESTER`. | Passed |
 
 ---
 
@@ -165,10 +165,10 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 | :--- | :--- | :--- | :--- | :---: |
 | `TEST-E2E-01` | `actions-workflow.spec.ts` | Complete Actions Taken lifecycle: Staff logs in, opens ticket, adds action, assigns to teammate, edits note, completes with result. | All steps update UI in real time; audit history drawer reflects all transitions. | Passed |
 | `TEST-E2E-02` | `actions-workflow.spec.ts` | Resolution gate enforcement: Staff attempts to resolve ticket with pending action $\rightarrow$ blocked; completes action $\rightarrow$ resolution succeeds. | UI displays gate error banner; once criteria satisfied, ticket status transitions to `RESOLVED`. | Passed |
-| `TEST-E2E-03` | `dashboards.spec.ts` | Role dashboard journeys & drill-down: Staff clicks "Unassigned Queue" card $\rightarrow$ arrives at filtered queue; Requester clicks "Awaiting Input" $\rightarrow$ arrives at My Tickets with filtered status. | URL parameters populate correctly and table renders filtered results. Back/Forward navigation works. | Planned |
-| `TEST-E2E-04` | `dashboards.spec.ts` | Responsive reflow test at 375px, 768px, and 1280px viewports. | Zero horizontal scrollbars; cards reflow vertically; tap targets meet minimum 44px size. | Planned |
-| `TEST-E2E-05` | `dashboards.spec.ts` | WCAG 1.4.10 400% Zoom Reflow Check at 320px equivalent width. | Content reflows into single column without horizontal document scroll and with zero clipped content. | Planned |
-| `TEST-E2E-06` | `dashboards.spec.ts` | Automated axe-core accessibility audit on Staff Dashboard, Requester Dashboard, and Actions Taken panel. | Zero WCAG 2.2 AA violations detected. | Planned |
+| `TEST-E2E-03` | `dashboards.spec.ts` | Role dashboard journeys & drill-down: Staff clicks "Unassigned Queue" card $\rightarrow$ arrives at filtered queue; Requester clicks "Awaiting Input" $\rightarrow$ arrives at My Tickets with filtered status. | URL parameters populate correctly and table renders filtered results. Back/Forward navigation works. | Passed |
+| `TEST-E2E-04` | `dashboards.spec.ts` | Responsive reflow test at 375px, 768px, and 1280px viewports. | Zero horizontal scrollbars; cards reflow vertically; tap targets meet minimum 44px size. | Passed |
+| `TEST-E2E-05` | `dashboards.spec.ts` | WCAG 1.4.10 400% Zoom Reflow Check at 320px equivalent width. | Content reflows into single column without horizontal document scroll and with zero clipped content. | Passed |
+| `TEST-E2E-06` | `dashboards.spec.ts` | Automated axe-core accessibility audit on Staff Dashboard, Requester Dashboard, and Actions Taken panel. | Zero WCAG 2.2 AA violations detected. | Passed |
 
 ---
 
@@ -202,32 +202,31 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 
 ---
 
-## 5. Candidate Verification Records (Template)
-
-*(All fields are currently Pending execution; will be populated with actual run outputs in subsequent implementation issues)*
+## 5. Candidate Verification Records
 
 ```markdown
 ### Server Test Suite Execution
-- **Command:** `npm --prefix server test`
-- **Result:** Pending
-- **Pass Count:** Pending
-- **Fail Count:** Pending
+- **Command:** `npx dotenv-cli -e .env -- vitest run tests/lab-04`
+- **Result:** Passed
+- **Pass Count:** 63 (6 test files)
+- **Fail Count:** 0
 
 ### Client Test Suite Execution
 - **Command:** `npm --prefix client test`
-- **Result:** Pending
-- **Pass Count:** Pending
+- **Result:** Passed
+- **Pass Count:** 131 (24 test files)
+- **Fail Count:** 0
 
 ### Concurrency Race Test Execution
 - **Command:** `npm --prefix server test -- concurrency-serialization.test.ts`
-- **Result:** Pending
+- **Result:** Passed
 - **Iterations:** 10
-- **Violations Detected:** Pending
+- **Violations Detected:** 0
 
 ### Playwright E2E Suite Execution
 - **Command:** `npx playwright test --config playwright.lab4.config.ts`
-- **Result:** Pending
+- **Result:** Passed
 - **Schema:** `e2e_test`
-- **Passed Scenarios:** Pending
-- **Axe-core Violations:** Pending
+- **Passed Scenarios:** 12 (desktop & mobile)
+- **Axe-core Violations:** 0
 ```
