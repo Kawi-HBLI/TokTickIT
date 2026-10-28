@@ -39,20 +39,28 @@ function SystemDiagnostics() {
 function RoleWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: () => Promise<void> }) {
   const [route, setRoute] = useState<string>(() => {
     const path = window.location.pathname;
-    if (path === "/staff/dashboard") return "/staff/dashboard";
-    if (user.role === "ADMINISTRATOR" && path === "/admin/users") return "/admin/users";
-    if (/^\/staff\/tickets(\/\d+)?$/.test(path)) return path;
+    const search = window.location.search;
+    const full = path + search;
+    if (path === "/staff/dashboard") return full;
+    if (user.role === "ADMINISTRATOR" && path === "/admin/users") return full;
+    if (/^\/staff\/tickets(\/\d+)?$/.test(path)) return full;
     return "/staff/tickets";
   });
   const [message, setMessage] = useState<string | null>(null);
   async function logout() { try { await onLogout(); } catch { setMessage("We could not sign you out right now. Try again."); } }
   function navigate(next: string) {
-    window.history.pushState({}, "", next);
-    setRoute(next);
+    const current = window.location.pathname + window.location.search;
+    if (current !== next) {
+      window.history.pushState({}, "", next);
+      setRoute(next);
+      window.dispatchEvent(new Event("popstate"));
+    } else {
+      window.dispatchEvent(new Event("popstate"));
+    }
   }
   useEffect(() => {
     const onPop = () => {
-      setRoute(window.location.pathname);
+      setRoute(window.location.pathname + window.location.search);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -85,7 +93,7 @@ function RoleWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: () => 
           onNavigate={navigate}
         />
       ) : route === "/staff/tickets" || route.startsWith("/staff/tickets?") ? (
-        <StaffTicketQueue onNavigate={navigate} />
+        <StaffTicketQueue onNavigate={navigate} url={route} />
       ) : route === "/admin/users" && user.role === "ADMINISTRATOR" ? (
         <UserManagement onNavigate={navigate} />
       ) : (
@@ -101,7 +109,9 @@ function RoleWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: () => 
 function RequesterWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: () => Promise<void> }) {
   const [route, setRoute] = useState<string>(() => {
     const path = window.location.pathname;
-    return path === "/dashboard" || path === "/tickets/new" || /^\/tickets\/\d+$/.test(path) || path === "/tickets" ? path : "/tickets";
+    const search = window.location.search;
+    const full = path + search;
+    return path === "/dashboard" || path === "/tickets/new" || /^\/tickets\/\d+$/.test(path) || path === "/tickets" ? full : "/tickets";
   });
   const [isDirty, setIsDirty] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
@@ -115,8 +125,14 @@ function RequesterWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: (
   useEffect(() => {
     const onPopState = () => {
       const path = window.location.pathname;
-      const next = path === "/dashboard" || path === "/tickets/new" || /^\/tickets\/\d+$/.test(path) ? path : "/tickets";
-      if (isBusy || (route === "/tickets/new" && isDirty && next !== route)) { window.history.pushState({}, "", route); if (!isBusy) openConfirmation(); return; }
+      const search = window.location.search;
+      const full = path + search;
+      const next = path === "/dashboard" || path === "/tickets/new" || /^\/tickets\/\d+$/.test(path) || path === "/tickets" ? full : "/tickets";
+      if (isBusy || (route.startsWith("/tickets/new") && isDirty && next !== route)) {
+        window.history.pushState({}, "", route);
+        if (!isBusy) openConfirmation();
+        return;
+      }
       setRoute(next);
     };
     window.addEventListener("popstate", onPopState);
@@ -125,11 +141,28 @@ function RequesterWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: (
   useEffect(() => { const content = contentRef.current; if (content) confirmation ? content.setAttribute("inert", "") : content.removeAttribute("inert"); if (confirmation) keepEditingButton.current?.focus(); if (!confirmation) previousFocus.current?.focus(); }, [confirmation]);
   function openConfirmation() { previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setConfirmation("cancel"); }
   function closeConfirmation() { setConfirmation(null); }
-  function navigate(next: string) { if (isBusy || next === route) return; if (route === "/tickets/new" && isDirty) { openConfirmation(); return; } window.history.pushState({}, "", next); setRoute(next); }
-  function confirmDiscard() { setConfirmation(null); setIsDirty(false); window.history.pushState({}, "", "/tickets"); setRoute("/tickets"); }
+  function navigate(next: string) {
+    if (isBusy) return;
+    if (route.startsWith("/tickets/new") && isDirty) { openConfirmation(); return; }
+    const current = window.location.pathname + window.location.search;
+    if (current !== next) {
+      window.history.pushState({}, "", next);
+      setRoute(next);
+      window.dispatchEvent(new Event("popstate"));
+    } else {
+      window.dispatchEvent(new Event("popstate"));
+    }
+  }
+  function confirmDiscard() {
+    setConfirmation(null);
+    setIsDirty(false);
+    window.history.pushState({}, "", "/tickets");
+    setRoute("/tickets");
+    window.dispatchEvent(new Event("popstate"));
+  }
   function handleDialogKeyDown(event: KeyboardEvent<HTMLElement>) { if (event.key === "Escape") { event.preventDefault(); closeConfirmation(); return; } if (event.key !== "Tab") return; const first = keepEditingButton.current; const last = confirmButton.current; if (!first || !last) return; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } }
   async function logout() { try { await onLogout(); } catch { setLogoutMessage("We could not sign you out right now. Try again."); } }
-  const ticketDetailMatch = route.match(/^\/tickets\/(\d+)$/);
+  const ticketDetailMatch = route.match(/^\/tickets\/(\d+)(?:\?.*)?$/);
   const detailTicketId = ticketDetailMatch ? parseInt(ticketDetailMatch[1], 10) : null;
 
   return (
@@ -155,12 +188,12 @@ function RequesterWorkspace({ user, onLogout }: { user: CurrentUser; onLogout: (
         {logoutMessage && <p className="form-alert" role="alert">{logoutMessage}</p>}
         {route === "/dashboard" || route.startsWith("/dashboard?") ? (
           <RequesterDashboard onNavigate={navigate} />
-        ) : route === "/tickets/new" ? (
+        ) : route === "/tickets/new" || route.startsWith("/tickets/new?") ? (
           <CreateTicket onDirtyChange={setIsDirty} onBusyChange={setIsBusy} onNavigate={navigate} />
         ) : detailTicketId !== null ? (
           <RequesterTicketDetail ticketId={detailTicketId} onNavigate={navigate} />
         ) : (
-          <MyTickets onNavigate={navigate} />
+          <MyTickets onNavigate={navigate} url={route} />
         )}
         <SystemDiagnostics />
       </div>

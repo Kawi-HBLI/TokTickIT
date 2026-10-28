@@ -125,7 +125,7 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 | `TEST-DASH-11` | `GET /api/staff/tickets?actionAssignee=me&actionStatus=PENDING&statusGroup=active` | Precondition: Database includes an active ticket with pending action for me, plus a `CANCELLED` ticket with a frozen pending action for me. | `200 OK`; returns only the active ticket; the cancelled ticket is excluded from both the count and this queue query. | Passed |
 | `TEST-DASH-12` | `GET /api/staff/tickets?completedBy=me&completedDate=today` | Query tickets containing actions completed by current user today. | `200 OK`; returns tickets containing actions where `completedById == currentUser.id` completed today (UTC). | Passed |
 | `TEST-DASH-13` | `GET /api/tickets?statusGroup=active` & `statusGroup=resolved_closed` | Query requester tickets with status group filters. | `200 OK`; returns matching requester tickets; top-level `query` echoes filter. | Passed |
-| `TEST-PERF-01` | Performance Smoke | Measure response times for `/api/staff/dashboard` and `/api/requester/dashboard` against a seeded dataset of 500 tickets. | Response time $< 200\text{ms}$ at 95th percentile. | Passed |
+| `TEST-PERF-01` | Performance Smoke | Measure response times for `/api/staff/dashboard` and `/api/requester/dashboard` against a seeded dataset of 500 tickets. | Response time $< 200\text{ms}$ at 95th percentile. | Planned |
 
 ---
 
@@ -167,7 +167,7 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 | `TEST-E2E-02` | `actions-workflow.spec.ts` | Resolution gate enforcement: Staff attempts to resolve ticket with pending action $\rightarrow$ blocked; completes action $\rightarrow$ resolution succeeds. | UI displays gate error banner; once criteria satisfied, ticket status transitions to `RESOLVED`. | Passed |
 | `TEST-E2E-03` | `dashboards.spec.ts` | Role dashboard journeys & drill-down: Staff clicks "Unassigned Queue" card $\rightarrow$ arrives at filtered queue; Requester clicks "Awaiting Input" $\rightarrow$ arrives at My Tickets with filtered status. | URL parameters populate correctly and table renders filtered results. Back/Forward navigation works. | Passed |
 | `TEST-E2E-04` | `dashboards.spec.ts` | Responsive reflow test at 375px, 768px, and 1280px viewports. | Zero horizontal scrollbars; cards reflow vertically; tap targets meet minimum 44px size. | Passed |
-| `TEST-E2E-05` | `dashboards.spec.ts` | WCAG 1.4.10 400% Zoom Reflow Check at 320px equivalent width. | Content reflows into single column without horizontal document scroll and with zero clipped content. | Passed |
+| `TEST-E2E-05` | `dashboards.spec.ts` | WCAG 1.4.10 equivalent-width reflow check at 320px viewport. | Content reflows into single column without horizontal document scroll and with zero clipped content. | Passed |
 | `TEST-E2E-06` | `dashboards.spec.ts` | Automated axe-core accessibility audit on Staff Dashboard, Requester Dashboard, and Actions Taken panel. | Zero WCAG 2.2 AA violations detected. | Passed |
 
 ---
@@ -206,7 +206,7 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 
 ```markdown
 ### Server Test Suite Execution
-- **Command:** `npx dotenv-cli -e .env -- vitest run tests/lab-04`
+- **Command:** `npx dotenv-cli -e server/.env -- npx --prefix server vitest run --root server tests/lab-04`
 - **Result:** Passed
 - **Pass Count:** 63 (6 test files)
 - **Fail Count:** 0
@@ -214,11 +214,11 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 ### Client Test Suite Execution
 - **Command:** `npm --prefix client test`
 - **Result:** Passed
-- **Pass Count:** 131 (24 test files)
+- **Pass Count:** 132 (24 test files)
 - **Fail Count:** 0
 
 ### Concurrency Race Test Execution
-- **Command:** `npm --prefix server test -- concurrency-serialization.test.ts`
+- **Command:** `npx dotenv-cli -e server/.env -- npx --prefix server vitest run tests/lab-04/concurrency-serialization.test.ts`
 - **Result:** Passed
 - **Iterations:** 10
 - **Violations Detected:** 0

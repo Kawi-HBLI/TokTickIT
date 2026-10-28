@@ -393,7 +393,9 @@ export default function StaffDashboard({ onNavigate }: StaffDashboardProps) {
                     >
                       {action.ticketNumber}
                     </button>
-                    : &ldquo;{action.result || action.description}&rdquo;
+                    <span className="activity-text">
+                      : &ldquo;{action.result || action.description}&rdquo;
+                    </span>
                     <span className="activity-time">
                       {" "}
                       ({formatRelativeTime(action.completedAt || action.updatedAt)})

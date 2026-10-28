@@ -66,6 +66,28 @@ test.describe("Lab 4: Role Dashboards, Interactive Drill-Downs & Accessibility",
     await expect(filterContainer).toContainText("Unassigned");
     await expect(filterContainer).toContainText("Active Tickets");
 
+    // In-app navigation sync test: clicking "Ticket Queue" resets filters to unfiltered base queue
+    await navigateViaMenu(page, "Ticket Queue");
+    await page.waitForURL(/\/staff\/tickets$/);
+    expect(new URL(page.url()).search).toBe("");
+    await expect(page.locator(".active-filters-container")).toHaveCount(0);
+
+    // Directly loaded filtered URL test:
+    await page.goto("/staff/tickets?statusGroup=active");
+    await expect(page.locator(".active-filters-container")).toBeVisible();
+    await expect(page.locator(".active-filters-container")).toContainText("Active Tickets");
+    await navigateViaMenu(page, "Ticket Queue");
+    await page.waitForURL(/\/staff\/tickets$/);
+    expect(new URL(page.url()).search).toBe("");
+    await expect(page.locator(".active-filters-container")).toHaveCount(0);
+
+    // Re-trigger Drill-Down 1 to test Browser Back and Forward
+    await page.goto("/staff/dashboard");
+    await expect(unassignedCard).toBeVisible();
+    await unassignedCard.getByRole("button", { name: /Claim Work/i }).click();
+    await page.waitForURL(/\/staff\/tickets\?/);
+    await expect(page.locator(".active-filters-container")).toBeVisible();
+
     // Browser Back: returns to Staff Dashboard
     await page.goBack();
     await expect(page).toHaveURL(/\/staff\/dashboard/);
@@ -165,6 +187,31 @@ test.describe("Lab 4: Role Dashboards, Interactive Drill-Downs & Accessibility",
     expect(r2.searchParams.get("statusGroup")).toBe("active");
     await expect(page.locator(".active-filters-container")).toContainText("Active Tickets");
 
+    // In-app navigation sync test: clicking "My Tickets" resets filters to unfiltered base queue
+    await navigateViaMenu(page, "My Tickets");
+    await page.waitForURL(/\/tickets$/);
+    expect(new URL(page.url()).search).toBe("");
+    await expect(page.locator(".active-filters-container")).toHaveCount(0);
+
+    // Directly loaded filtered URL test with Browser Back/Forward:
+    await page.goto("/tickets?status=WAITING_FOR_REQUESTER");
+    await expect(page.locator(".active-filters-container")).toBeVisible();
+    await expect(page.locator(".active-filters-container")).toContainText("Awaiting Your Input");
+    await navigateViaMenu(page, "My Tickets");
+    await page.waitForURL(/\/tickets$/);
+    expect(new URL(page.url()).search).toBe("");
+    await expect(page.locator(".active-filters-container")).toHaveCount(0);
+
+    // Browser Back restores filtered state
+    await page.goBack();
+    await page.waitForURL(/\/tickets\?status=WAITING_FOR_REQUESTER/);
+    await expect(page.locator(".active-filters-container")).toBeVisible();
+
+    // Browser Forward restores unfiltered state
+    await page.goForward();
+    await page.waitForURL(/\/tickets$/);
+    await expect(page.locator(".active-filters-container")).toHaveCount(0);
+
     // Drill-Down 3: Resolved & Closed -> /tickets?statusGroup=resolved_closed
     await page.goto("/dashboard");
     const resolvedLink = reqResolvedCard.getByRole("button", { name: /View History/i });
@@ -193,14 +240,15 @@ test.describe("Lab 4: Role Dashboards, Interactive Drill-Downs & Accessibility",
       await page.goto("/staff/dashboard");
       await expect(page.getByRole("heading", { name: "Operational Overview" })).toBeVisible();
 
-      // Verify zero horizontal page overflow
-      await checkNoHorizontalScroll(page);
-
-      // Verify all 4 metric cards are visible
+      // Wait for loaded metric cards and preview content before checking overflow
       await expect(page.locator('[data-testid="metric-open-tickets"]')).toBeVisible();
       await expect(page.locator('[data-testid="metric-pending-actions"]')).toBeVisible();
       await expect(page.locator('[data-testid="metric-completed-today"]')).toBeVisible();
       await expect(page.locator('[data-testid="metric-unassigned-queue"]')).toBeVisible();
+      await expect(page.locator(".recent-activity-list, .state-message").first()).toBeVisible();
+
+      // Verify zero horizontal page overflow
+      await checkNoHorizontalScroll(page);
     }
 
     await page.getByRole("button", { name: "Log out" }).click();
@@ -213,17 +261,18 @@ test.describe("Lab 4: Role Dashboards, Interactive Drill-Downs & Accessibility",
       await page.goto("/dashboard");
       await expect(page.getByRole("heading", { name: /Welcome back/i })).toBeVisible();
 
-      // Verify zero horizontal page overflow
-      await checkNoHorizontalScroll(page);
-
-      // Verify 3 metric cards are visible
+      // Wait for loaded metric cards and preview table before checking overflow
       await expect(page.locator('[data-testid="metric-active-tickets"]')).toBeVisible();
       await expect(page.locator('[data-testid="metric-awaiting-input"]')).toBeVisible();
       await expect(page.locator('[data-testid="metric-resolved-closed"]')).toBeVisible();
+      await expect(page.locator(".queue-table, .state-message").first()).toBeVisible();
+
+      // Verify zero horizontal page overflow
+      await checkNoHorizontalScroll(page);
     }
   });
 
-  test("TEST-E2E-05: WCAG 1.4.10 400% Zoom Reflow Check at 320px equivalent width", async ({
+  test("TEST-E2E-05: WCAG 1.4.10 equivalent-width reflow check at 320px viewport", async ({
     page,
   }) => {
     // 320px equivalent width test
@@ -233,6 +282,8 @@ test.describe("Lab 4: Role Dashboards, Interactive Drill-Downs & Accessibility",
     await loginUser(page, "ethan.brooks@toktickit.local");
     await page.goto("/staff/dashboard");
     await expect(page.getByRole("heading", { name: "Operational Overview" })).toBeVisible();
+    await expect(page.locator('[data-testid="metric-open-tickets"]')).toBeVisible();
+    await expect(page.locator(".recent-activity-list, .state-message").first()).toBeVisible();
 
     // Verify zero horizontal overflow at 320px
     await checkNoHorizontalScroll(page);
@@ -241,12 +292,60 @@ test.describe("Lab 4: Role Dashboards, Interactive Drill-Downs & Accessibility",
     const openCard = page.locator('[data-testid="metric-open-tickets"]');
     await expect(openCard).toBeVisible();
 
+    // Populated browser regression: 1,500-character uninterrupted action result at 320px
+    await page.route("**/api/staff/dashboard", async (route) => {
+      const longUnbrokenText = "UninterruptedActivityResult".repeat(60); // 1,560 uninterrupted characters
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            metrics: {
+              openTicketsCount: 14,
+              pendingActionsCount: 2,
+              completedActionsTodayCount: 3,
+              unassignedTicketsCount: 5,
+              myAssignedTicketsCount: 4,
+            },
+            myWork: { total: 0, items: [] },
+            unassignedQueue: { total: 0, items: [] },
+            recentActions: [
+              {
+                id: 9999,
+                ticketId: 1,
+                ticketNumber: "TCK-2026-00001",
+                description: "Investigation note",
+                result: longUnbrokenText,
+                status: "COMPLETED",
+                performerName: "Ethan Brooks",
+                updatedAt: new Date().toISOString(),
+                completedAt: new Date().toISOString(),
+              },
+            ],
+          },
+        }),
+      });
+    });
+
+    await page.goto("/staff/dashboard");
+    await expect(page.locator('[data-testid="metric-open-tickets"]')).toBeVisible();
+    await expect(page.locator(".recent-activity-list")).toBeVisible();
+    const activityItem = page.locator(".recent-activity-item").first();
+    await expect(activityItem).toBeVisible();
+    await expect(activityItem).toContainText("UninterruptedActivityResult");
+
+    // Verify 1,500-character uninterrupted result wraps cleanly without causing horizontal scrolling at 320px
+    await checkNoHorizontalScroll(page);
+    await page.unroute("**/api/staff/dashboard");
+
     await page.getByRole("button", { name: "Log out" }).click();
 
     // Check Requester Dashboard at 320px
     await loginUser(page, "diego.santos@toktickit.local");
     await page.goto("/dashboard");
     await expect(page.getByRole("heading", { name: /Welcome back/i })).toBeVisible();
+    await expect(page.locator('[data-testid="metric-active-tickets"]')).toBeVisible();
+    await expect(page.locator(".queue-table, .state-message").first()).toBeVisible();
 
     // Verify zero horizontal overflow at 320px
     await checkNoHorizontalScroll(page);
@@ -255,13 +354,15 @@ test.describe("Lab 4: Role Dashboards, Interactive Drill-Downs & Accessibility",
     await expect(reqActiveCard).toBeVisible();
   });
 
-  test("TEST-E2E-06: Automated axe-core accessibility audit on Dashboards and filtered views", async ({
+  test("TEST-E2E-06: Automated axe-core accessibility audit on Dashboards, filtered queue, and Actions Taken panel", async ({
     page,
   }) => {
     // 1. Staff Dashboard audit
     await loginUser(page, "ethan.brooks@toktickit.local");
     await page.goto("/staff/dashboard");
     await expect(page.getByRole("heading", { name: "Operational Overview" })).toBeVisible();
+    await expect(page.locator('[data-testid="metric-open-tickets"]')).toBeVisible();
+    await expect(page.locator(".recent-activity-list, .state-message").first()).toBeVisible();
 
     const staffAxeResults = await new AxeBuilder({ page })
       .withTags(axeTags)
@@ -271,18 +372,35 @@ test.describe("Lab 4: Role Dashboards, Interactive Drill-Downs & Accessibility",
     // 2. Filtered Staff Queue audit
     await page.goto("/staff/tickets?owner=unassigned&statusGroup=active");
     await expect(page.getByRole("heading", { name: /Ticket Queue/i })).toBeVisible();
+    await expect(page.locator(".active-filters-container")).toBeVisible();
+    await expect(page.locator(".staff-queue-table, .state-message").first()).toBeVisible();
 
     const queueAxeResults = await new AxeBuilder({ page })
       .withTags(axeTags)
       .analyze();
     expect(queueAxeResults.violations).toEqual([]);
 
+    // 3. Actions Taken panel audit on Staff Ticket Detail
+    await page.goto("/staff/tickets/1");
+    await expect(page.getByRole("heading", { name: "Ticket Detail" })).toBeVisible();
+    const actionsSection = page.locator("section.actions-taken-section");
+    await expect(actionsSection).toBeVisible();
+    await expect(actionsSection.getByRole("heading", { name: /Actions Taken/i })).toBeVisible();
+
+    const actionsAxeResults = await new AxeBuilder({ page })
+      .include("section.actions-taken-section")
+      .withTags(axeTags)
+      .analyze();
+    expect(actionsAxeResults.violations).toEqual([]);
+
     await page.getByRole("button", { name: "Log out" }).click();
 
-    // 3. Requester Dashboard audit
+    // 4. Requester Dashboard audit
     await loginUser(page, "diego.santos@toktickit.local");
     await page.goto("/dashboard");
     await expect(page.getByRole("heading", { name: /Welcome back/i })).toBeVisible();
+    await expect(page.locator('[data-testid="metric-active-tickets"]')).toBeVisible();
+    await expect(page.locator(".queue-table, .state-message").first()).toBeVisible();
 
     const requesterAxeResults = await new AxeBuilder({ page })
       .withTags(axeTags)

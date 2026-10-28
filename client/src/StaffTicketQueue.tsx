@@ -14,6 +14,7 @@ import {
 
 interface StaffTicketQueueProps {
   onNavigate: (path: string) => void;
+  url?: string;
 }
 
 function formatDate(iso: string): string {
@@ -56,7 +57,7 @@ function parseStaffSearchParams() {
   };
 }
 
-export default function StaffTicketQueue({ onNavigate }: StaffTicketQueueProps) {
+export default function StaffTicketQueue({ onNavigate, url }: StaffTicketQueueProps) {
   const [tickets, setTickets] = useState<StaffQueueItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [assignees, setAssignees] = useState<StaffAssignee[]>([]);
@@ -112,6 +113,28 @@ export default function StaffTicketQueue({ onNavigate }: StaffTicketQueueProps) 
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
+
+  // Re-sync query state when navigation changes route / url
+  useEffect(() => {
+    if (url !== undefined) {
+      const sp = parseStaffSearchParams();
+      setSearch(sp.q);
+      setStatus(sp.status);
+      setRequestedPriority(sp.requestedPriority);
+      setItPriority(sp.itPriority);
+      setCategoryId(sp.categoryId);
+      setOwner(sp.owner);
+      setStatusGroup(sp.statusGroup);
+      setActionAssignee(sp.actionAssignee);
+      setActionStatus(sp.actionStatus);
+      setCompletedBy(sp.completedBy);
+      setCompletedDate(sp.completedDate);
+      setSortBy(sp.sortBy);
+      setSortDirection(sp.sortDirection);
+      setPage(sp.page);
+      setPageSize(sp.pageSize);
+    }
+  }, [url]);
 
   const searchId = useId();
   const statusId = useId();

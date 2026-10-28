@@ -230,4 +230,32 @@ describe("TEST-UI-08: Staff Dashboard Component & Drill-Downs", () => {
     await userEvent.click(refreshBtn);
     expect(api.fetchStaffDashboard).toHaveBeenCalledTimes(2);
   });
+
+  it("renders long uninterrupted action result (1,500 chars) wrapped in activity-text class", async () => {
+    const longText = "UnbrokenResult".repeat(110); // 1,540 characters
+    const dataWithLongResult: api.StaffDashboardData = {
+      ...mockStaffDashboardData,
+      recentActions: [
+        {
+          id: 888,
+          ticketId: 10,
+          ticketNumber: "TCK-2026-00010",
+          description: "Testing wrap",
+          result: longText,
+          status: "COMPLETED",
+          performerName: "Ethan Brooks",
+          updatedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+        },
+      ],
+    };
+
+    vi.mocked(api.fetchStaffDashboard).mockResolvedValueOnce({ data: dataWithLongResult });
+    render(<StaffDashboard onNavigate={vi.fn()} />);
+
+    await screen.findByRole("heading", { name: "Operational Overview" });
+    const activityText = screen.getByText(new RegExp(longText.slice(0, 30)));
+    expect(activityText).toBeInTheDocument();
+    expect(activityText).toHaveClass("activity-text");
+  });
 });

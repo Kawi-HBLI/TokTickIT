@@ -1876,7 +1876,14 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
 .ticket-latest-update-cell {
   max-width: 420px;
   overflow-wrap: anywhere;
+  word-break: break-word;
   color: #345548;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .action-count-pending {
@@ -1904,6 +1911,8 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
   list-style: none;
   padding: 0;
   margin: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .recent-activity-item {
@@ -1912,6 +1921,10 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
   line-height: 1.6;
   font-size: 0.95rem;
   color: #1a2e26;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .recent-activity-item:last-child {
@@ -1935,6 +1948,11 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
   min-height: 44px;
   display: inline-flex;
   align-items: center;
+}
+
+.activity-text {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .activity-time {

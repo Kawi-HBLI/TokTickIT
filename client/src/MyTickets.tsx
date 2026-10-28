@@ -13,6 +13,7 @@ import { formatTicketStatus } from "./ticket-status.js";
 
 interface MyTicketsProps {
   onNavigate: (path: string) => void;
+  url?: string;
 }
 
 const defaultQuery: Required<TicketQueryState> = {
@@ -57,7 +58,7 @@ function parseRequesterSearchParams() {
   };
 }
 
-export default function MyTickets({ onNavigate }: MyTicketsProps) {
+export default function MyTickets({ onNavigate, url }: MyTicketsProps) {
   const { currentRequester } = useRequester();
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryState, setCategoryState] = useState<"loading" | "ready" | "error">("loading");
@@ -103,6 +104,22 @@ export default function MyTickets({ onNavigate }: MyTicketsProps) {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
+
+  // Re-sync query state when navigation changes route / url
+  useEffect(() => {
+    if (url !== undefined) {
+      const sp = parseRequesterSearchParams();
+      setSearch(sp.search);
+      setCategoryId(sp.categoryId);
+      setPriority(sp.priority);
+      setStatusGroup(sp.statusGroup);
+      setStatus(sp.status);
+      setSortBy(sp.sortBy);
+      setSortOrder(sp.sortOrder);
+      setPage(sp.page);
+      setPageSize(sp.pageSize);
+    }
+  }, [url]);
 
   const searchInputId = useId();
   const categoryFilterId = useId();
