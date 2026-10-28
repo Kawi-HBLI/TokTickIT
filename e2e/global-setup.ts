@@ -33,7 +33,7 @@ export default async function globalSetup() {
   const seedClient = new PrismaClient({ datasources: { db: { url: E2E_DATABASE_URL } } });
   try {
     const { seedDatabase } = await import("../server/prisma/seed.js");
-    await seedDatabase(seedClient);
+    await seedDatabase(seedClient, { seedActions: true });
   } finally {
     await seedClient.$disconnect();
   }

@@ -52,32 +52,32 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 
 | Test ID | Method & Path | Description / Precondition | Expected Status & Result | Status |
 | :--- | :--- | :--- | :--- | :---: |
-| `TEST-ACT-01` | `POST /api/tickets/:id/actions` | IT Staff creates action with valid description and assignee ID. | `201 Created`; action status `PENDING`, initial history `CREATED` logged atomically. | Planned |
-| `TEST-ACT-02` | `POST /api/tickets/:id/actions` | IT Staff attempts to assign action to an inactive user. | `422 Unprocessable Entity`; code `INVALID_ACTION_ASSIGNEE`. | Planned |
-| `TEST-ACT-03` | `POST /api/tickets/:id/actions` | IT Staff attempts to assign action to a user with role `REQUESTER`. | `422 Unprocessable Entity`; code `INVALID_ACTION_ASSIGNEE`. | Planned |
-| `TEST-ACT-04` | `POST /api/tickets/:id/actions` | Requester attempts to create an action taken. | `403 Forbidden`. | Planned |
-| `TEST-ACT-05` | `POST /api/tickets/:id/actions` | Follow-up required is `true` but `followUpNote` is omitted or empty. | `422 Unprocessable Entity`; code `FOLLOW_UP_NOTE_REQUIRED`. | Planned |
-| `TEST-ACT-06` | `PATCH /api/actions/:id` | IT Staff updates description and follow-up note on a `PENDING` action. | `200 OK`; version incremented, `UPDATED` history logged. | Planned |
-| `TEST-ACT-07` | `PATCH /api/actions/:id` | IT Staff attempts to edit an action with a stale version. | `409 Conflict`; code `ACTION_VERSION_CONFLICT`. | Planned |
-| `TEST-ACT-08` | `PATCH /api/actions/:id/status` | IT Staff completes action providing a valid result string ($\ge 3$ chars). | `200 OK`; status `COMPLETED`, `completedAt` set, `completedById` recorded, `COMPLETED` history logged. | Planned |
-| `TEST-ACT-09` | `PATCH /api/actions/:id/status` | IT Staff attempts to complete action with empty or whitespace result. | `422 Unprocessable Entity`; code `ACTION_RESULT_REQUIRED`. | Planned |
-| `TEST-ACT-10` | `PATCH /api/actions/:id/status` | IT Staff cancels action providing a non-empty cancellation reason. | `200 OK`; status `CANCELLED`, `cancelledAt` set, `CANCELLED` history logged. | Planned |
-| `TEST-ACT-11` | `PATCH /api/actions/:id/status` | IT Staff attempts to cancel action without cancellation reason. | `422 Unprocessable Entity`; code `CANCELLATION_REASON_REQUIRED`. | Planned |
-| `TEST-ACT-12` | `PATCH /api/actions/:id` | IT Staff attempts to edit an already `COMPLETED` or `CANCELLED` action. | `422 Unprocessable Entity`; code `ACTION_TERMINAL_IMMUTABLE`. | Planned |
-| `TEST-ACT-13` | `GET /api/tickets/:id/actions` | Requester retrieves actions on an owned ticket. | `200 OK`; returns all actions (`PENDING`, `COMPLETED`, `CANCELLED`) in read-only format. | Planned |
-| `TEST-ACT-14` | `GET /api/tickets/:id/actions` | Requester attempts to retrieve actions on someone else's ticket or non-existent ticket. | `404 Not Found`; identical safe error code `TICKET_NOT_FOUND`. | Planned |
-| `TEST-ACT-15` | `GET /api/actions/:id/history` | IT Staff retrieves audit history for an action. | `200 OK`; returns ordered history array (`createdAt ASC, id ASC`). | Planned |
-| `TEST-ACT-16` | `GET /api/actions/:id/history` | Requester attempts to retrieve audit history for an action. | `403 Forbidden`. | Planned |
-| `TEST-ACT-17` | `POST /api/tickets/:id/actions` | Retry submission with identical `idempotencyKey` and identical payload. | `200 OK`; returns existing action without creating duplicate action or history record. | Planned |
-| `TEST-ACT-18` | `POST /api/tickets/:id/actions` | Retry submission with identical `idempotencyKey` but differing payload. | `409 Conflict`; code `IDEMPOTENCY_CONFLICT`. | Planned |
-| `TEST-ACT-19` | `POST /api/tickets/:id/actions` | User with `mustChangePassword = true` attempts to create an action. | `403 Forbidden`; code `PASSWORD_CHANGE_REQUIRED`. | Planned |
-| `TEST-ACT-20` | `POST /api/tickets/:id/actions` | State-changing request submitted with invalid CSRF token. | `403 Forbidden`; code `CSRF_INVALID`. | Planned |
-| `TEST-ACT-21` | `POST /api/tickets/:id/actions` | Replay with identical key after the created Action has been edited or completed. | `200 OK`; fingerprint matches original creation request, safely returns stored creation response. | Planned |
-| `TEST-ACT-22` | `POST /api/tickets/:id/actions` | Replay with identical key after the parent Ticket has transitioned to `RESOLVED` or `CLOSED`. | `200 OK`; key handled before mutable gates, returning stored creation response without terminal error. | Planned |
-| `TEST-ACT-23` | `POST /api/tickets/:id/actions` | Replay with equivalent normalized payload (whitespace variations, omitted defaults). | `200 OK`; normalized fingerprint matches, safely replays without conflict. | Planned |
-| `TEST-ACT-24` | `POST /api/tickets/:id/actions` | Concurrent simultaneous requests submitted with the identical idempotency key. | Row lock serializes execution: exactly one inserts the action; the second safely replays with `200 OK`. | Planned |
-| `TEST-ACT-25` | `PATCH /api/actions/:id/status` | Staff User B completes an action assigned to Staff User A. | `200 OK`; `ActionTaken.completedById` is recorded as User B (`B.id`), while `assigneeId` remains User A (`A.id`). | Planned |
-| `TEST-ACT-26` | `PATCH /api/actions/:id/status` | Staff User B completes an unassigned action (`assigneeId = null`). | `200 OK`; `ActionTaken.completedById` is recorded as User B (`B.id`), while `assigneeId` remains `null`. | Planned |
+| `TEST-ACT-01` | `POST /api/tickets/:id/actions` | IT Staff creates action with valid description and assignee ID. | `201 Created`; action status `PENDING`, initial history `CREATED` logged atomically. | Passed |
+| `TEST-ACT-02` | `POST /api/tickets/:id/actions` | IT Staff attempts to assign action to an inactive user. | `422 Unprocessable Entity`; code `INVALID_ACTION_ASSIGNEE`. | Passed |
+| `TEST-ACT-03` | `POST /api/tickets/:id/actions` | IT Staff attempts to assign action to a user with role `REQUESTER`. | `422 Unprocessable Entity`; code `INVALID_ACTION_ASSIGNEE`. | Passed |
+| `TEST-ACT-04` | `POST /api/tickets/:id/actions` | Requester attempts to create an action taken. | `403 Forbidden`. | Passed |
+| `TEST-ACT-05` | `POST /api/tickets/:id/actions` | Follow-up required is `true` but `followUpNote` is omitted or empty. | `422 Unprocessable Entity`; code `FOLLOW_UP_NOTE_REQUIRED`. | Passed |
+| `TEST-ACT-06` | `PATCH /api/actions/:id` | IT Staff updates description and follow-up note on a `PENDING` action. | `200 OK`; version incremented, `UPDATED` history logged. | Passed |
+| `TEST-ACT-07` | `PATCH /api/actions/:id` | IT Staff attempts to edit an action with a stale version. | `409 Conflict`; code `ACTION_VERSION_CONFLICT`. | Passed |
+| `TEST-ACT-08` | `PATCH /api/actions/:id/status` | IT Staff completes action providing a valid result string ($\ge 3$ chars). | `200 OK`; status `COMPLETED`, `completedAt` set, `completedById` recorded, `COMPLETED` history logged. | Passed |
+| `TEST-ACT-09` | `PATCH /api/actions/:id/status` | IT Staff attempts to complete action with empty or whitespace result. | `422 Unprocessable Entity`; code `ACTION_RESULT_REQUIRED`. | Passed |
+| `TEST-ACT-10` | `PATCH /api/actions/:id/status` | IT Staff cancels action providing a non-empty cancellation reason. | `200 OK`; status `CANCELLED`, `cancelledAt` set, `CANCELLED` history logged. | Passed |
+| `TEST-ACT-11` | `PATCH /api/actions/:id/status` | IT Staff attempts to cancel action without cancellation reason. | `422 Unprocessable Entity`; code `CANCELLATION_REASON_REQUIRED`. | Passed |
+| `TEST-ACT-12` | `PATCH /api/actions/:id` | IT Staff attempts to edit an already `COMPLETED` or `CANCELLED` action. | `422 Unprocessable Entity`; code `ACTION_TERMINAL_IMMUTABLE`. | Passed |
+| `TEST-ACT-13` | `GET /api/tickets/:id/actions` | Requester retrieves actions on an owned ticket. | `200 OK`; returns all actions (`PENDING`, `COMPLETED`, `CANCELLED`) in read-only format. | Passed |
+| `TEST-ACT-14` | `GET /api/tickets/:id/actions` | Requester attempts to retrieve actions on someone else's ticket or non-existent ticket. | `404 Not Found`; identical safe error code `TICKET_NOT_FOUND`. | Passed |
+| `TEST-ACT-15` | `GET /api/actions/:id/history` | IT Staff retrieves audit history for an action. | `200 OK`; returns ordered history array (`createdAt ASC, id ASC`). | Passed |
+| `TEST-ACT-16` | `GET /api/actions/:id/history` | Requester attempts to retrieve audit history for an action. | `403 Forbidden`. | Passed |
+| `TEST-ACT-17` | `POST /api/tickets/:id/actions` | Retry submission with identical `idempotencyKey` and identical payload. | `200 OK`; returns existing action without creating duplicate action or history record. | Passed |
+| `TEST-ACT-18` | `POST /api/tickets/:id/actions` | Retry submission with identical `idempotencyKey` but differing payload. | `409 Conflict`; code `IDEMPOTENCY_CONFLICT`. | Passed |
+| `TEST-ACT-19` | `POST /api/tickets/:id/actions` | User with `mustChangePassword = true` attempts to create an action. | `403 Forbidden`; code `PASSWORD_CHANGE_REQUIRED`. | Passed |
+| `TEST-ACT-20` | `POST /api/tickets/:id/actions` | State-changing request submitted with invalid CSRF token. | `403 Forbidden`; code `CSRF_INVALID`. | Passed |
+| `TEST-ACT-21` | `POST /api/tickets/:id/actions` | Replay with identical key after the created Action has been edited or completed. | `200 OK`; fingerprint matches original creation request, safely returns stored creation response. | Passed |
+| `TEST-ACT-22` | `POST /api/tickets/:id/actions` | Replay with identical key after the parent Ticket has transitioned to `RESOLVED` or `CLOSED`. | `200 OK`; key handled before mutable gates, returning stored creation response without terminal error. | Passed |
+| `TEST-ACT-23` | `POST /api/tickets/:id/actions` | Replay with equivalent normalized payload (whitespace variations, omitted defaults). | `200 OK`; normalized fingerprint matches, safely replays without conflict. | Passed |
+| `TEST-ACT-24` | `POST /api/tickets/:id/actions` | Concurrent simultaneous requests submitted with the identical idempotency key. | Row lock serializes execution: exactly one inserts the action; the second safely replays with `200 OK`. | Passed |
+| `TEST-ACT-25` | `PATCH /api/actions/:id/status` | Staff User B completes an action assigned to Staff User A. | `200 OK`; `ActionTaken.completedById` is recorded as User B (`B.id`), while `assigneeId` remains User A (`A.id`). | Passed |
+| `TEST-ACT-26` | `PATCH /api/actions/:id/status` | Staff User B completes an unassigned action (`assigneeId = null`). | `200 OK`; `ActionTaken.completedById` is recorded as User B (`B.id`), while `assigneeId` remains `null`. | Passed |
 
 ---
 
@@ -85,16 +85,16 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 
 | Test ID | Method & Path | Description / Precondition | Expected Status & Result | Status |
 | :--- | :--- | :--- | :--- | :---: |
-| `TEST-RES-01` | `PATCH /api/staff/tickets/:id/status` | Ticket has assigned owner, 1 completed action with result, 0 pending actions. Target $\rightarrow$ `RESOLVED`. | `200 OK`; returns `previousStatus`, updates `currentStatus` to `RESOLVED`, clears resolution indications. | Planned |
-| `TEST-RES-02` | `PATCH /api/staff/tickets/:id/status` | Ticket has 1 completed action and 0 pending actions, but `ownerId` is null. Target $\rightarrow$ `RESOLVED`. | `422 Unprocessable Entity`; code `RESOLUTION_GATE_NO_OWNER`. | Planned |
-| `TEST-RES-03` | `PATCH /api/staff/tickets/:id/status` | Ticket has assigned owner, but 0 completed actions. Target $\rightarrow$ `RESOLVED`. | `422 Unprocessable Entity`; code `RESOLUTION_GATE_NO_COMPLETED_ACTION`. | Planned |
-| `TEST-RES-04` | `PATCH /api/staff/tickets/:id/status` | Ticket has assigned owner, 1 completed action, but 1 pending action remains. Target $\rightarrow$ `RESOLVED`. | `422 Unprocessable Entity`; code `RESOLUTION_GATE_PENDING_ACTIONS`. | Planned |
-| `TEST-RES-05` | `POST /api/tickets/:id/actions` | Attempting to create an Action Taken on a `RESOLVED` or `CLOSED` ticket. | `422 Unprocessable Entity`; code `TICKET_TERMINAL_IMMUTABLE`. | Planned |
-| `TEST-RES-06` | `PATCH /api/staff/tickets/:id/status` | Reopening a `RESOLVED` or `CLOSED` ticket to `REOPENED` succeeds; subsequent action creation succeeds. | `200 OK`; `currentStatus` becomes `REOPENED`. | Planned |
-| `TEST-RES-07` | `PATCH /api/staff/tickets/:id/status` | Attempting to transition `CANCELLED` ticket to `REOPENED` or any other status. | `409 Conflict`; code `INVALID_STATUS_TRANSITION` (CANCELLED is terminal). | Planned |
-| `TEST-RES-08` | `PATCH /api/staff/tickets/:id/status` | Attempting prohibited active-to-CLOSED shortcut (`OPEN` $\rightarrow$ `CLOSED`). | `409 Conflict`; code `INVALID_STATUS_TRANSITION`. | Planned |
-| `TEST-RES-09` | `PATCH /api/staff/tickets/:id/status` | Stale update submission where `expectedUpdatedAt` does not match database. | `409 Conflict`; code `TICKET_VERSION_CONFLICT`. | Planned |
-| `TEST-RES-10` | `PATCH /api/staff/tickets/:id/status` | Legacy ticket query: retrieving existing resolved/closed tickets from Lab 3. | `200 OK`; query succeeds without requiring backfilled actions. | Planned |
+| `TEST-RES-01` | `PATCH /api/staff/tickets/:id/status` | Ticket has assigned owner, 1 completed action with result, 0 pending actions. Target $\rightarrow$ `RESOLVED`. | `200 OK`; returns `previousStatus`, updates `currentStatus` to `RESOLVED`, clears resolution indications. | Passed |
+| `TEST-RES-02` | `PATCH /api/staff/tickets/:id/status` | Ticket has 1 completed action and 0 pending actions, but `ownerId` is null. Target $\rightarrow$ `RESOLVED`. | `422 Unprocessable Entity`; code `RESOLUTION_GATE_NO_OWNER`. | Passed |
+| `TEST-RES-03` | `PATCH /api/staff/tickets/:id/status` | Ticket has assigned owner, but 0 completed actions. Target $\rightarrow$ `RESOLVED`. | `422 Unprocessable Entity`; code `RESOLUTION_GATE_NO_COMPLETED_ACTION`. | Passed |
+| `TEST-RES-04` | `PATCH /api/staff/tickets/:id/status` | Ticket has assigned owner, 1 completed action, but 1 pending action remains. Target $\rightarrow$ `RESOLVED`. | `422 Unprocessable Entity`; code `RESOLUTION_GATE_PENDING_ACTIONS`. | Passed |
+| `TEST-RES-05` | `POST /api/tickets/:id/actions` | Attempting to create an Action Taken on a `RESOLVED` or `CLOSED` ticket. | `422 Unprocessable Entity`; code `TICKET_TERMINAL_IMMUTABLE`. | Passed |
+| `TEST-RES-06` | `PATCH /api/staff/tickets/:id/status` | Reopening a `RESOLVED` or `CLOSED` ticket to `REOPENED` succeeds; subsequent action creation succeeds. | `200 OK`; `currentStatus` becomes `REOPENED`. | Passed |
+| `TEST-RES-07` | `PATCH /api/staff/tickets/:id/status` | Attempting to transition `CANCELLED` ticket to `REOPENED` or any other status. | `409 Conflict`; code `INVALID_STATUS_TRANSITION` (CANCELLED is terminal). | Passed |
+| `TEST-RES-08` | `PATCH /api/staff/tickets/:id/status` | Attempting prohibited active-to-CLOSED shortcut (`OPEN` $\rightarrow$ `CLOSED`). | `409 Conflict`; code `INVALID_STATUS_TRANSITION`. | Passed |
+| `TEST-RES-09` | `PATCH /api/staff/tickets/:id/status` | Stale update submission where `expectedUpdatedAt` does not match database. | `409 Conflict`; code `TICKET_VERSION_CONFLICT`. | Passed |
+| `TEST-RES-10` | `PATCH /api/staff/tickets/:id/status` | Legacy ticket query: retrieving existing resolved/closed tickets from Lab 3. | `200 OK`; query succeeds without requiring backfilled actions. | Passed |
 
 ---
 
@@ -102,9 +102,9 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 
 | Test ID | Scope | Description / Simulation | Expected Outcome | Status |
 | :--- | :--- | :--- | :--- | :---: |
-| `TEST-CONC-01` | Action Creation vs Ticket Resolution | 10 concurrent iterations where Thread A attempts to resolve ticket while Thread B attempts to add a `PENDING` action. | Row lock ensures serialization. Either ticket resolves first (causing action creation to fail with `422 TICKET_TERMINAL_IMMUTABLE`) or action creates first (causing resolution to fail with `422 RESOLUTION_GATE_PENDING_ACTIONS`). In 0% of runs is a resolved ticket left with pending actions. | Planned |
-| `TEST-CONC-02` | Action Completion vs Ticket Resolution | Thread A attempts to complete last pending action while Thread B concurrently attempts to resolve ticket. | Lock serialization handles both valid acquisition orders: (1) If resolution locks first, it fails gate (pending action still open), then action completes; (2) If action completion locks first, action completes, then resolution evaluates gate and succeeds. In both orders, state remains consistent. | Planned |
-| `TEST-CONC-03` | Concurrent Action Edits | Two threads attempt to update the same action simultaneously with the same version number. | Exactly one thread succeeds with `200 OK`; the other fails with `409 ACTION_VERSION_CONFLICT`. | Planned |
+| `TEST-CONC-01` | Action Creation vs Ticket Resolution | 10 concurrent iterations where Thread A attempts to resolve ticket while Thread B attempts to add a `PENDING` action. | Row lock ensures serialization. Either ticket resolves first (causing action creation to fail with `422 TICKET_TERMINAL_IMMUTABLE`) or action creates first (causing resolution to fail with `422 RESOLUTION_GATE_PENDING_ACTIONS`). In 0% of runs is a resolved ticket left with pending actions. | Passed |
+| `TEST-CONC-02` | Action Completion vs Ticket Resolution | Thread A attempts to complete last pending action while Thread B concurrently attempts to resolve ticket. | Lock serialization handles both valid acquisition orders: (1) If resolution locks first, it fails gate (pending action still open), then action completes; (2) If action completion locks first, action completes, then resolution evaluates gate and succeeds. In both orders, state remains consistent. | Passed |
+| `TEST-CONC-03` | Concurrent Action Edits | Two threads attempt to update the same action simultaneously with the same version number. | Exactly one thread succeeds with `200 OK`; the other fails with `409 ACTION_VERSION_CONFLICT`. | Passed |
 
 ---
 
@@ -133,11 +133,12 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 
 | Test ID | Scope | Description / Verification | Expected Outcome | Status |
 | :--- | :--- | :--- | :--- | :---: |
-| `TEST-HIST-01` | Database Trigger Immutability | Attempt raw SQL `UPDATE "ActionTakenHistory"` or `DELETE FROM "ActionTakenHistory"`. | Trigger `trg_action_history_append_only` raises exception; query is rejected. | Planned |
-| `TEST-HIST-02` | Atomic Rollback on Failure | Simulate database failure during history insertion inside creation transaction. | Entire transaction rolls back; no record created in `ActionTaken` or `ActionTakenHistory`. | Planned |
-| `TEST-HIST-03` | State Timeline Reconstruction | Retrieve history records for an action that underwent create, edit, reassign, complete. | Records ordered by `createdAt ASC, id ASC` completely reconstruct field values at each step. | Planned |
-| `TEST-MIGR-01` | Populated Migration | Apply Lab 4 Prisma migration on a database populated with Lab 3 users, tickets, attachments, comments, and notes. | Migration succeeds cleanly; 100% of existing rows and relationships remain intact. | Planned |
-| `TEST-MIGR-02` | Seed Idempotency | Execute `prisma db seed` three consecutive times on the migrated database. | Seed completes without unique constraint violations or duplicate tickets/actions. | Planned |
+| `TEST-HIST-01` | Database Trigger Immutability | Attempt raw SQL `UPDATE "ActionTakenHistory"` or `DELETE FROM "ActionTakenHistory"`. | Trigger `trg_action_history_append_only` raises exception; query is rejected. | Passed |
+| `TEST-HIST-02` | Atomic Rollback on Failure | Simulate database failure during history insertion inside creation transaction. | Entire transaction rolls back; no record created in `ActionTaken` or `ActionTakenHistory`. | Passed |
+| `TEST-HIST-03` | State Timeline Reconstruction | Retrieve history records for an action that underwent create, edit, reassign, complete. | Records ordered by `createdAt ASC, id ASC` completely reconstruct field values at each step. | Passed |
+| `TEST-MIGR-01` | Populated Migration | Apply Lab 4 Prisma migration on a database populated with Lab 3 users, tickets, attachments, comments, and notes. | Migration succeeds cleanly; 100% of existing rows and relationships remain intact. | Passed |
+| `TEST-MIGR-02` | Seed Idempotency | Execute `prisma db seed` three consecutive times on the migrated database. | Seed completes without unique constraint violations or duplicate tickets/actions. | Passed |
+| `TEST-MIGR-03` | Sequence Collision-Free Allocation | Verify sequence state (`last_value`, `is_called`) on `ActionTaken` and `ActionTakenHistory` sequences, ensuring subsequent allocations are collision-free. | Sequences advance cleanly; subsequent allocations generate strictly increasing unique IDs. | Passed |
 | `TEST-RECOV-01` | Recovery Rehearsal in Disposable DB | Precondition: Database contains populated Lab 4 actions and history. Dump using `pg_dump --format=custom --file=...`. Restore into separate disposable test database (`toktickit_recovery_test`) using `pg_restore`. | 100% table row counts match source; foreign keys, sequence state (`last_value`/`is_called` with collision-free subsequent allocation), and trigger immutability verified. | Planned |
 
 ---
@@ -146,13 +147,13 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 
 | Test ID | Component | Scenario | Expected DOM / Interaction Behavior | Status |
 | :--- | :--- | :--- | :--- | :---: |
-| `TEST-UI-01` | `ActionsTaken.test.tsx` | Renders actions list with mixed statuses. | Correct Zen Green badge colors, clock icon for pending, checkmark for completed. | Planned |
-| `TEST-UI-02` | `ActionsTaken.test.tsx` | Staff opens "Complete Action" modal, submits empty result. | In-modal error displayed; submit disabled or rejected; modal remains open and entered text preserved. | Planned |
-| `TEST-UI-03` | `ActionsTaken.test.tsx` | Staff opens "Complete Action" modal, submits valid result string. | Submit enters pending disabled state with spinner; successfully completes; closes modal; refreshes list. | Planned |
-| `TEST-UI-04` | `ActionsTaken.test.tsx` | Staff opens "Cancel Action" modal, submits valid reason. | Button enters pending disabled state; submits payload; closes modal; refreshes list. | Planned |
-| `TEST-UI-05` | `ActionsTaken.test.tsx` | Modal focus management: open modal, press Tab, press Escape. | Focus is trapped inside modal; pressing Escape closes modal and restores focus to trigger button. | Planned |
-| `TEST-UI-06` | `ActionsTaken.test.tsx` | Renders Actions Taken panel for Requester role. | Edit, complete, cancel, and add buttons are absent; read-only text is rendered. | Planned |
-| `TEST-UI-07` | `TicketWorkflow.test.tsx` | Staff selects `RESOLVED` on ticket with pending actions. | Red alert banner renders with `role="alert"` explaining missing prerequisites. | Planned |
+| `TEST-UI-01` | `ActionsTakenSection.test.tsx` | Renders actions list with mixed statuses. | Correct Zen Green badge colors, clock icon for pending, checkmark for completed. | Passed |
+| `TEST-UI-02` | `ActionsTakenSection.test.tsx` | Staff opens "Complete Action" modal, submits empty result. | In-modal error displayed; submit disabled or rejected; modal remains open and entered text preserved. | Passed |
+| `TEST-UI-03` | `ActionsTakenSection.test.tsx` | Staff opens "Complete Action" modal, submits valid result string. | Submit enters pending disabled state with spinner; successfully completes; closes modal; refreshes list. | Passed |
+| `TEST-UI-04` | `ActionsTakenSection.test.tsx` | Staff opens "Cancel Action" modal, submits valid reason. | Button enters pending disabled state; submits payload; closes modal; refreshes list. | Passed |
+| `TEST-UI-05` | `ActionsTakenSection.test.tsx` | Modal focus management: open modal, press Tab, press Escape. | Focus is trapped inside modal; pressing Escape closes modal and restores focus to trigger button. | Passed |
+| `TEST-UI-06` | `ActionsTakenSection.test.tsx` | Renders Actions Taken panel for Requester role. | Edit, complete, cancel, and add buttons are absent; read-only text is rendered. | Passed |
+| `TEST-UI-07` | `TicketWorkflow.test.tsx` | Staff selects `RESOLVED` on ticket with pending actions. | Red alert banner renders with `role="alert"` explaining missing prerequisites. | Passed |
 | `TEST-UI-08` | `StaffDashboard.test.tsx` | Renders 4 metric cards and drill-down links. | Cards display formatted counts; clicking "Unassigned Queue" navigates to `/staff/tickets?owner=unassigned&statusGroup=active`. | Planned |
 | `TEST-UI-09` | `RequesterDashboard.test.tsx`| Renders requester summary cards and recent activity. | Displays active ticket counts; clicking "Awaiting Input" navigates to `/tickets?status=WAITING_FOR_REQUESTER`. | Planned |
 
@@ -162,8 +163,8 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 
 | Test ID | File | Scenario & User Journey | Expected Browser Behavior | Status |
 | :--- | :--- | :--- | :--- | :---: |
-| `TEST-E2E-01` | `actions-taken-flow.spec.ts` | Complete Actions Taken lifecycle: Staff logs in, opens ticket, adds action, assigns to teammate, edits note, completes with result. | All steps update UI in real time; audit history drawer reflects all transitions. | Planned |
-| `TEST-E2E-02` | `ticket-resolution.spec.ts` | Resolution gate enforcement: Staff attempts to resolve ticket with pending action $\rightarrow$ blocked; completes action $\rightarrow$ resolution succeeds. | UI displays gate error banner; once criteria satisfied, ticket status transitions to `RESOLVED`. | Planned |
+| `TEST-E2E-01` | `actions-workflow.spec.ts` | Complete Actions Taken lifecycle: Staff logs in, opens ticket, adds action, assigns to teammate, edits note, completes with result. | All steps update UI in real time; audit history drawer reflects all transitions. | Passed |
+| `TEST-E2E-02` | `actions-workflow.spec.ts` | Resolution gate enforcement: Staff attempts to resolve ticket with pending action $\rightarrow$ blocked; completes action $\rightarrow$ resolution succeeds. | UI displays gate error banner; once criteria satisfied, ticket status transitions to `RESOLVED`. | Passed |
 | `TEST-E2E-03` | `dashboards.spec.ts` | Role dashboard journeys & drill-down: Staff clicks "Unassigned Queue" card $\rightarrow$ arrives at filtered queue; Requester clicks "Awaiting Input" $\rightarrow$ arrives at My Tickets with filtered status. | URL parameters populate correctly and table renders filtered results. Back/Forward navigation works. | Planned |
 | `TEST-E2E-04` | `dashboards.spec.ts` | Responsive reflow test at 375px, 768px, and 1280px viewports. | Zero horizontal scrollbars; cards reflow vertically; tap targets meet minimum 44px size. | Planned |
 | `TEST-E2E-05` | `dashboards.spec.ts` | WCAG 1.4.10 400% Zoom Reflow Check at 320px equivalent width. | Content reflows into single column without horizontal document scroll and with zero clipped content. | Planned |

@@ -108,3 +108,67 @@ export const internalNoteFixtures = [
     content: "Vendor status page shows a matching incident under investigation.",
   },
 ] as const;
+
+export interface ActionTakenFixture {
+  ticketKey: string;
+  idempotencyKey: string;
+  creatorEmail: string;
+  assigneeEmail?: string;
+  completedByEmail?: string;
+  status: "PENDING" | "COMPLETED" | "CANCELLED";
+  description: string;
+  result?: string;
+  cancellationReason?: string;
+  followUpRequired?: boolean;
+  followUpNote?: string;
+  attachmentNotes?: string;
+}
+
+export const actionTakenFixtures: readonly ActionTakenFixture[] = [
+  {
+    ticketKey: "11111111-1111-4111-8111-111111111111",
+    idempotencyKey: "act-seed-001",
+    creatorEmail: "ethan.brooks@toktickit.local",
+    assigneeEmail: "ethan.brooks@toktickit.local",
+    status: "PENDING",
+    description: "Reset email password and verify MFA token.",
+  },
+  {
+    ticketKey: "11111111-1111-4111-8111-111111111111",
+    idempotencyKey: "act-seed-002",
+    creatorEmail: "ethan.brooks@toktickit.local",
+    assigneeEmail: "ethan.brooks@toktickit.local",
+    completedByEmail: "gavin.lee@toktickit.local",
+    status: "COMPLETED",
+    description: "Checked server exchange logs for blocked IP.",
+    result: "No IP blocks found; connection allowed.",
+  },
+  {
+    ticketKey: "22222222-2222-4222-8222-222222222222",
+    idempotencyKey: "act-seed-003",
+    creatorEmail: "farah.malik@toktickit.local",
+    assigneeEmail: "farah.malik@toktickit.local",
+    completedByEmail: "farah.malik@toktickit.local",
+    status: "COMPLETED",
+    description: "Diagnose battery and motherboard power rail.",
+    result: "Power rail delivers 19.5V; battery internal fuse is tripped.",
+  },
+  {
+    ticketKey: "22222222-2222-4222-8222-222222222222",
+    idempotencyKey: "act-seed-004",
+    creatorEmail: "farah.malik@toktickit.local",
+    assigneeEmail: "gavin.lee@toktickit.local",
+    status: "PENDING",
+    description: "Order replacement battery pack model BTY-404.",
+    followUpRequired: true,
+    followUpNote: "Expected delivery within 2 business days.",
+  },
+  {
+    ticketKey: "22222222-2222-4222-8222-222222222222",
+    idempotencyKey: "act-seed-005",
+    creatorEmail: "harper.morgan@toktickit.local",
+    status: "CANCELLED",
+    description: "Attempted external monitor hookup.",
+    cancellationReason: "Laptop fails to post before video initialization.",
+  },
+];

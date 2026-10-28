@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { getPrisma } from "../src/prisma.js";
 import { hashPassword, INITIAL_PASSWORD, MIGRATED_INITIAL_PASSWORD_HASH, normalizeEmail } from "../src/auth-crypto.js";
 import {
+  actionTakenFixtures,
   administratorUsers,
   categories,
   internalNoteFixtures,
@@ -16,10 +17,16 @@ import {
 
 type SeedClient = Pick<
   PrismaClient,
-  "category" | "relatedSystem" | "user" | "ticket" | "publicComment" | "internalNote"
->;
+  "category" | "relatedSystem" | "user" | "ticket" | "publicComment" | "internalNote" | "actionTaken" | "actionTakenHistory"
+> & {
+  $transaction?: PrismaClient["$transaction"];
+};
 
-export async function seedDatabase(prisma: SeedClient): Promise<void> {
+export interface SeedOptions {
+  seedActions?: boolean;
+}
+
+export async function seedDatabase(prisma: SeedClient, options?: SeedOptions): Promise<void> {
   for (const category of categories) {
     await prisma.category.upsert({
       where: { name: category.name },
@@ -117,13 +124,130 @@ export async function seedDatabase(prisma: SeedClient): Promise<void> {
     const existing = await prisma.internalNote.findFirst({ where: { ticketId: ticket.id, authorId: author.id, content: fixture.content }, select: { id: true } });
     if (!existing) await prisma.internalNote.create({ data: { ticketId: ticket.id, authorId: author.id, content: fixture.content } });
   }
+  const shouldSeedActions = Boolean(options?.seedActions);
+  if (shouldSeedActions && "actionTaken" in prisma && "actionTakenHistory" in prisma) {
+    for (const fixture of actionTakenFixtures) {
+      const ticket = seededTickets.get(fixture.ticketKey);
+      if (!ticket) continue;
+      const creator = await prisma.user.findUnique({ where: { email: fixture.creatorEmail }, select: { id: true } });
+      if (!creator) continue;
+      const assignee = fixture.assigneeEmail
+        ? await prisma.user.findUnique({ where: { email: fixture.assigneeEmail }, select: { id: true } })
+        : null;
+      const completedBy = fixture.completedByEmail
+        ? await prisma.user.findUnique({ where: { email: fixture.completedByEmail }, select: { id: true } })
+        : null;
+
+      const existing = await prisma.actionTaken.findFirst({
+        where: { ticketId: ticket.id, idempotencyKey: fixture.idempotencyKey },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        const now = new Date();
+        const finalVersion = fixture.status === "PENDING" ? 1 : 2;
+        const normalizedFollowUpNote = fixture.followUpRequired ? (fixture.followUpNote ?? null) : null;
+
+        const runInTx = typeof prisma.$transaction === "function"
+          ? (fn: (tx: any) => Promise<void>) => prisma.$transaction!(fn)
+          : (fn: (tx: any) => Promise<void>) => fn(prisma);
+
+        await runInTx(async (tx: any) => {
+          const created = await tx.actionTaken.create({
+            data: {
+              ticketId: ticket.id,
+              idempotencyKey: fixture.idempotencyKey,
+              createdById: creator.id,
+              assigneeId: assignee?.id ?? null,
+              completedById: completedBy?.id ?? null,
+              status: fixture.status,
+              description: fixture.description,
+              result: fixture.result ?? null,
+              cancellationReason: fixture.cancellationReason ?? null,
+              followUpRequired: fixture.followUpRequired ?? false,
+              followUpNote: normalizedFollowUpNote,
+              attachmentNotes: fixture.attachmentNotes ?? null,
+              completedAt: fixture.status === "COMPLETED" ? now : null,
+              cancelledAt: fixture.status === "CANCELLED" ? now : null,
+              version: finalVersion,
+            },
+            select: { id: true },
+          });
+
+          await tx.actionTakenHistory.create({
+            data: {
+              actionId: created.id,
+              ticketId: ticket.id,
+              actorId: creator.id,
+              eventType: "CREATED",
+              version: 1,
+              snapshot: {
+                changes: {
+                  description: { before: null, after: fixture.description },
+                  status: { before: null, after: "PENDING" },
+                  assignee: { beforeId: null, afterId: assignee?.id ?? null },
+                  followUpRequired: { before: null, after: fixture.followUpRequired ?? false },
+                  followUpNote: { before: null, after: normalizedFollowUpNote },
+                  attachmentNotes: { before: null, after: fixture.attachmentNotes ?? null },
+                },
+                versionBefore: null,
+                versionAfter: 1,
+              },
+            },
+          });
+
+          if (fixture.status === "COMPLETED" && completedBy) {
+            await tx.actionTakenHistory.create({
+              data: {
+                actionId: created.id,
+                ticketId: ticket.id,
+                actorId: completedBy.id,
+                eventType: "COMPLETED",
+                version: 2,
+                snapshot: {
+                  changes: {
+                    status: { before: "PENDING", after: "COMPLETED" },
+                    result: { before: null, after: fixture.result },
+                    completedBy: { beforeId: null, afterId: completedBy.id },
+                  },
+                  versionBefore: 1,
+                  versionAfter: 2,
+                },
+              },
+            });
+          }
+
+          if (fixture.status === "CANCELLED") {
+            await tx.actionTakenHistory.create({
+              data: {
+                actionId: created.id,
+                ticketId: ticket.id,
+                actorId: creator.id,
+                eventType: "CANCELLED",
+                version: 2,
+                snapshot: {
+                  changes: {
+                    status: { before: "PENDING", after: "CANCELLED" },
+                    cancellationReason: { before: null, after: fixture.cancellationReason },
+                  },
+                  versionBefore: 1,
+                  versionAfter: 2,
+                },
+              },
+            });
+          }
+        });
+      }
+    }
+  }
 }
+
 
 async function main(): Promise<void> {
   const prisma = getPrisma();
 
   try {
-    await seedDatabase(prisma);
+    await seedDatabase(prisma, { seedActions: true });
     console.log(
       `Database seeded: ${categories.length} categories, ` +
         `${relatedSystems.length} related systems, and ` +

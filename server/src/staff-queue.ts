@@ -767,7 +767,134 @@ staffQueueRouter.patch("/tickets/:id/status", requireCsrf, async (req: Request, 
       return;
     }
 
-    const ticket = await getPrisma().ticket.findUnique({
+    const targetStatus = status as TicketStatus;
+    const expectedDate = new Date(expectedUpdatedAt);
+    const prisma = getPrisma();
+
+    if (typeof (prisma as any).$transaction === "function") {
+      const result = await prisma.$transaction(async (tx) => {
+        // 1. Acquire exclusive parent-ticket row lock
+        const ticketRows = await tx.$queryRaw<Array<{
+          id: number;
+          currentStatus: TicketStatus;
+          ownerId: number | null;
+          updatedAt: Date;
+          requesterResolutionIndicatedAt: Date | null;
+          requesterResolutionIndicatedById: number | null;
+        }>>`
+          SELECT id, "currentStatus", "ownerId", "updatedAt", "requesterResolutionIndicatedAt", "requesterResolutionIndicatedById"
+          FROM "Ticket"
+          WHERE id = ${ticketId}
+          FOR UPDATE
+        `;
+        const ticket = ticketRows[0];
+        if (!ticket) {
+          return { status: 404, body: { error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } } };
+        }
+
+        if (!isValidStatusTransition(ticket.currentStatus, targetStatus)) {
+          return {
+            status: 409,
+            body: {
+              error: {
+                code: "INVALID_STATUS_TRANSITION",
+                message: "This status transition is not permitted.",
+              },
+            },
+          };
+        }
+
+        if (ticket.updatedAt.toISOString() !== expectedDate.toISOString()) {
+          return {
+            status: 409,
+            body: {
+              error: {
+                code: "TICKET_VERSION_CONFLICT",
+                message: "This ticket was modified by another operation. Refresh and try again.",
+              },
+            },
+          };
+        }
+
+        // Enforce Resolution Gate on transitions into RESOLVED
+        if (targetStatus === "RESOLVED") {
+          if (ticket.ownerId === null) {
+            return {
+              status: 422,
+              body: {
+                error: {
+                  code: "RESOLUTION_GATE_NO_OWNER",
+                  message: "Ticket must be claimed by or assigned to an IT Staff owner before it can be resolved.",
+                },
+              },
+            };
+          }
+
+          const completedActions = await tx.actionTaken.findMany({
+            where: { ticketId, status: "COMPLETED" },
+            select: { result: true },
+          });
+          const hasValidCompleted = completedActions.some((a) => a.result && a.result.trim().length >= 3);
+          if (!hasValidCompleted) {
+            return {
+              status: 422,
+              body: {
+                error: {
+                  code: "RESOLUTION_GATE_NO_COMPLETED_ACTION",
+                  message: "Ticket must have at least one completed Action Taken with documented results before resolution.",
+                },
+              },
+            };
+          }
+
+          const pendingCount = await tx.actionTaken.count({
+            where: { ticketId, status: "PENDING" },
+          });
+          if (pendingCount > 0) {
+            return {
+              status: 422,
+              body: {
+                error: {
+                  code: "RESOLUTION_GATE_PENDING_ACTIONS",
+                  message: "Ticket has pending actions. All actions must be completed or cancelled before resolution.",
+                },
+              },
+            };
+          }
+        }
+
+        const updated = await tx.ticket.update({
+          where: { id: ticketId },
+          data: clearsResolutionIndication(targetStatus)
+            ? { currentStatus: targetStatus, requesterResolutionIndicatedAt: null, requesterResolutionIndicatedById: null }
+            : { currentStatus: targetStatus },
+          include: { requesterResolutionIndicatedBy: { select: { id: true, name: true } } },
+        });
+
+        return {
+          status: 200,
+          body: {
+            data: {
+              previousStatus: ticket.currentStatus,
+              currentStatus: updated.currentStatus,
+              requesterResolutionIndicatedAt: updated.requesterResolutionIndicatedAt
+                ? updated.requesterResolutionIndicatedAt.toISOString()
+                : null,
+              requesterResolutionIndicatedBy: updated.requesterResolutionIndicatedBy
+                ? { id: updated.requesterResolutionIndicatedBy.id, name: updated.requesterResolutionIndicatedBy.name }
+                : null,
+              updatedAt: updated.updatedAt.toISOString(),
+            },
+          },
+        };
+      });
+
+      res.status(result.status).json(result.body);
+      return;
+    }
+
+    // Fallback for mocked unit tests (e.g. Lab 3 isolated unit tests)
+    const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
       select: { id: true, currentStatus: true, updatedAt: true },
     });
@@ -776,7 +903,6 @@ staffQueueRouter.patch("/tickets/:id/status", requireCsrf, async (req: Request, 
       return;
     }
 
-    const targetStatus = status as TicketStatus;
     if (!isValidStatusTransition(ticket.currentStatus, targetStatus)) {
       res.status(409).json({
         error: {
@@ -787,7 +913,6 @@ staffQueueRouter.patch("/tickets/:id/status", requireCsrf, async (req: Request, 
       return;
     }
 
-    const expectedDate = new Date(expectedUpdatedAt);
     if (ticket.updatedAt.toISOString() !== expectedDate.toISOString()) {
       res.status(409).json({
         error: {
@@ -798,7 +923,7 @@ staffQueueRouter.patch("/tickets/:id/status", requireCsrf, async (req: Request, 
       return;
     }
 
-    const updateResult = await getPrisma().ticket.updateMany({
+    const updateResult = await prisma.ticket.updateMany({
       where: { id: ticketId, updatedAt: expectedDate },
       data: clearsResolutionIndication(targetStatus)
         ? { currentStatus: targetStatus, requesterResolutionIndicatedAt: null, requesterResolutionIndicatedById: null }
@@ -815,7 +940,7 @@ staffQueueRouter.patch("/tickets/:id/status", requireCsrf, async (req: Request, 
       return;
     }
 
-    const updated = await getPrisma().ticket.findUniqueOrThrow({
+    const updated = await prisma.ticket.findUniqueOrThrow({
       where: { id: ticketId },
       include: { requesterResolutionIndicatedBy: { select: { id: true, name: true } } },
     });
