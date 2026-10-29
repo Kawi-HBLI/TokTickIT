@@ -30,13 +30,24 @@ export type OwnerFilter =
   | { type: "me"; userId?: number }
   | { type: "user"; userId: number };
 
+export type StatusGroupFilter = "active" | "resolved_closed";
+export type ActionStatusFilter = "PENDING" | "COMPLETED" | "CANCELLED";
+export type StaffUserFilter =
+  | { type: "me" }
+  | { type: "user"; userId: number };
+
 export interface NormalizedStaffQueueQuery {
   q: string;
   status: TicketStatus | null;
+  statusGroup?: StatusGroupFilter | null;
   requestedPriority: TicketPriority | null;
   itPriority: TicketPriority | null;
   categoryId: number | null;
   owner: OwnerFilter | null;
+  actionAssignee?: StaffUserFilter | null;
+  actionStatus?: ActionStatusFilter | null;
+  completedBy?: StaffUserFilter | null;
+  completedDate?: "today" | null;
   sortBy: StaffSortByField;
   sortDirection: StaffSortDirection;
   page: number;
@@ -72,10 +83,15 @@ export function validateStaffQueueQuery(
   const allowed = [
     "q",
     "status",
+    "statusGroup",
     "requestedPriority",
     "itPriority",
     "categoryId",
     "owner",
+    "actionAssignee",
+    "actionStatus",
+    "completedBy",
+    "completedDate",
     "sortBy",
     "sortDirection",
     "page",
@@ -105,6 +121,16 @@ export function validateStaffQueueQuery(
       fields.push({ field: "status", message: "Choose a valid ticket status." });
     } else {
       status = raw.status as TicketStatus;
+    }
+  }
+
+  // statusGroup
+  let statusGroup: StatusGroupFilter | null = null;
+  if (raw.statusGroup !== undefined && raw.statusGroup !== null && raw.statusGroup !== "") {
+    if (typeof raw.statusGroup !== "string" || !["active", "resolved_closed"].includes(raw.statusGroup)) {
+      fields.push({ field: "statusGroup", message: "statusGroup must be active or resolved_closed." });
+    } else {
+      statusGroup = raw.statusGroup as StatusGroupFilter;
     }
   }
 
@@ -156,6 +182,56 @@ export function validateStaffQueueQuery(
     }
   }
 
+  // actionAssignee
+  let actionAssignee: StaffUserFilter | null = null;
+  if (raw.actionAssignee !== undefined && raw.actionAssignee !== null && raw.actionAssignee !== "") {
+    if (raw.actionAssignee === "me") {
+      actionAssignee = { type: "me" };
+    } else {
+      const num = Number(raw.actionAssignee);
+      if (Number.isInteger(num) && num > 0) {
+        actionAssignee = { type: "user", userId: num };
+      } else {
+        fields.push({ field: "actionAssignee", message: "actionAssignee must be me or a valid user ID." });
+      }
+    }
+  }
+
+  // actionStatus
+  let actionStatus: ActionStatusFilter | null = null;
+  if (raw.actionStatus !== undefined && raw.actionStatus !== null && raw.actionStatus !== "") {
+    if (typeof raw.actionStatus !== "string" || !["PENDING", "COMPLETED", "CANCELLED"].includes(raw.actionStatus)) {
+      fields.push({ field: "actionStatus", message: "actionStatus must be PENDING, COMPLETED, or CANCELLED." });
+    } else {
+      actionStatus = raw.actionStatus as ActionStatusFilter;
+    }
+  }
+
+  // completedBy
+  let completedBy: StaffUserFilter | null = null;
+  if (raw.completedBy !== undefined && raw.completedBy !== null && raw.completedBy !== "") {
+    if (raw.completedBy === "me") {
+      completedBy = { type: "me" };
+    } else {
+      const num = Number(raw.completedBy);
+      if (Number.isInteger(num) && num > 0) {
+        completedBy = { type: "user", userId: num };
+      } else {
+        fields.push({ field: "completedBy", message: "completedBy must be me or a valid user ID." });
+      }
+    }
+  }
+
+  // completedDate
+  let completedDate: "today" | null = null;
+  if (raw.completedDate !== undefined && raw.completedDate !== null && raw.completedDate !== "") {
+    if (raw.completedDate !== "today") {
+      fields.push({ field: "completedDate", message: "completedDate must be today." });
+    } else {
+      completedDate = "today";
+    }
+  }
+
   // sortBy
   let sortBy: StaffSortByField = "updatedAt";
   if (raw.sortBy !== undefined && raw.sortBy !== null && raw.sortBy !== "") {
@@ -202,7 +278,7 @@ export function validateStaffQueueQuery(
     throw new StaffQueueError(400, "INVALID_QUERY", "Some query parameters are invalid.", fields);
   }
 
-  return {
+  const result: NormalizedStaffQueueQuery = {
     q,
     status,
     requestedPriority,
@@ -214,6 +290,24 @@ export function validateStaffQueueQuery(
     page,
     pageSize,
   };
+
+  if (statusGroup !== null) {
+    result.statusGroup = statusGroup;
+  }
+  if (actionAssignee !== null) {
+    result.actionAssignee = actionAssignee;
+  }
+  if (actionStatus !== null) {
+    result.actionStatus = actionStatus;
+  }
+  if (completedBy !== null) {
+    result.completedBy = completedBy;
+  }
+  if (completedDate !== null) {
+    result.completedDate = completedDate;
+  }
+
+  return result;
 }
 
 export function requireStaff(req: Request, res: Response, next: NextFunction) {
@@ -236,6 +330,11 @@ export function requireStaff(req: Request, res: Response, next: NextFunction) {
 export const staffQueueRouter = Router();
 
 staffQueueRouter.use(requireStaff);
+
+staffQueueRouter.get("/dashboard", async (req, res, next) => {
+  const { getStaffDashboard } = await import("./dashboard-router.js");
+  return getStaffDashboard(req, res, next);
+});
 
 staffQueueRouter.get("/assignees", async (_req: Request, res: Response) => {
   try {
@@ -271,9 +370,25 @@ staffQueueRouter.get("/tickets", async (req: Request, res: Response, next: NextF
 
     const where: Prisma.TicketWhereInput = {};
 
+    const ACTIVE_STATUSES: TicketStatus[] = [
+      "NEW",
+      "OPEN",
+      "IN_PROGRESS",
+      "WAITING_FOR_REQUESTER",
+      "REOPENED",
+    ];
+    const RESOLVED_CLOSED_STATUSES: TicketStatus[] = ["RESOLVED", "CLOSED"];
+
     if (query.status) {
       where.currentStatus = query.status;
+    } else if (query.statusGroup) {
+      if (query.statusGroup === "active") {
+        where.currentStatus = { in: ACTIVE_STATUSES };
+      } else if (query.statusGroup === "resolved_closed") {
+        where.currentStatus = { in: RESOLVED_CLOSED_STATUSES };
+      }
     }
+
     if (query.requestedPriority) {
       where.requestedPriority = query.requestedPriority;
     }
@@ -291,6 +406,34 @@ staffQueueRouter.get("/tickets", async (req: Request, res: Response, next: NextF
       } else if (query.owner.type === "user") {
         where.ownerId = query.owner.userId;
       }
+    }
+
+    const actionWhere: Prisma.ActionTakenWhereInput = {};
+    if (query.actionStatus) {
+      actionWhere.status = query.actionStatus;
+    }
+    if (query.actionAssignee) {
+      actionWhere.assigneeId = query.actionAssignee.type === "me" ? req.auth!.user.id : query.actionAssignee.userId;
+    }
+    if (query.completedBy) {
+      actionWhere.completedById = query.completedBy.type === "me" ? req.auth!.user.id : query.completedBy.userId;
+    }
+    if (query.completedDate === "today") {
+      const now = new Date();
+      const todayStartUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+      const tomorrowStartUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
+      actionWhere.completedAt = {
+        gte: todayStartUtc,
+        lt: tomorrowStartUtc,
+      };
+      if (!query.actionStatus) {
+        actionWhere.status = "COMPLETED";
+      }
+    }
+    if (Object.keys(actionWhere).length > 0) {
+      where.actionsTaken = {
+        some: actionWhere,
+      };
     }
     if (query.q) {
       where.OR = [
@@ -366,10 +509,15 @@ staffQueueRouter.get("/tickets", async (req: Request, res: Response, next: NextF
       query: {
         q: query.q,
         status: query.status,
+        statusGroup: query.statusGroup,
         requestedPriority: query.requestedPriority,
         itPriority: query.itPriority,
         categoryId: query.categoryId,
         owner: typeof req.query.owner === "string" ? req.query.owner : null,
+        actionAssignee: typeof req.query.actionAssignee === "string" ? req.query.actionAssignee : null,
+        actionStatus: query.actionStatus,
+        completedBy: typeof req.query.completedBy === "string" ? req.query.completedBy : null,
+        completedDate: query.completedDate,
         sortBy: query.sortBy,
         sortDirection: query.sortDirection,
       },

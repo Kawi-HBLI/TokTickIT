@@ -45,6 +45,7 @@ createTicketRouter.get("/", requireRequester, async (req, res, next) => {
       requesterId,
       ...(query.categoryId !== null ? { categoryId: query.categoryId } : {}),
       ...(query.requestedPriority !== null ? { requestedPriority: query.requestedPriority } : {}),
+      ...(query.status ? { currentStatus: query.status } : query.statusGroup === 'active' ? { currentStatus: { in: ['NEW', 'OPEN', 'IN_PROGRESS', 'WAITING_FOR_REQUESTER', 'REOPENED'] } } : query.statusGroup === 'resolved_closed' ? { currentStatus: { in: ['RESOLVED', 'CLOSED'] } } : {}),
       ...(query.search
         ? {
             OR: [
@@ -118,6 +119,8 @@ createTicketRouter.get("/", requireRequester, async (req, res, next) => {
         search: query.search,
         categoryId: query.categoryId,
         requestedPriority: query.requestedPriority,
+        status: query.status,
+        statusGroup: query.statusGroup,
         sortBy: query.sortBy,
         sortOrder: query.sortOrder,
       },
