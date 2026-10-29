@@ -59,7 +59,10 @@ The top navigation bar provides clear active-page indicators and role-scoped nav
 
 ## 4. IT Staff Dashboard UI (`/staff/dashboard`)
 
-The Staff Dashboard provides operational awareness and prioritized work queues.
+The Staff Dashboard provides operational awareness and prioritized work queues. It displays server-calculated metric totals alongside bounded preview lists:
+- **My Assigned Work (`myAssignedWork`):** Preview of up to 5 active tickets owned by the current staff member.
+- **Unassigned Team Queue (`unassignedQueue`):** Preview of up to 5 unassigned active tickets across the team.
+- **Recent Action Activity (`recentActions`):** Preview of up to 10 recent actions completed by or created by the current staff member.
 
 ```
 +-------------------------------------------------------------------------------------------------------------+
@@ -71,7 +74,7 @@ The Staff Dashboard provides operational awareness and prioritized work queues.
 |  | [View All Open ->] |  | [View Tickets ->]  |  | [View Tickets ->]  |  | [Claim Work ->]    |             |
 |  +--------------------+  +--------------------+  +--------------------+  +--------------------+             |
 +-------------------------------------------------------------------------------------------------------------+
-|  My Assigned Work (5 Tickets)                                                    [View Full Queue ->]      |
+|  My Assigned Work (Preview - Up to 5 Tickets)                                     [View Full Queue ->]      |
 |  +-------------------+-----------------------------------------+----------+-------------+----------------+  |
 |  | Ticket Number     | Summary                                 | Priority | Status      | Actions        |  |
 |  +-------------------+-----------------------------------------+----------+-------------+----------------+  |
@@ -79,12 +82,12 @@ The Staff Dashboard provides operational awareness and prioritized work queues.
 |  | TCK-2026-00018    | Keyboard spacebar stuck on Lab PC 4     | MEDIUM   | OPEN        | 0 Actions      |  |
 |  +-------------------+-----------------------------------------+----------+-------------+----------------+  |
 +-------------------------------------------------------------------------------------------------------------+
-|  Unassigned Team Work (3 Tickets)                                                                           |
+|  Unassigned Team Work (Preview - Up to 5 Tickets)                                                           |
 |  +-------------------+-----------------------------------------+----------+-------------+----------------+  |
 |  | TCK-2026-00045    | New hire workstation setup              | MEDIUM   | OPEN        | [Claim Ticket] |  |
 |  +-------------------+-----------------------------------------+----------+-------------+----------------+  |
 +-------------------------------------------------------------------------------------------------------------+
-|  Recent Action Activity (Preview - Latest 10)                                                               |
+|  Recent Action Activity (Preview - Up to 10 Actions)                                                        |
 |  - Jane IT completed action on TCK-2026-00012: "Adjusted MTU size on router interface" (10m ago)          |
 +-------------------------------------------------------------------------------------------------------------+
 ```
@@ -104,7 +107,8 @@ The Staff Dashboard provides operational awareness and prioritized work queues.
 
 ## 5. Requester Dashboard UI (`/dashboard`)
 
-The Requester Dashboard provides an executive summary of user-owned requests.
+The Requester Dashboard provides an executive summary of user-owned requests. It displays server-calculated metric totals alongside a bounded preview of the requester's recent activity:
+- **Recent Ticket Activity (`recentTickets`):** Preview of up to 5 recently updated tickets owned by the authenticated requester.
 
 ```
 +-------------------------------------------------------------------------------------------------------------+
@@ -116,7 +120,7 @@ The Requester Dashboard provides an executive summary of user-owned requests.
 |  | [View Active Tickets ->]  |  | [Provide Details ->]      |  | [View History ->]         |                |
 |  +---------------------------+  +---------------------------+  +---------------------------+                |
 +-------------------------------------------------------------------------------------------------------------+
-|  Recent Ticket Activity                                                                                     |
+|  Recent Ticket Activity (Preview - Up to 5 Tickets)                                                         |
 |  +-------------------+---------------------------------------+----------------------+--------------------+  |
 |  | Ticket Number     | Summary                               | Status               | Latest Update      |  |
 |  +-------------------+---------------------------------------+----------------------+--------------------+  |
@@ -241,8 +245,9 @@ When an IT Staff member attempts to update status to `RESOLVED` on Ticket Detail
 - Modal dialogs render full-screen with touch-friendly tap targets ($\ge 44 \times 44\text{px}$).
 
 ### 9.4 400% Zoom / 320px Reflow Check (WCAG 1.4.10)
-- Content reflows into a single column at 320px equivalent width without requiring two-dimensional scrolling.
+- Content reflows cleanly into a single column at 320px equivalent width without horizontal scrolling or clipped information.
 - Layouts use fluid CSS flexbox/grid and wrapping text without relying on `overflow-x: hidden` to clip overflow.
+- *Caveat:* The 320px viewport test and automated accessibility checks verify equivalent-width reflow and structural contrast/DOM criteria. They are documented strictly as an equivalent-width reflow check and automated accessibility baseline; they do not replace a full manual browser 400% zoom test or a complete manual screen-reader walkthrough.
 
 ---
 
@@ -262,22 +267,22 @@ When an IT Staff member attempts to update status to `RESOLVED` on Ticket Detail
 
 ## 11. Visual & Screenshot Evidence Checklist
 
-The following screenshots must be captured under `artifacts/lab-04/screenshots/` for the final submission PDF across desktop, tablet, and mobile viewports:
+The following 17 screenshots have been captured under `artifacts/lab-04/screenshots/` using real application flows in the isolated test environment:
 
-- [ ] `artifacts/lab-04/screenshots/staff-dashboard/desktop-overview.png`: 4 metric cards, workload tables, and recent activity (1440px).
-- [ ] `artifacts/lab-04/screenshots/staff-dashboard/tablet-view.png`: 2x2 metric cards layout (834px).
-- [ ] `artifacts/lab-04/screenshots/staff-dashboard/mobile-view.png`: Stacked cards and responsive rows (390px).
-- [ ] `artifacts/lab-04/screenshots/requester-dashboard/desktop-summary.png`: 3 metric cards and recent tickets list (1440px).
-- [ ] `artifacts/lab-04/screenshots/requester-dashboard/tablet-view.png`: 2x2 or responsive card layout (834px).
-- [ ] `artifacts/lab-04/screenshots/requester-dashboard/mobile-view.png`: Mobile layout (390px).
-- [ ] `artifacts/lab-04/screenshots/actions-taken/staff-actions-list-desktop.png`: Mixed status actions (`PENDING`, `COMPLETED`, `CANCELLED`) on Staff Ticket Detail (1440px).
-- [ ] `artifacts/lab-04/screenshots/actions-taken/staff-actions-list-tablet.png`: Actions list wrapping on Tablet (834px).
-- [ ] `artifacts/lab-04/screenshots/actions-taken/staff-actions-list-mobile.png`: Stacked Actions cards on Mobile (390px).
-- [ ] `artifacts/lab-04/screenshots/actions-taken/create-action-modal.png`: Create modal with pending-submit state.
-- [ ] `artifacts/lab-04/screenshots/actions-taken/complete-action-modal.png`: Complete modal requiring result.
-- [ ] `artifacts/lab-04/screenshots/actions-taken/cancel-action-modal.png`: Cancel modal requiring cancellation reason.
-- [ ] `artifacts/lab-04/screenshots/actions-taken/audit-history-drawer.png`: Reconstructible timeline of changes with actor and diffs.
-- [ ] `artifacts/lab-04/screenshots/actions-taken/resolution-gate-failure.png`: Red error banner when resolution prerequisites fail.
-- [ ] `artifacts/lab-04/screenshots/actions-taken/requester-read-only-desktop.png`: Read-only view on Requester Ticket Detail (1440px).
-- [ ] `artifacts/lab-04/screenshots/actions-taken/requester-read-only-mobile.png`: Read-only view on Requester Ticket Detail (390px).
-- [ ] `artifacts/lab-04/screenshots/accessibility/reflow-400-percent.png`: 320px equivalent view showing clean reflow with zero clipping.
+- [x] `artifacts/lab-04/screenshots/staff-dashboard/desktop-overview.png`: 4 metric cards, workload tables, and recent activity (1440px).
+- [x] `artifacts/lab-04/screenshots/staff-dashboard/tablet-view.png`: 2x2 metric cards layout (834px).
+- [x] `artifacts/lab-04/screenshots/staff-dashboard/mobile-view.png`: Stacked cards and responsive rows (390px).
+- [x] `artifacts/lab-04/screenshots/requester-dashboard/desktop-summary.png`: 3 metric cards and recent tickets list (1440px).
+- [x] `artifacts/lab-04/screenshots/requester-dashboard/tablet-view.png`: Responsive card layout (834px).
+- [x] `artifacts/lab-04/screenshots/requester-dashboard/mobile-view.png`: Mobile layout (390px).
+- [x] `artifacts/lab-04/screenshots/actions-taken/staff-actions-list-desktop.png`: Mixed status actions (`PENDING`, `COMPLETED`, `CANCELLED`) on Staff Ticket Detail (1440px).
+- [x] `artifacts/lab-04/screenshots/actions-taken/staff-actions-list-tablet.png`: Actions list wrapping on Tablet (834px).
+- [x] `artifacts/lab-04/screenshots/actions-taken/staff-actions-list-mobile.png`: Stacked Actions cards on Mobile (390px).
+- [x] `artifacts/lab-04/screenshots/actions-taken/create-action-modal.png`: Create modal with pending-submit state and form fields.
+- [x] `artifacts/lab-04/screenshots/actions-taken/complete-action-modal.png`: Complete modal requiring documented result.
+- [x] `artifacts/lab-04/screenshots/actions-taken/cancel-action-modal.png`: Cancel modal requiring cancellation reason.
+- [x] `artifacts/lab-04/screenshots/actions-taken/audit-history-drawer.png`: Implemented audit history dialog showing timeline of changes and actor diffs.
+- [x] `artifacts/lab-04/screenshots/actions-taken/resolution-gate-failure.png`: Red error banner when resolution prerequisites fail.
+- [x] `artifacts/lab-04/screenshots/actions-taken/requester-read-only-desktop.png`: Read-only view on Requester Ticket Detail (1440px).
+- [x] `artifacts/lab-04/screenshots/actions-taken/requester-read-only-mobile.png`: Read-only view on Requester Ticket Detail (390px).
+- [x] `artifacts/lab-04/screenshots/accessibility/reflow-400-percent.png`: 320px equivalent-width reflow check showing responsive layout without horizontal clipping.

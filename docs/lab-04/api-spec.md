@@ -399,7 +399,7 @@ interface ActionTakenHistoryDto {
 ### 5.1 IT Staff Dashboard
 
 - **Endpoint:** `GET /api/staff/dashboard`
-- **Description:** Returns authoritative operational metrics, breakdown lists, and recent activity preview for the IT Staff operational dashboard.
+- **Description:** Returns authoritative operational metrics, breakdown preview lists (`myWork.items` up to 5 tickets, `unassignedQueue.items` up to 5 tickets), and recent activity preview (`recentActions` up to 10 actions) for the IT Staff operational dashboard.
 - **Authorization:** `IT_STAFF`, `ADMINISTRATOR`.
 - **Query Parameters:** None.
 - **Response `200 OK`:**
@@ -461,7 +461,7 @@ interface ActionTakenHistoryDto {
 ### 5.2 Requester Dashboard
 
 - **Endpoint:** `GET /api/requester/dashboard`
-- **Description:** Returns authoritative request summary metrics and recent activity scoped strictly to the authenticated Requester's tickets.
+- **Description:** Returns authoritative request summary metrics and recent activity preview (`recentTickets` up to 5 tickets) scoped strictly to the authenticated Requester's tickets.
 - **Authorization:** `REQUESTER`.
 - **Query Parameters:** None.
 - **Response `200 OK`:**
