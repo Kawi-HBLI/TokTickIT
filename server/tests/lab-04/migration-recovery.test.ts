@@ -541,4 +541,237 @@ describe("Database Triggers, Migration & Recovery (server/tests/lab-04/migration
       expect(newHistory.id).toBeGreaterThan(Number(historySeq[0].last_value));
     });
   });
+
+  describe("Genuine Database Backup & Restore Rehearsal (TEST-RECOV-01)", () => {
+    it("performs actual pg_dump and pg_restore into separate disposable database, verifying 100% row counts, FKs, sequences, collision-free allocations, and trigger immutability", async () => {
+      const runId = randomUUID().replaceAll("-", "").slice(0, 10);
+      const srcDbName = `toktickit_recov_src_${runId}`;
+      const dstDbName = `toktickit_recov_dst_${runId}`;
+      const dumpFile = `/tmp/toktickit_recov_${runId}.dump`;
+
+      const execDocker = (args: string[]) => {
+        return execFileSync("docker", ["exec", "toktickit-db", ...args], {
+          encoding: "utf8",
+          timeout: 30000,
+        });
+      };
+
+      let srcPrisma: PrismaClient | null = null;
+      let dstPrisma: PrismaClient | null = null;
+
+      try {
+        // 1. Create uniquely named disposable source database
+        execDocker(["psql", "-U", "toktickit", "-d", "postgres", "-c", `CREATE DATABASE ${srcDbName};`]);
+
+        const srcUrl = new URL(process.env.DATABASE_URL!);
+        srcUrl.pathname = `/${srcDbName}`;
+        srcUrl.searchParams.delete("schema");
+
+        // 2. Deploy all Prisma migrations on source database
+        execFileSync(
+          process.execPath,
+          [createRequire(import.meta.url).resolve("prisma/build/index.js"), "migrate", "deploy"],
+          {
+            cwd: serverRoot,
+            env: { ...process.env, DATABASE_URL: srcUrl.toString() },
+            encoding: "utf8",
+            timeout: 30000,
+          }
+        );
+
+        srcPrisma = new PrismaClient({ datasources: { db: { url: srcUrl.toString() } } });
+        await srcPrisma.$connect();
+
+        // 3. Populate representative Lab 4 data
+        await seedDatabase(srcPrisma, { seedActions: true });
+
+        // Add additional representative action and history records
+        const extraTicket = await srcPrisma.ticket.findFirstOrThrow({ where: { currentStatus: "IN_PROGRESS" } });
+        const staff = await srcPrisma.user.findFirstOrThrow({ where: { role: "IT_STAFF", isActive: true } });
+        const extraAction = await srcPrisma.actionTaken.create({
+          data: {
+            ticketId: extraTicket.id,
+            createdById: staff.id,
+            assigneeId: staff.id,
+            status: "PENDING",
+            description: "Rehearsal verification action for disaster recovery test",
+          },
+        });
+        await srcPrisma.actionTakenHistory.create({
+          data: {
+            actionId: extraAction.id,
+            ticketId: extraTicket.id,
+            actorId: staff.id,
+            eventType: "CREATED",
+            version: 1,
+            snapshot: { summary: "Created in source DB before backup" },
+          },
+        });
+
+        // Introduce intentional sequence gaps to verify collision-free allocation
+        await srcPrisma.$executeRawUnsafe(`SELECT setval('"ActionTaken_id_seq"', 500, true);`);
+        await srcPrisma.$executeRawUnsafe(`SELECT setval('"ActionTakenHistory_id_seq"', 600, true);`);
+
+        // 4. Record pre-dump source invariants
+        const srcCounts = {
+          users: await srcPrisma.user.count(),
+          categories: await srcPrisma.category.count(),
+          relatedSystems: await srcPrisma.relatedSystem.count(),
+          tickets: await srcPrisma.ticket.count(),
+          attachments: await srcPrisma.attachment.count(),
+          publicComments: await srcPrisma.publicComment.count(),
+          internalNotes: await srcPrisma.internalNote.count(),
+          actionsTaken: await srcPrisma.actionTaken.count(),
+          actionTakenHistory: await srcPrisma.actionTakenHistory.count(),
+        };
+
+        const sequenceNames = [
+          "ActionTaken_id_seq",
+          "ActionTakenHistory_id_seq",
+          "Ticket_id_seq",
+          "Attachment_id_seq",
+          "Category_id_seq",
+          "InternalNote_id_seq",
+          "PublicComment_id_seq",
+          "RelatedSystem_id_seq",
+          "RequesterUser_id_seq",
+          "Session_id_seq",
+          "ticket_number_seq",
+        ];
+
+        const srcSequences = new Map<string, { last_value: string; is_called: boolean }>();
+        for (const seq of sequenceNames) {
+          const [row] = await srcPrisma.$queryRawUnsafe<Array<{ last_value: bigint | number | string; is_called: boolean }>>(
+            `SELECT last_value::text, is_called FROM "${seq}"`
+          );
+          srcSequences.set(seq, { last_value: String(row.last_value), is_called: row.is_called });
+        }
+
+        // 5. Perform genuine custom-format pg_dump
+        execDocker(["pg_dump", "-U", "toktickit", "-d", srcDbName, "-Fc", "-f", dumpFile]);
+
+        // 6. Create uniquely named disposable target database
+        execDocker(["psql", "-U", "toktickit", "-d", "postgres", "-c", `CREATE DATABASE ${dstDbName};`]);
+
+        // 7. Perform genuine pg_restore into separate target database
+        execDocker(["pg_restore", "-U", "toktickit", "-d", dstDbName, dumpFile]);
+
+        // 8. Connect to target database
+        const dstUrl = new URL(process.env.DATABASE_URL!);
+        dstUrl.pathname = `/${dstDbName}`;
+        dstUrl.searchParams.delete("schema");
+
+        dstPrisma = new PrismaClient({ datasources: { db: { url: dstUrl.toString() } } });
+        await dstPrisma.$connect();
+
+        // 9. Verify Table Row Counts match 100% across all relations
+        const dstCounts = {
+          users: await dstPrisma.user.count(),
+          categories: await dstPrisma.category.count(),
+          relatedSystems: await dstPrisma.relatedSystem.count(),
+          tickets: await dstPrisma.ticket.count(),
+          attachments: await dstPrisma.attachment.count(),
+          publicComments: await dstPrisma.publicComment.count(),
+          internalNotes: await dstPrisma.internalNote.count(),
+          actionsTaken: await dstPrisma.actionTaken.count(),
+          actionTakenHistory: await dstPrisma.actionTakenHistory.count(),
+        };
+        expect(dstCounts).toEqual(srcCounts);
+        expect(dstCounts.tickets).toBeGreaterThan(0);
+        expect(dstCounts.actionsTaken).toBeGreaterThan(0);
+        expect(dstCounts.actionTakenHistory).toBeGreaterThan(0);
+
+        // 10. Verify Restored Data and IDs Preserved with Valid FK Relationships
+        const restoredTicket = await dstPrisma.ticket.findUniqueOrThrow({
+          where: { id: extraTicket.id },
+          include: { requester: true, owner: true, actionsTaken: true },
+        });
+        expect(restoredTicket.summary).toBe(extraTicket.summary);
+        expect(restoredTicket.requester).not.toBeNull();
+        expect(restoredTicket.actionsTaken.length).toBeGreaterThan(0);
+
+        const restoredAction = await dstPrisma.actionTaken.findUniqueOrThrow({
+          where: { id: extraAction.id },
+          include: { ticket: true, createdBy: true, history: true },
+        });
+        expect(restoredAction.description).toBe("Rehearsal verification action for disaster recovery test");
+        expect(restoredAction.ticket.id).toBe(extraTicket.id);
+        expect(restoredAction.createdBy.id).toBe(staff.id);
+        expect(restoredAction.history.length).toBe(1);
+
+        // 11. Verify Sequence States Match (last_value and is_called) before subsequent allocations
+        for (const seq of sequenceNames) {
+          const [row] = await dstPrisma.$queryRawUnsafe<Array<{ last_value: bigint | number | string; is_called: boolean }>>(
+            `SELECT last_value::text, is_called FROM "${seq}"`
+          );
+          const srcSeq = srcSequences.get(seq)!;
+          expect({ seq, last_value: String(row.last_value), is_called: row.is_called }).toEqual({
+            seq,
+            last_value: srcSeq.last_value,
+            is_called: srcSeq.is_called,
+          });
+        }
+
+        // 12. Verify Collision-Free Subsequent Allocations (advancing cleanly from gap)
+        const postRestoreAction = await dstPrisma.actionTaken.create({
+          data: {
+            ticketId: extraTicket.id,
+            createdById: staff.id,
+            assigneeId: staff.id,
+            status: "PENDING",
+            description: "Post-restore allocation test advancing from sequence gap",
+          },
+        });
+        expect(postRestoreAction.id).toBe(501);
+
+        const postRestoreHistory = await dstPrisma.actionTakenHistory.create({
+          data: {
+            actionId: postRestoreAction.id,
+            ticketId: extraTicket.id,
+            actorId: staff.id,
+            eventType: "CREATED",
+            version: 1,
+            snapshot: { summary: "Created post-restore" },
+          },
+        });
+        expect(postRestoreHistory.id).toBe(601);
+
+        // 13. Verify Restored History Triggers Continue to Reject Direct UPDATE and DELETE
+        let updateError: Error | null = null;
+        try {
+          await dstPrisma.$executeRawUnsafe(
+            `UPDATE "ActionTakenHistory" SET "version" = 999 WHERE id = ${postRestoreHistory.id}`
+          );
+        } catch (err: any) {
+          updateError = err;
+        }
+        expect(updateError).not.toBeNull();
+        expect(updateError?.message).toMatch(/immutable and cannot be updated or deleted/i);
+
+        let deleteError: Error | null = null;
+        try {
+          await dstPrisma.$executeRawUnsafe(
+            `DELETE FROM "ActionTakenHistory" WHERE id = ${postRestoreHistory.id}`
+          );
+        } catch (err: any) {
+          deleteError = err;
+        }
+        expect(deleteError).not.toBeNull();
+        expect(deleteError?.message).toMatch(/immutable and cannot be updated or deleted/i);
+      } finally {
+        // 14. Clean up disposable databases and dump file
+        if (srcPrisma) await srcPrisma.$disconnect().catch(() => {});
+        if (dstPrisma) await dstPrisma.$disconnect().catch(() => {});
+        try {
+          execDocker(["rm", "-f", dumpFile]);
+        } catch {}
+        try {
+          execDocker(["psql", "-U", "toktickit", "-d", "postgres", "-c", `DROP DATABASE IF EXISTS ${srcDbName};`]);
+        } catch {}
+        try {
+          execDocker(["psql", "-U", "toktickit", "-d", "postgres", "-c", `DROP DATABASE IF EXISTS ${dstDbName};`]);
+        } catch {}
+      }
+    }, 90000);
+  });
 });
