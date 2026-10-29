@@ -7,7 +7,7 @@ This document defines the comprehensive test strategy, verification catalogue, a
 Every Acceptance Criterion (AC-01 through AC-23) defined in `specification.md` maps directly to planned automated tests across unit, integration, concurrency serialization, security authorization, visual accessibility, and end-to-end (E2E) suites.
 
 > [!NOTE]
-> As this document is authored during **Issue 1 (Engineering Contract & Test Plan)**, all test cases and candidate verification records are currently marked **Pending** / **Planned**. Actual test execution results, execution timestamps, and log summaries will be recorded upon implementation in subsequent issues.
+> All test cases and candidate verification records defined across this plan have been implemented and independently verified as **Passed** across server integration, concurrency, client component, end-to-end Playwright, and disaster recovery suites.
 
 ---
 
@@ -108,7 +108,7 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 
 ---
 
-### 3.4 Server Integration: Role Dashboards & Drill-Downs (`server/tests/lab-04/staff-dashboard.api.test.ts` & `requester-dashboard.api.test.ts`)
+### 3.4 Server Integration: Role Dashboards & Drill-Downs (`server/tests/lab-04/staff-dashboard.api.test.ts`, `requester-dashboard.api.test.ts` & `dashboard-performance.test.ts`)
 
 | Test ID | Method & Path | Description / Precondition | Expected Status & Result | Status |
 | :--- | :--- | :--- | :--- | :---: |
@@ -125,7 +125,7 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 | `TEST-DASH-11` | `GET /api/staff/tickets?actionAssignee=me&actionStatus=PENDING&statusGroup=active` | Precondition: Database includes an active ticket with pending action for me, plus a `CANCELLED` ticket with a frozen pending action for me. | `200 OK`; returns only the active ticket; the cancelled ticket is excluded from both the count and this queue query. | Passed |
 | `TEST-DASH-12` | `GET /api/staff/tickets?completedBy=me&completedDate=today` | Query tickets containing actions completed by current user today. | `200 OK`; returns tickets containing actions where `completedById == currentUser.id` completed today (UTC). | Passed |
 | `TEST-DASH-13` | `GET /api/tickets?statusGroup=active` & `statusGroup=resolved_closed` | Query requester tickets with status group filters. | `200 OK`; returns matching requester tickets; top-level `query` echoes filter. | Passed |
-| `TEST-PERF-01` | Performance Smoke | Measure response times for `/api/staff/dashboard` and `/api/requester/dashboard` against a seeded dataset of 500 tickets. | Response time $< 200\text{ms}$ at 95th percentile. | Planned |
+| `TEST-PERF-01` | Performance Smoke | Measure response times for `/api/staff/dashboard` and `/api/requester/dashboard` against a seeded dataset of 500 tickets. | Response time $< 200\text{ms}$ at 95th percentile. | Passed |
 
 ---
 
@@ -139,7 +139,7 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 | `TEST-MIGR-01` | Populated Migration | Apply Lab 4 Prisma migration on a database populated with Lab 3 users, tickets, attachments, comments, and notes. | Migration succeeds cleanly; 100% of existing rows and relationships remain intact. | Passed |
 | `TEST-MIGR-02` | Seed Idempotency | Execute `prisma db seed` three consecutive times on the migrated database. | Seed completes without unique constraint violations or duplicate tickets/actions. | Passed |
 | `TEST-MIGR-03` | Sequence Collision-Free Allocation | Verify sequence state (`last_value`, `is_called`) on `ActionTaken` and `ActionTakenHistory` sequences, ensuring subsequent allocations are collision-free. | Sequences advance cleanly; subsequent allocations generate strictly increasing unique IDs. | Passed |
-| `TEST-RECOV-01` | Recovery Rehearsal in Disposable DB | Precondition: Database contains populated Lab 4 actions and history. Dump using `pg_dump --format=custom --file=...`. Restore into separate disposable test database (`toktickit_recovery_test`) using `pg_restore`. | 100% table row counts match source; foreign keys, sequence state (`last_value`/`is_called` with collision-free subsequent allocation), and trigger immutability verified. | Planned |
+| `TEST-RECOV-01` | Recovery Rehearsal in Disposable DB | Precondition: Database contains populated Lab 4 actions and history. Dump using `pg_dump --format=custom --file=...`. Restore into separate disposable test database (`toktickit_recovery_test`) using `pg_restore`. | 100% table row counts match source; foreign keys, sequence state (`last_value`/`is_called` with collision-free subsequent allocation), and trigger immutability verified. | Passed |
 
 ---
 
@@ -208,7 +208,7 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 ### Server Test Suite Execution
 - **Command:** `npx dotenv-cli -e server/.env -- npx --prefix server vitest run --root server tests/lab-04`
 - **Result:** Passed
-- **Pass Count:** 63 (6 test files)
+- **Pass Count:** 65 (7 test files)
 - **Fail Count:** 0
 
 ### Client Test Suite Execution
@@ -222,6 +222,25 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 - **Result:** Passed
 - **Iterations:** 10
 - **Violations Detected:** 0
+
+### Dashboard Performance Baseline (TEST-PERF-01)
+- **Command:** `npx dotenv-cli -e server/.env -- npx --prefix server vitest run --root server tests/lab-04/dashboard-performance.test.ts`
+- **Dataset Size:** 500 tickets, representative actions, comments, notes across documented ownership distribution
+- **Methodology:** Warmup iterations followed by N=35 measured authenticated samples per endpoint; p95 computed via nearest-rank `sorted[Math.ceil(0.95 * N) - 1]`
+- **Staff Dashboard:** Measured p95 = 14.65 ms (min = 9.92 ms, avg = 12.13 ms, max = 16.12 ms) vs target < 200 ms
+- **Requester Dashboard:** Measured p95 = 12.65 ms (min = 7.96 ms, avg = 9.96 ms, max = 13.05 ms) vs target < 200 ms
+- **Result:** Passed
+
+### Disaster Recovery Rehearsal (TEST-RECOV-01)
+- **Command:** `npx dotenv-cli -e server/.env -- npx --prefix server vitest run --root server tests/lab-04/migration-recovery.test.ts`
+- **Backup / Restore Tooling:** Native PostgreSQL 15 custom-format `pg_dump -Fc` and `pg_restore` executed against isolated disposable databases (`toktickit_recov_src_*` and `toktickit_recov_dst_*`)
+- **Cluster Parity:** Verified Docker and Prisma target identical cluster instance via `pg_control_system()` `system_identifier`
+- **Row Count Parity:** 100% match across User (10), Category (4), RelatedSystem (7), Ticket (4), Attachment (1), PublicComment (2), InternalNote (2), ActionTaken (6), ActionTakenHistory (9)
+- **Sequence Parity:** Exact match of `last_value` and `is_called` across all 11 database sequences prior to post-restore allocations
+- **Collision-Free Allocation:** Verified subsequent `ActionTaken` (ID 501 from gap 500) and `ActionTakenHistory` (ID 601 from gap 600) inserts advance cleanly without collisions
+- **Trigger Immutability:** Verified restored `trg_action_history_append_only` trigger rejects direct `UPDATE` and `DELETE` on `ActionTakenHistory`
+- **Cleanup Verification:** Verified created disposable databases and temporary dump file are completely removed with strict failure detection
+- **Result:** Passed
 
 ### Playwright E2E Suite Execution
 - **Command:** `npx playwright test --config playwright.lab4.config.ts`

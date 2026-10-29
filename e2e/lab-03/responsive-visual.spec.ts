@@ -16,7 +16,7 @@ test.describe("VIS-01–03: approved 45-state responsive evidence", () => {
       const capture = async (area: string, state: string, fullPage = true) => {
         await page.evaluate(() => document.fonts.ready);
         await checkNoHorizontalScroll(page);
-        const dir = path.resolve("artifacts/lab-03/screenshots", area);
+        const dir = path.resolve("artifacts/lab-04/screenshots", area);
         fs.mkdirSync(dir, { recursive: true });
         await page.screenshot({ path: path.join(dir, `${state}-${vp.name}.png`), fullPage });
       };

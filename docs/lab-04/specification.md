@@ -75,15 +75,15 @@ In this increment, the IT service desk requires:
 ### Operational Role Dashboards & Drill-Downs
 
 - **FR-16 - IT Staff Dashboard:** IT Staff and Administrators can access `/api/staff/dashboard` displaying authoritative counts: Open Tickets (team), Pending Actions (current user on active tickets), Completed Actions today (actions completed by current user since UTC midnight), and Unassigned Tickets (team).
-- **FR-17 - Staff Workload Breakdown:** The Staff Dashboard provides categorized lists: "My Assigned Work" (up to 10 tickets owned by current user), "Unassigned Team Queue" (up to 10 unassigned tickets), and "Recent Action Activity" (up to 10 actions completed by or created by current user).
-- **FR-18 - Requester Dashboard:** Requesters can access `/api/requester/dashboard` summarizing owned tickets: Active Tickets, Awaiting Requester Action (`WAITING_FOR_REQUESTER`), and Resolved/Closed Tickets, alongside a safe recent activity log excluding internal notes and audit history.
+- **FR-17 - Staff Workload Breakdown:** The Staff Dashboard provides categorized preview lists: "My Assigned Work" (up to 5 tickets owned by current user), "Unassigned Team Queue" (up to 5 unassigned tickets), and "Recent Action Activity" (up to 10 actions completed by or created by current user).
+- **FR-18 - Requester Dashboard:** Requesters can access `/api/requester/dashboard` summarizing owned tickets: Active Tickets, Awaiting Requester Action (`WAITING_FOR_REQUESTER`), and Resolved/Closed Tickets, alongside a safe recent activity log (up to 5 tickets owned by the requester) excluding internal notes, audit history, and staff-only identifiers.
 - **FR-19 - Interactive Metric Drill-Down:** Clicking metric cards navigates to queue views where the destination filter exactly reproduces the counted set (`/staff/tickets?statusGroup=active`, `/staff/tickets?owner=unassigned&statusGroup=active`, `/staff/tickets?actionAssignee=me&actionStatus=PENDING&statusGroup=active`, `/staff/tickets?completedBy=me&completedDate=today`, `/tickets?statusGroup=active`, `/tickets?status=WAITING_FOR_REQUESTER`, `/tickets?statusGroup=resolved_closed`).
 
 ### Quality, Regression, and System Hardening
 
 - **FR-20 - Legacy Ticket & Data Preservation:** All tickets, attachments, users, comments, and notes from earlier labs remain valid and operational. Legacy resolved/closed tickets without actions remain queryable without artificial data generation.
 - **FR-21 - Standard Envelopes & Auth Consistency:** All endpoints maintain the established TokTickIT error format `{ error: { code, message, fields?, retryable? } }`, data wrapper `{ data: { ... } }`, top-level `query` echo on queue endpoints, CSRF validation with code `CSRF_INVALID`, and mandatory password change enforcement (`PASSWORD_CHANGE_REQUIRED`).
-- **FR-22 - Responsive & Accessible Experience:** Dashboards and ticket detail panels render responsively across mobile (375px), tablet (768px), and desktop (1280px+) with zero horizontal viewport scrolling, pending-submit button states, form state preservation on recoverable failure, modal focus trapping/restoration, and full support for 400% zoom (320px equivalent).
+- **FR-22 - Responsive & Accessible Experience:** Dashboards and ticket detail panels render responsively across mobile (375px), tablet (768px), and desktop (1280px+) with zero horizontal viewport scrolling, pending-submit button states, form state preservation on recoverable failure, modal focus trapping/restoration, and full support for equivalent-width 320px reflow (caveat: automated tests and 320px viewport checks verify reflow and DOM criteria, but do not replace manual 400% zoom or screen-reader evaluation).
 
 ---
 
@@ -310,54 +310,59 @@ model ActionTaken {
 }
 
 model ActionTakenHistory {
-  id                    Int                @id @default(autoincrement())
-  actionTakenId         Int
-  ticketId              Int
-  eventType             ActionHistoryEvent
-  actorId               Int
-  descriptionBefore     String?
-  descriptionAfter      String?
-  resultBefore          String?
-  resultAfter           String?
-  statusBefore          ActionStatus?
-  statusAfter           ActionStatus?
-  assigneeIdBefore      Int?
-  assigneeIdAfter       Int?
-  followUpReqBefore     Boolean?
-  followUpReqAfter      Boolean?
-  followUpNoteBefore    String?
-  followUpNoteAfter     String?
-  attachmentNotesBefore String?
-  attachmentNotesAfter  String?
-  cancelReasonBefore    String?
-  cancelReasonAfter     String?
-  versionBefore         Int?
-  versionAfter          Int
-  createdAt             DateTime           @default(now())
+  id        Int             @id @default(autoincrement())
+  actionId  Int
+  ticketId  Int
+  actorId   Int
+  eventType ActionEventType
+  version   Int
+  snapshot  Json
+  createdAt DateTime        @default(now())
 
-  actionTaken           ActionTaken        @relation(fields: [actionTakenId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  ticket                Ticket             @relation(fields: [ticketId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  actor                 User               @relation(fields: [actorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  action    ActionTaken     @relation(fields: [actionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  ticket    Ticket          @relation(fields: [ticketId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  actor     User            @relation("ActionHistoryActor", fields: [actorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  @@index([actionTakenId, createdAt, id])
+  @@index([actionId, createdAt])
   @@index([ticketId, createdAt])
-  @@index([actorId])
+  @@index([actorId, createdAt])
+}
+```
+
+The `snapshot` column stores a canonical JSON object detailing field-level diffs and version transitions:
+
+```json
+{
+  "changes": {
+    "description": { "before": "Initial description", "after": "Updated description" },
+    "result": { "before": null, "after": "Completed result text" },
+    "status": { "before": "PENDING", "after": "COMPLETED" },
+    "assignee": { "beforeId": 2, "afterId": 3 },
+    "followUpRequired": { "before": false, "after": true },
+    "followUpNote": { "before": null, "after": "Verify with user." },
+    "attachmentNotes": { "before": null, "after": "diag.log" },
+    "completedBy": { "beforeId": null, "afterId": 3 },
+    "cancellationReason": { "before": null, "after": "Duplicate item." }
+  },
+  "versionBefore": 1,
+  "versionAfter": 2
 }
 ```
 
 ### 8.2 Database-Enforced Immutability Trigger
 
 ```sql
-CREATE OR REPLACE FUNCTION enforce_action_history_append_only()
+CREATE OR REPLACE FUNCTION fn_prevent_action_history_mutation()
 RETURNS TRIGGER AS $$
 BEGIN
-  RAISE EXCEPTION 'ActionTakenHistory is append-only: UPDATE and DELETE operations are forbidden.';
+  RAISE EXCEPTION 'ActionTakenHistory records are immutable and cannot be updated or deleted';
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_action_history_append_only
 BEFORE UPDATE OR DELETE ON "ActionTakenHistory"
-FOR EACH ROW EXECUTE FUNCTION enforce_action_history_append_only();
+FOR EACH ROW
+EXECUTE FUNCTION fn_prevent_action_history_mutation();
 ```
 
 ### 8.3 Forward Migration & Recovery Rehearsal Strategy
@@ -378,6 +383,7 @@ FOR EACH ROW EXECUTE FUNCTION enforce_action_history_append_only();
    - **Verification Invariants:**
      - Row count parity across `User`, `Ticket`, `Attachment`, `PublicComment`, `InternalNote`, `ActionTaken`, and `ActionTakenHistory`.
      - Relational integrity: Foreign keys remain valid and match source IDs.
+     - Attachment check caveat: Recovery verification asserts database metadata preservation for Attachment records (file-content recovery from physical storage or S3 is an external storage process).
      - Sequence integrity: Autoincrement sequence state (including `last_value` and `is_called` where applicable) is preserved from the source database, and subsequent allocation remains collision-free without requiring sequence values to artificially equal `max(id)`.
      - History immutability: Re-verify that trigger `trg_action_history_append_only` blocks raw `UPDATE` and `DELETE` in the restored database.
 

@@ -17,10 +17,19 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 120_000,
       env: {
+        PORT: "8000",
         DATABASE_URL: E2E_DATABASE_URL,
         UPLOAD_DIR: E2E_UPLOAD_DIR,
       },
     },
-    { command: "npm --prefix client run dev", url: "http://localhost:5173", reuseExistingServer: false, timeout: 120_000 },
+    {
+      command: "npm --prefix client run dev",
+      url: "http://localhost:5173",
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: {
+        VITE_API_URL: "http://localhost:8000",
+      },
+    },
   ],
 });

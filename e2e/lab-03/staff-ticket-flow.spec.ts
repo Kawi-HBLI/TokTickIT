@@ -1,4 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { createRequire } from "node:module";
+import path from "node:path";
+import { E2E_DATABASE_URL } from "../test-environment.js";
+
+const serverRequire = createRequire(path.resolve(process.cwd(), "server/package.json"));
+const { PrismaClient } = serverRequire("@prisma/client");
+const prisma = new PrismaClient({ datasources: { db: { url: E2E_DATABASE_URL } } });
 
 const staffEmail = "ethan.brooks@toktickit.local";
 const initialPassword = "ChangeMe-2026!";
@@ -64,6 +71,45 @@ async function loginAsRequester(page: import("@playwright/test").Page) {
 }
 
 test.describe("E2E-STAFF-OPS-01: IT Staff Ticket Operations and Authorization", () => {
+  test.beforeEach(async () => {
+    const ticket4 = await prisma.ticket.findFirst({ where: { summary: "Grade submission error" } });
+    if (ticket4) {
+      const creator = await prisma.user.findFirst({ where: { email: "ethan.brooks@toktickit.local" } });
+      const existing = await prisma.actionTaken.findFirst({ where: { ticketId: ticket4.id } });
+      if (!existing && creator) {
+        const now = new Date();
+        const action = await prisma.actionTaken.create({
+          data: {
+            ticketId: ticket4.id,
+            createdById: creator.id,
+            assigneeId: creator.id,
+            completedById: creator.id,
+            status: "COMPLETED",
+            description: "Investigate and resolve submission deadlock",
+            result: "Deadlock resolved and grade cache cleared",
+            completedAt: now,
+            idempotencyKey: "act-flow-ticket4-seed",
+            version: 2,
+          },
+        });
+        await prisma.actionTakenHistory.create({
+          data: {
+            actionId: action.id,
+            ticketId: ticket4.id,
+            actorId: creator.id,
+            eventType: "COMPLETED",
+            version: 2,
+            snapshot: {
+              changes: {
+                status: "COMPLETED",
+                result: "Deadlock resolved and grade cache cleared",
+              },
+            },
+          },
+        });
+      }
+    }
+  });
   test("claims ticket, reassigns owner with dialog, changes IT priority, transitions status with confirmation, posts comments/notes, and guards requester access", async ({ page }) => {
     // 1. Sign in as IT Staff
     await loginAsStaff(page);

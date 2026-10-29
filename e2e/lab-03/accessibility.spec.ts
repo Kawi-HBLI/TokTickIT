@@ -19,9 +19,11 @@ test.describe("E2E-A11Y-01: Accessibility and Keyboard Navigation", () => {
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await expect(navigation).toHaveAttribute("id", (await toggle.getAttribute("aria-controls"))!);
     await page.keyboard.press("Tab");
-    await expect(navigation.getByRole("button", { name: "User Management", exact: true })).toBeFocused();
+    await expect(navigation.getByRole("button", { name: "Dashboard", exact: true })).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(navigation.getByRole("button", { name: "Ticket Queue", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(navigation.getByRole("button", { name: "User Management", exact: true })).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(toggle).toBeFocused();
     await expect(navigation).toBeHidden();
@@ -39,7 +41,7 @@ test.describe("E2E-A11Y-01: Accessibility and Keyboard Navigation", () => {
     await page.getByRole("button", { name: "Log out" }).click();
 
     await loginVisualRequester(page);
-    const dir = path.resolve("artifacts/lab-03/screenshots/candidate-checks");
+    const dir = path.resolve("artifacts/lab-04/screenshots/candidate-checks");
     fs.mkdirSync(dir, { recursive: true });
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(navigation).toBeHidden();
@@ -78,7 +80,7 @@ test.describe("E2E-A11Y-01: Accessibility and Keyboard Navigation", () => {
       data: { name, email, role: "REQUESTER", isActive: true, initialPassword: "ChangeMe-2026!" },
     });
     expect(created.status()).toBe(201);
-    const dir = path.resolve("artifacts/lab-03/screenshots/candidate-checks");
+    const dir = path.resolve("artifacts/lab-04/screenshots/candidate-checks");
     fs.mkdirSync(dir, { recursive: true });
 
     for (const viewport of [

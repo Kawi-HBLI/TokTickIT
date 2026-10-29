@@ -25,10 +25,10 @@ Dates below are UTC. This record tracks review activities across the 4 planned G
 | Work Package / Issue | Target Branch | Planned PR Link | Reviewer | Verdict & Status |
 | :--- | :--- | :--- | :--- | :--- |
 | **Issue 1:** Engineering contract and test plan ([#48](https://github.com/Kawi-HBLI/TokTickIT/issues/48)) | `feature/lab4-engineering-contract` $\rightarrow$ `lab4-staging` | [PR #52](https://github.com/Kawi-HBLI/TokTickIT/pull/52) | @R1NNE0 | Approved and Merged (`70d865d`) |
-| **Issue 2:** Actions Taken and Ticket workflow ([#49](https://github.com/Kawi-HBLI/TokTickIT/issues/49)) | `feature/lab4-actions-workflow` $\rightarrow$ `lab4-staging` | In Progress | @R1NNE0 | Started |
-| **Issue 3:** Role dashboards ([#50](https://github.com/Kawi-HBLI/TokTickIT/issues/50)) | `feature/lab4-dashboards` $\rightarrow$ `lab4-staging` | Planned | @R1NNE0 | Backlog |
-| **Issue 4:** Final regression, hardening, and delivery evidence ([#51](https://github.com/Kawi-HBLI/TokTickIT/issues/51)) | `feature/lab4-final-verification` $\rightarrow$ `lab4-staging` | Planned | @R1NNE0 | Backlog |
-| **Release PR:** Integrate Lab 4 into main | `lab4-staging` $\rightarrow$ `main` | Planned | @R1NNE0 | Planned |
+| **Issue 2:** Actions Taken and Ticket workflow ([#49](https://github.com/Kawi-HBLI/TokTickIT/issues/49)) | `feature/lab4-actions-workflow` $\rightarrow$ `lab4-staging` | [PR #53](https://github.com/Kawi-HBLI/TokTickIT/pull/53) | @R1NNE0 | Approved and Merged (`46d54ae`) |
+| **Issue 3:** Role dashboards ([#50](https://github.com/Kawi-HBLI/TokTickIT/issues/50)) | `feature/lab4-dashboards` $\rightarrow$ `lab4-staging` | [PR #54](https://github.com/Kawi-HBLI/TokTickIT/pull/54) | @R1NNE0 | Approved and Merged (`d5c2e2a`) |
+| **Issue 4:** Final regression, hardening, and delivery evidence ([#51](https://github.com/Kawi-HBLI/TokTickIT/issues/51)) | `feature/lab4-final-verification` $\rightarrow$ `lab4-staging` | Planned (Pending Review) | @R1NNE0 | In Progress (Unfinished) |
+| **Release PR:** Integrate Lab 4 into main | `lab4-staging` $\rightarrow$ `main` | Planned | @R1NNE0 | Planned (Unfinished) |
 
 ### Detailed Review Log for Authored Work
 
@@ -57,12 +57,43 @@ Dates below are UTC. This record tracks review activities across the 4 planned G
     1. Clarify inverse Prisma relations for `User` and `Ticket` in schema.
     2. Add UI validation test coverage for empty cancellation reason.
     3. Extend terminal Ticket test coverage to include Cancelled tickets and action edits.
-  - *Merge & Handoff:* Peer merged PR #52 into `lab4-staging` (`70d865d347d20f064a6a53bd984dc2817397a831`). Issue #48 closed. All three review suggestions acknowledged: inverse Prisma relations and terminal-state test extensions are incorporated into Issue #49 backend implementation; UI validation test for empty cancellation reason is deferred to Issue #49 frontend phase.
+  - *Merge & Handoff:* Peer merged PR #52 into `lab4-staging` (`70d865d347d20f064a6a53bd984dc2817397a831`). Issue #48 closed. All three review suggestions acknowledged: inverse Prisma relations and terminal-state test extensions were incorporated into Issue #49 backend implementation; UI validation test for empty cancellation reason was incorporated into Issue #49 frontend suite.
 
-#### Issue 2: Actions Taken and Ticket Workflow
+#### Issue 2 / PR 2: Actions Taken and Ticket Workflow
 - **Issue:** [#49](https://github.com/Kawi-HBLI/TokTickIT/issues/49)
 - **Branch:** `feature/lab4-actions-workflow`
-- **Scope:** Database models (`ActionTaken`, `ActionTakenHistory`), append-only trigger, additive migration, seed data, Actions Taken CRUD/history API, durable idempotency replay, resolution gate enforcement on ticket status updates, and backend test suite.
+- **Scope:** Database models (`ActionTaken`, `ActionTakenHistory`), append-only trigger, additive migration, seed data, Actions Taken CRUD/history API, durable idempotency replay, resolution gate enforcement on ticket status updates, React components (`ActionsTakenSection`), and test suites (44 server tests, 23 client tests, 5 E2E tests).
+- **Review Events:**
+  - *Independent Verification & AI Review (Backend Phase):* Identified follow-up note normalization (nulling `followUpNote` when `followUpRequired=false`), strict request validation, and database trigger immutability. Verified all 44 backend tests passed.
+  - *Independent Verification & AI Review (Frontend Phase):* Handled stale-version HTTP 409 handling in modals, retained uncertain keys on network failures, and preserved recovery modal state during parent ticket background refresh (`loadData()` in-place update). Verified 23 client tests and 5 E2E scenarios.
+  - *Peer Review by @R1NNE0:* Formally approved PR #53 after verifying Actions Taken lifecycle, resolution gate enforcement, concurrency row-locking, and mobile responsiveness.
+  - *Merge & Handoff:* Peer merged PR #53 into `lab4-staging` (`46d54aeda9edf68a5f219a4c939348ec66423b44`). Issue #49 closed.
+
+#### Issue 3 / PR 3: Role Dashboards and Filtered Navigation
+- **Issue:** [#50](https://github.com/Kawi-HBLI/TokTickIT/issues/50)
+- **Branch:** `feature/lab4-dashboards`
+- **Scope:** Staff operational dashboard (`/staff/dashboard`), Requester dashboard (`/dashboard`), drill-down filtering, queue URL state synchronization, Back/Forward navigation, draft discard confirmation guard, and test suites (19 server dashboard tests, 10 client tests, 7 E2E scenarios).
+- **Review Events:**
+  - *Independent Verification (Backend Checkpoint):* Verified activity scope freshness and requester privacy (excluding internal notes, audit logs, and staff IDs). Passed all 63 Lab 4 backend tests.
+  - *Independent Browser Check & AI Review (Frontend Checkpoint):* Identified queue query synchronization defect on same-path navigation (clicking "Ticket Queue" navigation from filtered URL did not reset filters) and text wrapping for long activity strings. Fixed with explicit search state synchronization and CSS word-break rules.
+  - *Regression Fix (Draft Discard Guard):* Resolved regression where `confirmDiscard()` re-entered the confirmation guard due to synchronous `popstate` dispatch; removed extraneous event dispatch while retaining history, route, and navKey updates. Verified with strengthened client test and 12 E2E scenarios.
+  - *Peer Review by @R1NNE0:* Formally approved PR #54 after verifying role dashboards, server-calculated totals, requester privacy, and drill-down navigation.
+  - *Merge & Handoff:* Peer merged PR #54 into `lab4-staging` (`d5c2e2af6feb4bb0552b815258c9d78249a80b6b`). Issue #50 closed.
+
+#### Issue 4: Final Regression, Hardening, and Delivery Evidence
+- **Issue:** [#51](https://github.com/Kawi-HBLI/TokTickIT/issues/51)
+- **Branch:** `feature/lab4-final-verification`
+- **Scope:** Full Labs 1-4 test suites, production builds, 500-ticket dashboard performance benchmark (`TEST-PERF-01`), representative backup/restore disaster recovery rehearsal (`TEST-RECOV-01`), 17 UI-spec screenshots, documentation alignment, and final release preparation.
+- **Review Events & Status:**
+  - *Checkpoint 1 (Regression):* Full Labs 1–4 server test suite (314 tests across 37 files; 63 was the earlier Lab 4-only count), client tests (132 tests), server/client production builds, and Playwright regressions (Lab 2, Lab 3, Lab 4) independently executed and passed.
+  - *Checkpoint 2 (Performance & Recovery):* `TEST-PERF-01` verified 500-ticket benchmark with p95 ~11–14ms staff, ~8–12ms requester (<200ms target). `TEST-RECOV-01` verified real PostgreSQL backup/restore into `toktickit_recovery_test`, asserting row parity, relational integrity, sequence advancement, database trigger immutability, and attachment metadata preservation.
+  - *Checkpoint 3 (Visual Evidence & Documentation):* All 17 UI-spec screenshots captured in isolated test environment and documentation aligned.
+  - *Current Status:* In Progress on feature branch; PR not yet opened; pending final review by @R1NNE0.
+
+#### Release PR: Integrate Lab 4 into main
+- **Target:** `lab4-staging` $\rightarrow$ `main`
+- **Scope:** Final integration of all Lab 4 deliverables into `main`.
+- **Status:** Planned / Unfinished (will be opened following formal approval and merge of Issue #51).
 
 ---
 

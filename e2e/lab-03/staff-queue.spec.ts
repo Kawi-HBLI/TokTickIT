@@ -71,7 +71,7 @@ test.describe("E2E-STAFF-01: IT Staff Ticket Queue Workflow", () => {
     await expect(page.locator('[aria-live="polite"]')).toBeVisible();
 
     // Clear filters action
-    const clearBtn = page.getByRole("button", { name: /Clear filters/i });
+    const clearBtn = page.getByRole("button", { name: /Clear filters/i }).first();
     if (await clearBtn.isVisible()) {
       await clearBtn.click();
       await expect(searchInput).toHaveValue("");
