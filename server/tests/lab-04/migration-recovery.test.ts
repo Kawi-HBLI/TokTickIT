@@ -549,6 +549,9 @@ describe("Database Triggers, Migration & Recovery (server/tests/lab-04/migration
       const dstDbName = `toktickit_recov_dst_${runId}`;
       const dumpFile = `/tmp/toktickit_recov_${runId}.dump`;
 
+      const createdDatabases: string[] = [];
+      let dumpFileCreated = false;
+
       const execDocker = (args: string[]) => {
         return execFileSync("docker", ["exec", "toktickit-db", ...args], {
           encoding: "utf8",
@@ -561,7 +564,8 @@ describe("Database Triggers, Migration & Recovery (server/tests/lab-04/migration
 
       try {
         // 1. Create uniquely named disposable source database
-        execDocker(["psql", "-U", "toktickit", "-d", "postgres", "-c", `CREATE DATABASE ${srcDbName};`]);
+        execDocker(["psql", "-U", "toktickit", "-d", "postgres", "-c", `CREATE DATABASE "${srcDbName}";`]);
+        createdDatabases.push(srcDbName);
 
         const srcUrl = new URL(process.env.DATABASE_URL!);
         srcUrl.pathname = `/${srcDbName}`;
@@ -582,12 +586,24 @@ describe("Database Triggers, Migration & Recovery (server/tests/lab-04/migration
         srcPrisma = new PrismaClient({ datasources: { db: { url: srcUrl.toString() } } });
         await srcPrisma.$connect();
 
+        // Confirm Prisma and Docker target the same local PostgreSQL cluster instance
+        const dockerSystemId = execDocker([
+          "psql", "-U", "toktickit", "-d", "postgres", "-t", "-A", "-c",
+          "SELECT system_identifier FROM pg_control_system();",
+        ]).trim();
+
+        const [prismaControl] = await srcPrisma.$queryRawUnsafe<Array<{ system_identifier: string | bigint }>>(
+          "SELECT system_identifier::text FROM pg_control_system();"
+        );
+        expect(String(prismaControl.system_identifier)).toBe(dockerSystemId);
+
         // 3. Populate representative Lab 4 data
         await seedDatabase(srcPrisma, { seedActions: true });
 
-        // Add additional representative action and history records
+        // Add additional representative action, history, and attachment records
         const extraTicket = await srcPrisma.ticket.findFirstOrThrow({ where: { currentStatus: "IN_PROGRESS" } });
         const staff = await srcPrisma.user.findFirstOrThrow({ where: { role: "IT_STAFF", isActive: true } });
+
         const extraAction = await srcPrisma.actionTaken.create({
           data: {
             ticketId: extraTicket.id,
@@ -597,7 +613,8 @@ describe("Database Triggers, Migration & Recovery (server/tests/lab-04/migration
             description: "Rehearsal verification action for disaster recovery test",
           },
         });
-        await srcPrisma.actionTakenHistory.create({
+
+        const extraHistory = await srcPrisma.actionTakenHistory.create({
           data: {
             actionId: extraAction.id,
             ticketId: extraTicket.id,
@@ -607,6 +624,55 @@ describe("Database Triggers, Migration & Recovery (server/tests/lab-04/migration
             snapshot: { summary: "Created in source DB before backup" },
           },
         });
+
+        const extraAttachment = await srcPrisma.attachment.create({
+          data: {
+            ticketId: extraTicket.id,
+            originalName: "system_diagnostic_report.pdf",
+            storedName: `diag-recovery-${runId}.pdf`,
+            mimeType: "application/pdf",
+            sizeBytes: 1048576,
+            isRemoved: false,
+          },
+        });
+
+        // Retain source values for deep comparison after restoration
+        const sourceTicketValues = {
+          id: extraTicket.id,
+          summary: extraTicket.summary,
+          description: extraTicket.description,
+          requesterId: extraTicket.requesterId,
+          ownerId: extraTicket.ownerId,
+          currentStatus: extraTicket.currentStatus,
+        };
+
+        const sourceActionValues = {
+          id: extraAction.id,
+          ticketId: extraAction.ticketId,
+          createdById: extraAction.createdById,
+          description: extraAction.description,
+          status: extraAction.status,
+        };
+
+        const sourceHistoryValues = {
+          id: extraHistory.id,
+          actionId: extraHistory.actionId,
+          ticketId: extraHistory.ticketId,
+          actorId: extraHistory.actorId,
+          eventType: extraHistory.eventType,
+          version: extraHistory.version,
+          snapshot: extraHistory.snapshot,
+        };
+
+        const sourceAttachmentValues = {
+          id: extraAttachment.id,
+          ticketId: extraAttachment.ticketId,
+          originalName: extraAttachment.originalName,
+          storedName: extraAttachment.storedName,
+          mimeType: extraAttachment.mimeType,
+          sizeBytes: extraAttachment.sizeBytes,
+          isRemoved: extraAttachment.isRemoved,
+        };
 
         // Introduce intentional sequence gaps to verify collision-free allocation
         await srcPrisma.$executeRawUnsafe(`SELECT setval('"ActionTaken_id_seq"', 500, true);`);
@@ -625,19 +691,10 @@ describe("Database Triggers, Migration & Recovery (server/tests/lab-04/migration
           actionTakenHistory: await srcPrisma.actionTakenHistory.count(),
         };
 
-        const sequenceNames = [
-          "ActionTaken_id_seq",
-          "ActionTakenHistory_id_seq",
-          "Ticket_id_seq",
-          "Attachment_id_seq",
-          "Category_id_seq",
-          "InternalNote_id_seq",
-          "PublicComment_id_seq",
-          "RelatedSystem_id_seq",
-          "RequesterUser_id_seq",
-          "Session_id_seq",
-          "ticket_number_seq",
-        ];
+        const seqRows = await srcPrisma.$queryRawUnsafe<Array<{ sequence_name: string }>>(
+          `SELECT sequence_name FROM information_schema.sequences WHERE sequence_schema = 'public' ORDER BY sequence_name;`
+        );
+        const sequenceNames = seqRows.map((r) => r.sequence_name);
 
         const srcSequences = new Map<string, { last_value: string; is_called: boolean }>();
         for (const seq of sequenceNames) {
@@ -647,11 +704,16 @@ describe("Database Triggers, Migration & Recovery (server/tests/lab-04/migration
           srcSequences.set(seq, { last_value: String(row.last_value), is_called: row.is_called });
         }
 
+        console.log("[TEST-RECOV-01] ACTUAL_ROW_COUNTS:" + JSON.stringify(srcCounts));
+        console.log("[TEST-RECOV-01] ACTUAL_SEQUENCES:" + JSON.stringify(Object.fromEntries(srcSequences)));
+
         // 5. Perform genuine custom-format pg_dump
         execDocker(["pg_dump", "-U", "toktickit", "-d", srcDbName, "-Fc", "-f", dumpFile]);
+        dumpFileCreated = true;
 
         // 6. Create uniquely named disposable target database
-        execDocker(["psql", "-U", "toktickit", "-d", "postgres", "-c", `CREATE DATABASE ${dstDbName};`]);
+        execDocker(["psql", "-U", "toktickit", "-d", "postgres", "-c", `CREATE DATABASE "${dstDbName}";`]);
+        createdDatabases.push(dstDbName);
 
         // 7. Perform genuine pg_restore into separate target database
         execDocker(["pg_restore", "-U", "toktickit", "-d", dstDbName, dumpFile]);
@@ -678,26 +740,62 @@ describe("Database Triggers, Migration & Recovery (server/tests/lab-04/migration
         };
         expect(dstCounts).toEqual(srcCounts);
         expect(dstCounts.tickets).toBeGreaterThan(0);
+        expect(dstCounts.attachments).toBeGreaterThan(0);
         expect(dstCounts.actionsTaken).toBeGreaterThan(0);
         expect(dstCounts.actionTakenHistory).toBeGreaterThan(0);
 
         // 10. Verify Restored Data and IDs Preserved with Valid FK Relationships
         const restoredTicket = await dstPrisma.ticket.findUniqueOrThrow({
-          where: { id: extraTicket.id },
-          include: { requester: true, owner: true, actionsTaken: true },
+          where: { id: sourceTicketValues.id },
+          include: { requester: true, owner: true, actionsTaken: true, attachments: true },
         });
-        expect(restoredTicket.summary).toBe(extraTicket.summary);
-        expect(restoredTicket.requester).not.toBeNull();
-        expect(restoredTicket.actionsTaken.length).toBeGreaterThan(0);
+        expect(restoredTicket.id).toBe(sourceTicketValues.id);
+        expect(restoredTicket.summary).toBe(sourceTicketValues.summary);
+        expect(restoredTicket.description).toBe(sourceTicketValues.description);
+        expect(restoredTicket.requesterId).toBe(sourceTicketValues.requesterId);
+        expect(restoredTicket.ownerId).toBe(sourceTicketValues.ownerId);
+        expect(restoredTicket.currentStatus).toBe(sourceTicketValues.currentStatus);
+        expect(restoredTicket.requester.id).toBe(sourceTicketValues.requesterId);
+        expect(restoredTicket.owner?.id).toBe(sourceTicketValues.ownerId);
 
         const restoredAction = await dstPrisma.actionTaken.findUniqueOrThrow({
-          where: { id: extraAction.id },
+          where: { id: sourceActionValues.id },
           include: { ticket: true, createdBy: true, history: true },
         });
-        expect(restoredAction.description).toBe("Rehearsal verification action for disaster recovery test");
-        expect(restoredAction.ticket.id).toBe(extraTicket.id);
+        expect(restoredAction.id).toBe(sourceActionValues.id);
+        expect(restoredAction.description).toBe(sourceActionValues.description);
+        expect(restoredAction.ticketId).toBe(sourceTicketValues.id);
+        expect(restoredAction.createdById).toBe(staff.id);
+        expect(restoredAction.ticket.id).toBe(sourceTicketValues.id);
         expect(restoredAction.createdBy.id).toBe(staff.id);
-        expect(restoredAction.history.length).toBe(1);
+
+        const restoredHistory = await dstPrisma.actionTakenHistory.findUniqueOrThrow({
+          where: { id: sourceHistoryValues.id },
+          include: { action: true, ticket: true, actor: true },
+        });
+        expect(restoredHistory.id).toBe(sourceHistoryValues.id);
+        expect(restoredHistory.actionId).toBe(sourceHistoryValues.actionId);
+        expect(restoredHistory.ticketId).toBe(sourceHistoryValues.ticketId);
+        expect(restoredHistory.actorId).toBe(sourceHistoryValues.actorId);
+        expect(restoredHistory.eventType).toBe(sourceHistoryValues.eventType);
+        expect(restoredHistory.version).toBe(sourceHistoryValues.version);
+        expect(restoredHistory.snapshot).toEqual(sourceHistoryValues.snapshot);
+        expect(restoredHistory.action.id).toBe(sourceActionValues.id);
+        expect(restoredHistory.ticket.id).toBe(sourceTicketValues.id);
+        expect(restoredHistory.actor.id).toBe(staff.id);
+
+        const restoredAttachment = await dstPrisma.attachment.findUniqueOrThrow({
+          where: { id: sourceAttachmentValues.id },
+          include: { ticket: true },
+        });
+        expect(restoredAttachment.id).toBe(sourceAttachmentValues.id);
+        expect(restoredAttachment.ticketId).toBe(sourceAttachmentValues.ticketId);
+        expect(restoredAttachment.originalName).toBe(sourceAttachmentValues.originalName);
+        expect(restoredAttachment.storedName).toBe(sourceAttachmentValues.storedName);
+        expect(restoredAttachment.mimeType).toBe(sourceAttachmentValues.mimeType);
+        expect(restoredAttachment.sizeBytes).toBe(sourceAttachmentValues.sizeBytes);
+        expect(restoredAttachment.isRemoved).toBe(sourceAttachmentValues.isRemoved);
+        expect(restoredAttachment.ticket.id).toBe(sourceTicketValues.id);
 
         // 11. Verify Sequence States Match (last_value and is_called) before subsequent allocations
         for (const seq of sequenceNames) {
@@ -759,18 +857,76 @@ describe("Database Triggers, Migration & Recovery (server/tests/lab-04/migration
         expect(deleteError).not.toBeNull();
         expect(deleteError?.message).toMatch(/immutable and cannot be updated or deleted/i);
       } finally {
-        // 14. Clean up disposable databases and dump file
-        if (srcPrisma) await srcPrisma.$disconnect().catch(() => {});
-        if (dstPrisma) await dstPrisma.$disconnect().catch(() => {});
+        // 14. Clean up disposable databases and dump file with strict error tracking
+        const cleanupErrors: string[] = [];
+
+        if (srcPrisma) {
+          try {
+            await srcPrisma.$disconnect();
+          } catch (err: any) {
+            cleanupErrors.push(`srcPrisma disconnect error: ${err.message}`);
+          }
+        }
+        if (dstPrisma) {
+          try {
+            await dstPrisma.$disconnect();
+          } catch (err: any) {
+            cleanupErrors.push(`dstPrisma disconnect error: ${err.message}`);
+          }
+        }
+
+        if (dumpFileCreated) {
+          try {
+            execDocker(["rm", "-f", dumpFile]);
+          } catch (err: any) {
+            cleanupErrors.push(`dump file removal error: ${err.message}`);
+          }
+        }
+
+        for (const dbName of createdDatabases) {
+          try {
+            execDocker([
+              "psql", "-U", "toktickit", "-d", "postgres", "-c",
+              `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${dbName}' AND pid <> pg_backend_pid();`,
+            ]);
+            execDocker(["psql", "-U", "toktickit", "-d", "postgres", "-c", `DROP DATABASE IF EXISTS "${dbName}";`]);
+          } catch (err: any) {
+            cleanupErrors.push(`DROP DATABASE ${dbName} error: ${err.message}`);
+          }
+        }
+
+        // Verify databases are gone
         try {
-          execDocker(["rm", "-f", dumpFile]);
-        } catch {}
-        try {
-          execDocker(["psql", "-U", "toktickit", "-d", "postgres", "-c", `DROP DATABASE IF EXISTS ${srcDbName};`]);
-        } catch {}
-        try {
-          execDocker(["psql", "-U", "toktickit", "-d", "postgres", "-c", `DROP DATABASE IF EXISTS ${dstDbName};`]);
-        } catch {}
+          const remainingDbs = execDocker([
+            "psql", "-U", "toktickit", "-d", "postgres", "-t", "-A", "-c",
+            "SELECT datname FROM pg_database;",
+          ]).trim().split(/\r?\n/).map((s) => s.trim());
+          for (const dbName of createdDatabases) {
+            if (remainingDbs.includes(dbName)) {
+              cleanupErrors.push(`Database ${dbName} still exists in pg_database after cleanup.`);
+            }
+          }
+        } catch (err: any) {
+          cleanupErrors.push(`Verification of database cleanup error: ${err.message}`);
+        }
+
+        // Verify dump file is gone
+        if (dumpFileCreated) {
+          try {
+            const dumpCheck = execDocker([
+              "sh", "-c", `if [ -f "${dumpFile}" ]; then echo "EXISTS"; else echo "GONE"; fi`,
+            ]).trim();
+            if (dumpCheck !== "GONE") {
+              cleanupErrors.push(`Dump file ${dumpFile} still exists after cleanup.`);
+            }
+          } catch (err: any) {
+            cleanupErrors.push(`Verification of dump file cleanup error: ${err.message}`);
+          }
+        }
+
+        if (cleanupErrors.length > 0) {
+          throw new Error(`TEST-RECOV-01 cleanup verification failed:\n${cleanupErrors.join("\n")}`);
+        }
       }
     }, 90000);
   });

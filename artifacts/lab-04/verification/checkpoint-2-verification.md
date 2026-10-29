@@ -74,8 +74,8 @@ npx dotenv-cli -e server/.env -- npx --prefix server vitest run --root server te
 
 | Endpoint / Role | Samples ($N$) | Min | Average | Max | p95 Measured | Documented Target | Status |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `GET /api/staff/dashboard` (IT Staff) | 35 | 9.92 ms | 12.13 ms | 16.12 ms | **14.65 ms** | $< 200\text{ ms}$ | **PASSED** |
-| `GET /api/requester/dashboard` (Requester) | 35 | 7.96 ms | 9.96 ms | 13.05 ms | **12.65 ms** | $< 200\text{ ms}$ | **PASSED** |
+| `GET /api/staff/dashboard` (IT Staff) | 35 | 7.38 ms | 8.47 ms | 14.16 ms | **11.36 ms** | $< 200\text{ ms}$ | **PASSED** |
+| `GET /api/requester/dashboard` (Requester) | 35 | 7.00 ms | 7.61 ms | 8.36 ms | **8.29 ms** | $< 200\text{ ms}$ | **PASSED** |
 
 ---
 
@@ -92,91 +92,112 @@ npx dotenv-cli -e server/.env -- npx --prefix server vitest run --root server te
 - **Test File:** `server/tests/lab-04/migration-recovery.test.ts`
 - **Tooling:** Docker-contained native `pg_dump (PostgreSQL) 15.19` and `pg_restore (PostgreSQL) 15.19`.
 
-### 2.3 Step-by-Step Rehearsal Procedure & Evidence
+### 2.3 Step-by-Step Rehearsal Procedure & Invariants
 
-1. **Disposable Source Database Creation:**
-   - Database name: `toktickit_recov_src_[uuid]`
-   - Created via: `docker exec toktickit-db psql -U toktickit -d postgres -c "CREATE DATABASE ..."`
-2. **Prisma Forward Migration Deployment:**
+1. **Target PostgreSQL Instance Confirmation:**
+   - Query `SELECT system_identifier FROM pg_control_system();` through both Docker CLI and Prisma client (`srcPrisma`).
+   - Confirmed both target the identical cluster instance: `7673912861168922662`. Existing development databases remain untouched.
+2. **Disposable Source Database Creation:**
+   - Database name: `toktickit_recov_src_[uuid]` (tracked in `createdDatabases`).
+   - Created via: `docker exec toktickit-db psql -U toktickit -d postgres -c 'CREATE DATABASE "..."'`
+3. **Prisma Forward Migration Deployment:**
    - Applied full migration chain (`20260815043555_init_category` through `20261027120000_lab4_actions_workflow`) via `prisma migrate deploy`.
-3. **Representative Lab 4 Data Population:**
+4. **Representative Lab 4 Fixture Population:**
    - Executed `seedDatabase(srcPrisma, { seedActions: true })`.
-   - Inserted additional representative Action Taken and Action History records under active triggers.
-4. **Sequence Gap Induction:**
-   - Induced intentional gaps to verify subsequent allocations advance from gaps:
+   - Seeded 10 Users, 4 Categories, 7 RelatedSystems, 4 Tickets, 2 PublicComments, 2 InternalNotes, 5 Actions, and 8 History records.
+   - Inserted additional representative records linked to source Ticket:
+     - 1 representative Action Taken (`ActionTaken`)
+     - 1 representative Action History (`ActionTakenHistory`)
+     - 1 representative Attachment (`Attachment`) with metadata: `originalName: "system_diagnostic_report.pdf"`, `mimeType: "application/pdf"`, `sizeBytes: 1048576`, `isRemoved: false`.
+5. **Sequence Gap Induction:**
+   - Induced intentional sequence gaps:
      - `SELECT setval('"ActionTaken_id_seq"', 500, true);`
      - `SELECT setval('"ActionTakenHistory_id_seq"', 600, true);`
-5. **Pre-Dump Invariant Recording:**
-   - Captured row counts for all 9 database relations.
-   - Recorded `last_value` and `is_called` across all 11 database sequences.
-6. **Logical Custom-Format Backup:**
+6. **Pre-Dump Invariant Capture:**
+   - Machine-readable row counts:
+     ```json
+     {"users":10,"categories":4,"relatedSystems":7,"tickets":4,"attachments":1,"publicComments":2,"internalNotes":2,"actionsTaken":6,"actionTakenHistory":9}
+     ```
+   - Machine-readable sequence states:
+     ```json
+     {"ActionTakenHistory_id_seq":{"last_value":"600","is_called":true},"ActionTaken_id_seq":{"last_value":"500","is_called":true},"Attachment_id_seq":{"last_value":"1","is_called":true},"Category_id_seq":{"last_value":"1","is_called":false},"InternalNote_id_seq":{"last_value":"2","is_called":true},"PublicComment_id_seq":{"last_value":"2","is_called":true},"RelatedSystem_id_seq":{"last_value":"7","is_called":true},"RequesterUser_id_seq":{"last_value":"10","is_called":true},"Session_id_seq":{"last_value":"1","is_called":false},"Ticket_id_seq":{"last_value":"4","is_called":true},"ticket_number_seq":{"last_value":"4","is_called":true}}
+     ```
+7. **Logical Custom-Format Backup:**
    - Command: `docker exec toktickit-db pg_dump -U toktickit -d toktickit_recov_src_* -Fc -f /tmp/toktickit_recov_*.dump`
-7. **Disposable Target Database Creation:**
-   - Database name: `toktickit_recov_dst_[uuid]` (separate target; never restoring into dev, staging, or source).
-8. **Restoration into Target Database:**
+   - Marked `dumpFileCreated = true`.
+8. **Disposable Target Database Creation:**
+   - Database name: `toktickit_recov_dst_[uuid]` (tracked in `createdDatabases`; never restoring into dev, staging, or source).
+9. **Restoration into Target Database:**
    - Command: `docker exec toktickit-db pg_restore -U toktickit -d toktickit_recov_dst_* /tmp/toktickit_recov_*.dump`
 
-### 2.4 Verification Results & Parity Matrix
+### 2.4 Actual Observed Evidence & Parity Verification
 
-#### A. Table Row Count Parity (100% Match)
+#### A. Table Row Count Parity (100% Match from Execution)
 
 | Relation / Table | Source DB Row Count | Restored Target Row Count | Match Status |
 | :--- | :---: | :---: | :---: |
-| `User` | 9 | 9 | **MATCH** |
-| `Category` | 6 | 6 | **MATCH** |
-| `RelatedSystem` | 5 | 5 | **MATCH** |
-| `Ticket` | 10 | 10 | **MATCH** |
-| `Attachment` | 10 | 10 | **MATCH** |
-| `PublicComment` | 9 | 9 | **MATCH** |
-| `InternalNote` | 7 | 7 | **MATCH** |
+| `User` | 10 | 10 | **MATCH** |
+| `Category` | 4 | 4 | **MATCH** |
+| `RelatedSystem` | 7 | 7 | **MATCH** |
+| `Ticket` | 4 | 4 | **MATCH** |
+| `Attachment` | 1 | 1 | **MATCH** |
+| `PublicComment` | 2 | 2 | **MATCH** |
+| `InternalNote` | 2 | 2 | **MATCH** |
 | `ActionTaken` | 6 | 6 | **MATCH** |
-| `ActionTakenHistory` | 6 | 6 | **MATCH** |
+| `ActionTakenHistory` | 9 | 9 | **MATCH** |
 
-#### B. Restored Relational Integrity & Data Preservation
-- Verified sample Ticket: summary, description, requester relationship, owner relationship, and related Actions Taken remained intact with identical foreign keys.
-- Verified sample Action Taken: description, ticketId, createdById, and history entries remained intact with identical IDs and snapshots.
+#### B. Restored Relational Integrity & Preservation Assertions
+- **Sample Ticket Preservation:**
+  - Restored `Ticket.id` matches source ID.
+  - `summary`, `description`, `requesterId`, `ownerId`, and `currentStatus` match source values identically.
+  - Restored foreign key relations `requester` and `owner` resolve to correct User records.
+- **Sample Action Taken Preservation:**
+  - Restored `ActionTaken.id`, `ticketId`, `createdById`, and `description` match source values identically.
+- **Sample History Record Preservation:**
+  - Restored `ActionTakenHistory.id`, `actionId`, `ticketId`, `actorId`, `eventType`, `version`, and complete `snapshot` JSON match source values identically.
+- **Representative Attachment Preservation:**
+  - Restored `Attachment.id`, `ticketId`, `originalName`, `storedName`, `mimeType`, `sizeBytes`, and `isRemoved` match source values identically.
+  - `Attachment.ticket` foreign-key relationship resolves to the correct source Ticket.
 
-#### C. Sequence State Parity (Source vs Restored Target before New Inserts)
+#### C. Actual Sequence State Parity (Source vs Restored Target before New Inserts)
 
 | Sequence Name | Source `last_value` | Target `last_value` | Source `is_called` | Target `is_called` | Status |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| `ActionTaken_id_seq` | 500 | 500 | true | true | **MATCH** |
 | `ActionTakenHistory_id_seq` | 600 | 600 | true | true | **MATCH** |
-| `Ticket_id_seq` | 10 | 10 | true | true | **MATCH** |
-| `Attachment_id_seq` | 10 | 10 | true | true | **MATCH** |
-| `Category_id_seq` | 6 | 6 | true | true | **MATCH** |
-| `InternalNote_id_seq` | 7 | 7 | true | true | **MATCH** |
-| `PublicComment_id_seq` | 9 | 9 | true | true | **MATCH** |
-| `RelatedSystem_id_seq` | 5 | 5 | true | true | **MATCH** |
-| `RequesterUser_id_seq` | 9 | 9 | true | true | **MATCH** |
+| `ActionTaken_id_seq` | 500 | 500 | true | true | **MATCH** |
+| `Attachment_id_seq` | 1 | 1 | true | true | **MATCH** |
+| `Category_id_seq` | 1 | 1 | false | false | **MATCH** |
+| `InternalNote_id_seq` | 2 | 2 | true | true | **MATCH** |
+| `PublicComment_id_seq` | 2 | 2 | true | true | **MATCH** |
+| `RelatedSystem_id_seq` | 7 | 7 | true | true | **MATCH** |
+| `RequesterUser_id_seq` | 10 | 10 | true | true | **MATCH** |
 | `Session_id_seq` | 1 | 1 | false | false | **MATCH** |
-| `ticket_number_seq` | 10 | 10 | true | true | **MATCH** |
+| `Ticket_id_seq` | 4 | 4 | true | true | **MATCH** |
+| `ticket_number_seq` | 4 | 4 | true | true | **MATCH** |
 
 #### D. Collision-Free Subsequent Allocations
-- Post-restore insert into `ActionTaken`: generated ID = **501** (strictly advancing from gap 500 without collision).
-- Post-restore insert into `ActionTakenHistory`: generated ID = **601** (strictly advancing from gap 600 without collision).
+- Post-restore insert into `ActionTaken`: generated ID = **501** (advancing cleanly from sequence gap 500 without collision).
+- Post-restore insert into `ActionTakenHistory`: generated ID = **601** (advancing cleanly from sequence gap 600 without collision).
 
 #### E. Restored Trigger Immutability Enforcement
 - Direct raw SQL `UPDATE "ActionTakenHistory" SET version = 999 WHERE id = 601`: rejected by restored trigger `trg_action_history_append_only` with PostgreSQL exception `ActionTakenHistory records are immutable and cannot be updated or deleted`.
 - Direct raw SQL `DELETE FROM "ActionTakenHistory" WHERE id = 601`: rejected by restored trigger `trg_action_history_append_only` with PostgreSQL exception `ActionTakenHistory records are immutable and cannot be updated or deleted`.
 
-#### F. Cleanup Verification
-- Disposable database `toktickit_recov_src_*`: dropped.
-- Disposable database `toktickit_recov_dst_*`: dropped.
-- Custom dump file `/tmp/toktickit_recov_*.dump`: removed from container filesystem.
-- Zero credentials, dumps, or tokens added to Git tracking.
+#### F. Verified Cleanup
+- Tracked created databases: `toktickit_recov_src_*` and `toktickit_recov_dst_*`.
+- Active backend connections terminated via `pg_terminate_backend()`.
+- Both disposable databases dropped via `DROP DATABASE IF EXISTS`.
+- Verified databases are absent from `pg_database`: query returned 0 matches for disposable names.
+- Dump file removed via `rm -f /tmp/toktickit_recov_*.dump`.
+- Verified dump file is absent from container filesystem (`GONE`).
+- Strict error handling: any cleanup failure throws an unsuppressed Error failing the test.
 
 ---
 
-## 3. Integrated Regression Test Suite Status
+## 3. Server Lab 4 Suite Status
 
 | Suite / Build | Command | Passed | Failed | Status |
 | :--- | :--- | :---: | :---: | :---: |
 | **Server Lab 4 Suite** | `npx dotenv-cli -e server/.env -- npx --prefix server vitest run --root server tests/lab-04` | 65 (7 files) | 0 | **PASSED** |
-| **Server Full Suite (Labs 1–4)** | `npx dotenv-cli -e server/.env -- npx --prefix server vitest run --root server tests` | 316 (38 files) | 0 | **PASSED** |
-| **Client Component Suite** | `npm --prefix client test` | 132 (24 files) | 0 | **PASSED** |
-| **Server Production Build** | `npm --prefix server run build` | 1 | 0 | **PASSED** |
-| **Client Production Build** | `npm --prefix client run build` | 1 | 0 | **PASSED** |
-| **Lab 2 Regression E2E** | `npx playwright test -c playwright.lab2-regression.config.ts` | 10 | 0 | **PASSED** |
-| **Lab 3 E2E Suite** | `npx playwright test -c playwright.lab3.config.ts` | 21 | 0 | **PASSED** |
-| **Lab 4 E2E Suite** | `npx playwright test -c playwright.lab4.config.ts` | 12 | 0 | **PASSED** |
+| **Performance Baseline (`TEST-PERF-01`)** | `npx dotenv-cli -e server/.env -- npx --prefix server vitest run --root server tests/lab-04/dashboard-performance.test.ts` | 1 | 0 | **PASSED** |
+| **Recovery Rehearsal (`TEST-RECOV-01`)** | `npx dotenv-cli -e server/.env -- npx --prefix server vitest run --root server tests/lab-04/migration-recovery.test.ts` | 8 (incl. RECOV-01) | 0 | **PASSED** |

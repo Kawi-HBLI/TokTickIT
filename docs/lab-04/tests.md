@@ -234,10 +234,12 @@ The repository currently defaults `playwright.config.ts` to `e2e/lab-02` and has
 ### Disaster Recovery Rehearsal (TEST-RECOV-01)
 - **Command:** `npx dotenv-cli -e server/.env -- npx --prefix server vitest run --root server tests/lab-04/migration-recovery.test.ts`
 - **Backup / Restore Tooling:** Native PostgreSQL 15 custom-format `pg_dump -Fc` and `pg_restore` executed against isolated disposable databases (`toktickit_recov_src_*` and `toktickit_recov_dst_*`)
-- **Row Count Parity:** 100% match across User, Category, RelatedSystem, Ticket, Attachment, PublicComment, InternalNote, ActionTaken, ActionTakenHistory
+- **Cluster Parity:** Verified Docker and Prisma target identical cluster instance via `pg_control_system()` `system_identifier`
+- **Row Count Parity:** 100% match across User (10), Category (4), RelatedSystem (7), Ticket (4), Attachment (1), PublicComment (2), InternalNote (2), ActionTaken (6), ActionTakenHistory (9)
 - **Sequence Parity:** Exact match of `last_value` and `is_called` across all 11 database sequences prior to post-restore allocations
-- **Collision-Free Allocation:** Verified subsequent `ActionTaken` and `ActionTakenHistory` inserts advance cleanly from gaps without collisions
+- **Collision-Free Allocation:** Verified subsequent `ActionTaken` (ID 501 from gap 500) and `ActionTakenHistory` (ID 601 from gap 600) inserts advance cleanly without collisions
 - **Trigger Immutability:** Verified restored `trg_action_history_append_only` trigger rejects direct `UPDATE` and `DELETE` on `ActionTakenHistory`
+- **Cleanup Verification:** Verified created disposable databases and temporary dump file are completely removed with strict failure detection
 - **Result:** Passed
 
 ### Playwright E2E Suite Execution
