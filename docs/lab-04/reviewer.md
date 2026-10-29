@@ -85,7 +85,7 @@ Dates below are UTC. This record tracks review activities across the 4 planned G
 - **Branch:** `feature/lab4-final-verification`
 - **Scope:** Full Labs 1-4 test suites, production builds, 500-ticket dashboard performance benchmark (`TEST-PERF-01`), representative backup/restore disaster recovery rehearsal (`TEST-RECOV-01`), 17 UI-spec screenshots, documentation alignment, and final release preparation.
 - **Review Events & Status:**
-  - *Checkpoint 1 (Regression):* All server tests (Labs 1–4, 63 tests), client tests (132 tests), server/client production builds, and Playwright regressions (Lab 2, Lab 3, Lab 4) independently executed and passed.
+  - *Checkpoint 1 (Regression):* Full Labs 1–4 server test suite (314 tests across 37 files; 63 was the earlier Lab 4-only count), client tests (132 tests), server/client production builds, and Playwright regressions (Lab 2, Lab 3, Lab 4) independently executed and passed.
   - *Checkpoint 2 (Performance & Recovery):* `TEST-PERF-01` verified 500-ticket benchmark with p95 ~11–14ms staff, ~8–12ms requester (<200ms target). `TEST-RECOV-01` verified real PostgreSQL backup/restore into `toktickit_recovery_test`, asserting row parity, relational integrity, sequence advancement, database trigger immutability, and attachment metadata preservation.
   - *Checkpoint 3 (Visual Evidence & Documentation):* All 17 UI-spec screenshots captured in isolated test environment and documentation aligned.
   - *Current Status:* In Progress on feature branch; PR not yet opened; pending final review by @R1NNE0.

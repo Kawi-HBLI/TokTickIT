@@ -185,6 +185,26 @@ async function captureScreenshot(page: Page, relativePath: string) {
   await page.screenshot({ path: targetPath, fullPage: true });
 }
 
+async function waitForStaffDashboardLoaded(page: Page) {
+  await expect(page.getByRole("heading", { name: "Operational Overview" })).toBeVisible();
+  await expect(page.locator('[data-testid="metric-open-tickets"]')).toBeVisible();
+  await expect(page.locator('[data-testid="metric-pending-actions"]')).toBeVisible();
+  await expect(page.locator('[data-testid="metric-completed-today"]')).toBeVisible();
+  await expect(page.locator('[data-testid="metric-unassigned-queue"]')).toBeVisible();
+  await expect(page.getByRole("heading", { name: /My Assigned Work/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Unassigned Team Work/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Recent Action Activity/i })).toBeVisible();
+}
+
+async function waitForRequesterDashboardLoaded(page: Page) {
+  await expect(page.getByRole("heading", { name: /Welcome back/i })).toBeVisible();
+  await expect(page.locator('[data-testid="metric-active-tickets"]')).toBeVisible();
+  await expect(page.locator('[data-testid="metric-awaiting-input"]')).toBeVisible();
+  await expect(page.locator('[data-testid="metric-resolved-closed"]')).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Recent Ticket Activity" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Recent Ticket Activity table" })).toBeVisible();
+}
+
 test.describe("Lab 4 Visual & Screenshot Evidence Capture (17 UI-Spec Items)", () => {
   test.beforeEach(async () => {
     await seedTicketWithMixedActions();
@@ -199,20 +219,19 @@ test.describe("Lab 4 Visual & Screenshot Evidence Capture (17 UI-Spec Items)", (
     // Staff Dashboard - Desktop (1440x900)
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/staff/dashboard");
-    await expect(page.getByRole("heading", { name: "Operational Overview" })).toBeVisible();
-    await expect(page.locator('[data-testid="metric-open-tickets"]')).toBeVisible();
+    await waitForStaffDashboardLoaded(page);
     await captureScreenshot(page, "staff-dashboard/desktop-overview.png");
 
     // Staff Dashboard - Tablet (834x1112)
     await page.setViewportSize({ width: 834, height: 1112 });
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Operational Overview" })).toBeVisible();
+    await waitForStaffDashboardLoaded(page);
     await captureScreenshot(page, "staff-dashboard/tablet-view.png");
 
     // Staff Dashboard - Mobile (390x844)
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Operational Overview" })).toBeVisible();
+    await waitForStaffDashboardLoaded(page);
     await captureScreenshot(page, "staff-dashboard/mobile-view.png");
 
     // =========================================================================
@@ -220,7 +239,7 @@ test.describe("Lab 4 Visual & Screenshot Evidence Capture (17 UI-Spec Items)", (
     // =========================================================================
     await page.setViewportSize({ width: 320, height: 800 });
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Operational Overview" })).toBeVisible();
+    await waitForStaffDashboardLoaded(page);
     await captureScreenshot(page, "accessibility/reflow-400-percent.png");
 
     // =========================================================================
@@ -242,12 +261,14 @@ test.describe("Lab 4 Visual & Screenshot Evidence Capture (17 UI-Spec Items)", (
     await page.setViewportSize({ width: 834, height: 1112 });
     await page.reload();
     await expect(page.locator("section.actions-taken-section")).toBeVisible();
+    await expect(page.locator("section.actions-taken-section").getByText("PENDING").first()).toBeVisible();
     await captureScreenshot(page, "actions-taken/staff-actions-list-tablet.png");
 
     // Staff Actions List - Mobile (390x844)
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
     await expect(page.locator("section.actions-taken-section")).toBeVisible();
+    await expect(page.locator("section.actions-taken-section").getByText("PENDING").first()).toBeVisible();
     await captureScreenshot(page, "actions-taken/staff-actions-list-mobile.png");
 
     // Return to Desktop for modal & dialog captures
@@ -256,7 +277,7 @@ test.describe("Lab 4 Visual & Screenshot Evidence Capture (17 UI-Spec Items)", (
     await expect(page.locator("section.actions-taken-section")).toBeVisible();
 
     // =========================================================================
-    // 10. Create Action Modal
+    // 10. Create Action Modal (Captured in Pending-Submit State)
     // =========================================================================
     const addActionBtn = page.getByRole("button", { name: "+ Add Action Taken" });
     await addActionBtn.click();
@@ -266,9 +287,45 @@ test.describe("Lab 4 Visual & Screenshot Evidence Capture (17 UI-Spec Items)", (
     await createDialog.getByLabel("Follow-up Required").check();
     await createDialog.getByLabel(/Follow-up Note/).fill("Verify with network operations after scheduled gateway reboot.");
     await createDialog.getByLabel(/Attachment Notes/).fill("pcap-trace-gateway-443.pcap");
+
+    // Intercept POST /api/tickets/1/actions with a controlled gate to capture pending-submit state
+    let releaseSubmit: () => void = () => {};
+    const submitGate = new Promise<void>((resolve) => {
+      releaseSubmit = resolve;
+    });
+
+    await page.route("**/api/tickets/1/actions", async (route) => {
+      if (route.request().method() === "POST") {
+        await submitGate;
+        await route.continue();
+      } else {
+        await route.continue();
+      }
+    });
+
+    // Click "Save Action" to trigger the pending submission
+    const saveActionBtn = createDialog.getByRole("button", { name: "Save Action" });
+    await saveActionBtn.click();
+
+    // Assert that the visible button text switches to "Saving…" and is disabled
+    const savingBtn = createDialog.getByRole("button", { name: /Saving/ });
+    await expect(savingBtn).toBeVisible();
+    await expect(savingBtn).toBeDisabled();
+
+    // Capture the pending state with modal and form controls visible
     await captureScreenshot(page, "actions-taken/create-action-modal.png");
-    await page.keyboard.press("Escape");
+
+    // Release the request and wait for the response to complete
+    const responsePromise = page.waitForResponse(
+      (res) => res.url().includes("/api/tickets/1/actions") && res.request().method() === "POST"
+    );
+    releaseSubmit();
+    await responsePromise;
+    await page.unroute("**/api/tickets/1/actions");
+
+    // Verify modal closes and the newly created action is in the list
     await expect(createDialog).not.toBeVisible();
+    await expect(actionsSection.getByText("Conducted deep packet capture on core gateway interface.")).toBeVisible();
 
     // =========================================================================
     // 11. Complete Action Modal
@@ -337,20 +394,19 @@ test.describe("Lab 4 Visual & Screenshot Evidence Capture (17 UI-Spec Items)", (
     // Requester Dashboard - Desktop (1440x900)
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/dashboard");
-    await expect(page.getByRole("heading", { name: /Welcome back/i })).toBeVisible();
-    await expect(page.locator('[data-testid="metric-active-tickets"]')).toBeVisible();
+    await waitForRequesterDashboardLoaded(page);
     await captureScreenshot(page, "requester-dashboard/desktop-summary.png");
 
     // Requester Dashboard - Tablet (834x1112)
     await page.setViewportSize({ width: 834, height: 1112 });
     await page.reload();
-    await expect(page.getByRole("heading", { name: /Welcome back/i })).toBeVisible();
+    await waitForRequesterDashboardLoaded(page);
     await captureScreenshot(page, "requester-dashboard/tablet-view.png");
 
     // Requester Dashboard - Mobile (390x844)
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
-    await expect(page.getByRole("heading", { name: /Welcome back/i })).toBeVisible();
+    await waitForRequesterDashboardLoaded(page);
     await captureScreenshot(page, "requester-dashboard/mobile-view.png");
 
     // =========================================================================
@@ -372,6 +428,7 @@ test.describe("Lab 4 Visual & Screenshot Evidence Capture (17 UI-Spec Items)", (
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
     await expect(page.locator("section.actions-taken-section")).toBeVisible();
+    await expect(page.locator("section.actions-taken-section").getByText("PENDING").first()).toBeVisible();
     await captureScreenshot(page, "actions-taken/requester-read-only-mobile.png");
   });
 });
