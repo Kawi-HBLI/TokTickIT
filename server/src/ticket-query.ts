@@ -1,23 +1,50 @@
-import type { TicketPriority } from "@prisma/client";
+import type { TicketPriority, TicketStatus } from "@prisma/client";
 import { FieldError, TicketError, positiveId } from "./ticket-validation.js";
 
 export type SortByField = "createdAt" | "updatedAt" | "requestedPriority";
 export type SortOrder = "asc" | "desc";
 export const ALLOWED_PAGE_SIZES = [10, 20, 50] as const;
 
+export type RequesterStatusGroup = "active" | "resolved_closed";
+
 export interface NormalizedTicketQuery {
   search: string;
   categoryId: number | null;
   requestedPriority: TicketPriority | null;
+  status?: TicketStatus | null;
+  statusGroup?: RequesterStatusGroup | null;
   sortBy: SortByField;
   sortOrder: SortOrder;
   page: number;
   pageSize: (typeof ALLOWED_PAGE_SIZES)[number];
 }
 
+const VALID_STATUSES: TicketStatus[] = [
+  "NEW",
+  "OPEN",
+  "IN_PROGRESS",
+  "WAITING_FOR_REQUESTER",
+  "RESOLVED",
+  "CLOSED",
+  "REOPENED",
+  "CANCELLED",
+];
+
+const VALID_STATUS_GROUPS: RequesterStatusGroup[] = ["active", "resolved_closed"];
+
 export function validateTicketQuery(raw: Record<string, unknown>): NormalizedTicketQuery {
   const fields: FieldError[] = [];
-  const allowed = ["search", "categoryId", "requestedPriority", "sortBy", "sortOrder", "page", "pageSize"];
+  const allowed = [
+    "search",
+    "categoryId",
+    "requestedPriority",
+    "status",
+    "statusGroup",
+    "sortBy",
+    "sortOrder",
+    "page",
+    "pageSize",
+  ];
 
   for (const key of Object.keys(raw)) {
     if (!allowed.includes(key)) {
@@ -56,6 +83,26 @@ export function validateTicketQuery(raw: Record<string, unknown>): NormalizedTic
       fields.push({ field: "requestedPriority", message: "Choose Low, Medium, High, or Critical." });
     } else {
       requestedPriority = raw.requestedPriority as TicketPriority;
+    }
+  }
+
+  // status
+  let status: TicketStatus | null = null;
+  if (raw.status !== undefined && raw.status !== null && raw.status !== "") {
+    if (typeof raw.status !== "string" || !VALID_STATUSES.includes(raw.status as TicketStatus)) {
+      fields.push({ field: "status", message: "Choose a valid ticket status." });
+    } else {
+      status = raw.status as TicketStatus;
+    }
+  }
+
+  // statusGroup
+  let statusGroup: RequesterStatusGroup | null = null;
+  if (raw.statusGroup !== undefined && raw.statusGroup !== null && raw.statusGroup !== "") {
+    if (typeof raw.statusGroup !== "string" || !VALID_STATUS_GROUPS.includes(raw.statusGroup as RequesterStatusGroup)) {
+      fields.push({ field: "statusGroup", message: "statusGroup must be active or resolved_closed." });
+    } else {
+      statusGroup = raw.statusGroup as RequesterStatusGroup;
     }
   }
 
@@ -108,7 +155,7 @@ export function validateTicketQuery(raw: Record<string, unknown>): NormalizedTic
     throw new TicketError(400, "INVALID_QUERY", "Some query parameters are invalid.", fields);
   }
 
-  return {
+  const result: NormalizedTicketQuery = {
     search,
     categoryId,
     requestedPriority,
@@ -117,4 +164,13 @@ export function validateTicketQuery(raw: Record<string, unknown>): NormalizedTic
     page,
     pageSize,
   };
+
+  if (status !== null) {
+    result.status = status;
+  }
+  if (statusGroup !== null) {
+    result.statusGroup = statusGroup;
+  }
+
+  return result;
 }

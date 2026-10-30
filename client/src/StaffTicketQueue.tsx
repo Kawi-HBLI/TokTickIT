@@ -14,6 +14,7 @@ import {
 
 interface StaffTicketQueueProps {
   onNavigate: (path: string) => void;
+  url?: string;
 }
 
 function formatDate(iso: string): string {
@@ -35,7 +36,33 @@ function formatStatus(status: string): string {
   return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export default function StaffTicketQueue({ onNavigate }: StaffTicketQueueProps) {
+function parseStaffSearchParams(searchStr?: string) {
+  let search = typeof window !== "undefined" ? window.location.search : "";
+  if (searchStr !== undefined) {
+    const qIndex = searchStr.indexOf("?");
+    search = qIndex !== -1 ? searchStr.slice(qIndex) : (searchStr.startsWith("?") ? searchStr : "");
+  }
+  const params = new URLSearchParams(search);
+  return {
+    q: params.get("q") || "",
+    status: params.get("status") || "",
+    requestedPriority: params.get("requestedPriority") || "",
+    itPriority: params.get("itPriority") || "",
+    categoryId: params.get("categoryId") || "",
+    owner: params.get("owner") || "",
+    statusGroup: (params.get("statusGroup") as "active" | "resolved_closed" | null) || null,
+    actionAssignee: params.get("actionAssignee") || null,
+    actionStatus: params.get("actionStatus") || null,
+    completedBy: params.get("completedBy") || null,
+    completedDate: params.get("completedDate") || null,
+    sortBy: (params.get("sortBy") as StaffSortBy) || "updatedAt",
+    sortDirection: (params.get("sortDirection") as StaffSortDirection) || "desc",
+    page: params.get("page") ? Math.max(1, parseInt(params.get("page")!, 10)) : 1,
+    pageSize: (params.get("pageSize") ? parseInt(params.get("pageSize")!, 10) : 20) as 10 | 20 | 50,
+  };
+}
+
+export default function StaffTicketQueue({ onNavigate, url }: StaffTicketQueueProps) {
   const [tickets, setTickets] = useState<StaffQueueItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [assignees, setAssignees] = useState<StaffAssignee[]>([]);
@@ -48,20 +75,71 @@ export default function StaffTicketQueue({ onNavigate }: StaffTicketQueueProps) 
     hasNextPage: false,
   });
 
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const [requestedPriority, setRequestedPriority] = useState("");
-  const [itPriority, setItPriority] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [owner, setOwner] = useState("");
-  const [sortBy, setSortBy] = useState<StaffSortBy>("updatedAt");
-  const [sortDirection, setSortDirection] = useState<StaffSortDirection>("desc");
-  const [page, setPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<10 | 20 | 50>(20);
+  const [search, setSearch] = useState(() => parseStaffSearchParams(url).q);
+  const [status, setStatus] = useState(() => parseStaffSearchParams(url).status);
+  const [requestedPriority, setRequestedPriority] = useState(() => parseStaffSearchParams(url).requestedPriority);
+  const [itPriority, setItPriority] = useState(() => parseStaffSearchParams(url).itPriority);
+  const [categoryId, setCategoryId] = useState(() => parseStaffSearchParams(url).categoryId);
+  const [owner, setOwner] = useState(() => parseStaffSearchParams(url).owner);
+  const [statusGroup, setStatusGroup] = useState<"active" | "resolved_closed" | null>(() => parseStaffSearchParams(url).statusGroup);
+  const [actionAssignee, setActionAssignee] = useState<string | null>(() => parseStaffSearchParams(url).actionAssignee);
+  const [actionStatus, setActionStatus] = useState<string | null>(() => parseStaffSearchParams(url).actionStatus);
+  const [completedBy, setCompletedBy] = useState<string | null>(() => parseStaffSearchParams(url).completedBy);
+  const [completedDate, setCompletedDate] = useState<string | null>(() => parseStaffSearchParams(url).completedDate);
+  const [sortBy, setSortBy] = useState<StaffSortBy>(() => parseStaffSearchParams(url).sortBy);
+  const [sortDirection, setSortDirection] = useState<StaffSortDirection>(() => parseStaffSearchParams(url).sortDirection);
+  const [page, setPage] = useState<number>(() => parseStaffSearchParams(url).page);
+  const [pageSize, setPageSize] = useState<10 | 20 | 50>(() => parseStaffSearchParams(url).pageSize);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<{ status?: number; code?: string; message: string } | null>(null);
   const [reloadTrigger, setReloadTrigger] = useState(0);
+
+  // Listen to popstate (browser back/forward)
+  useEffect(() => {
+    const onPop = () => {
+      const sp = parseStaffSearchParams();
+      setSearch(sp.q);
+      setStatus(sp.status);
+      setRequestedPriority(sp.requestedPriority);
+      setItPriority(sp.itPriority);
+      setCategoryId(sp.categoryId);
+      setOwner(sp.owner);
+      setStatusGroup(sp.statusGroup);
+      setActionAssignee(sp.actionAssignee);
+      setActionStatus(sp.actionStatus);
+      setCompletedBy(sp.completedBy);
+      setCompletedDate(sp.completedDate);
+      setSortBy(sp.sortBy);
+      setSortDirection(sp.sortDirection);
+      setPage(sp.page);
+      setPageSize(sp.pageSize);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // Re-sync query state when navigation changes route / url
+  useEffect(() => {
+    if (url !== undefined) {
+      const sp = parseStaffSearchParams(url);
+      setSearch(sp.q);
+      setStatus(sp.status);
+      setRequestedPriority(sp.requestedPriority);
+      setItPriority(sp.itPriority);
+      setCategoryId(sp.categoryId);
+      setOwner(sp.owner);
+      setStatusGroup(sp.statusGroup);
+      setActionAssignee(sp.actionAssignee);
+      setActionStatus(sp.actionStatus);
+      setCompletedBy(sp.completedBy);
+      setCompletedDate(sp.completedDate);
+      setSortBy(sp.sortBy);
+      setSortDirection(sp.sortDirection);
+      setPage(sp.page);
+      setPageSize(sp.pageSize);
+    }
+  }, [url]);
 
   const searchId = useId();
   const statusId = useId();
@@ -102,11 +180,39 @@ export default function StaffTicketQueue({ onNavigate }: StaffTicketQueueProps) 
       itPriority: itPriority || null,
       categoryId: categoryId ? Number(categoryId) : null,
       owner: owner || null,
+      statusGroup: statusGroup || null,
+      actionAssignee: actionAssignee || null,
+      actionStatus: actionStatus || null,
+      completedBy: completedBy || null,
+      completedDate: completedDate || null,
       sortBy,
       sortDirection,
       page,
       pageSize,
     };
+
+    // Reflect query parameters into URL
+    const sp = new URLSearchParams();
+    if (search.trim()) sp.set("q", search.trim());
+    if (status) sp.set("status", status);
+    if (requestedPriority) sp.set("requestedPriority", requestedPriority);
+    if (itPriority) sp.set("itPriority", itPriority);
+    if (categoryId) sp.set("categoryId", categoryId);
+    if (owner) sp.set("owner", owner);
+    if (statusGroup) sp.set("statusGroup", statusGroup);
+    if (actionAssignee) sp.set("actionAssignee", actionAssignee);
+    if (actionStatus) sp.set("actionStatus", actionStatus);
+    if (completedBy) sp.set("completedBy", completedBy);
+    if (completedDate) sp.set("completedDate", completedDate);
+    if (sortBy !== "updatedAt") sp.set("sortBy", sortBy);
+    if (sortDirection !== "desc") sp.set("sortDirection", sortDirection);
+    if (page > 1) sp.set("page", String(page));
+    if (pageSize !== 20) sp.set("pageSize", String(pageSize));
+    const qs = sp.toString();
+    const nextUrl = `/staff/tickets${qs ? `?${qs}` : ""}`;
+    if (window.location.pathname + window.location.search !== nextUrl) {
+      window.history.replaceState({}, "", nextUrl);
+    }
 
     fetchStaffTickets(query)
       .then((res) => {
@@ -138,6 +244,11 @@ export default function StaffTicketQueue({ onNavigate }: StaffTicketQueueProps) 
     itPriority,
     categoryId,
     owner,
+    statusGroup,
+    actionAssignee,
+    actionStatus,
+    completedBy,
+    completedDate,
     sortBy,
     sortDirection,
     page,
@@ -146,7 +257,17 @@ export default function StaffTicketQueue({ onNavigate }: StaffTicketQueueProps) 
   ]);
 
   const hasActiveFilters = Boolean(
-    search.trim() || status || requestedPriority || itPriority || categoryId || owner
+    search.trim() ||
+    status ||
+    requestedPriority ||
+    itPriority ||
+    categoryId ||
+    owner ||
+    statusGroup ||
+    actionAssignee ||
+    actionStatus ||
+    completedBy ||
+    completedDate
   );
 
   const handleClearFilters = () => {
@@ -156,9 +277,15 @@ export default function StaffTicketQueue({ onNavigate }: StaffTicketQueueProps) 
     setItPriority("");
     setCategoryId("");
     setOwner("");
+    setStatusGroup(null);
+    setActionAssignee(null);
+    setActionStatus(null);
+    setCompletedBy(null);
+    setCompletedDate(null);
     setSortBy("updatedAt");
     setSortDirection("desc");
     setPage(1);
+    window.history.replaceState({}, "", "/staff/tickets");
   };
 
   const startItem = pagination.totalItems === 0 ? 0 : (pagination.page - 1) * pagination.pageSize + 1;
@@ -377,6 +504,56 @@ export default function StaffTicketQueue({ onNavigate }: StaffTicketQueueProps) 
           </div>
         </div>
       </section>
+
+      {hasActiveFilters && (
+        <div className="active-filters-container" aria-label="Active filters">
+          <span className="active-filters-label">Filtered by:</span>
+          <div className="active-filter-badges">
+            {statusGroup === "active" && (
+              <span className="filter-badge">Active Tickets</span>
+            )}
+            {statusGroup === "resolved_closed" && (
+              <span className="filter-badge">Resolved &amp; Closed</span>
+            )}
+            {owner === "unassigned" && (
+              <span className="filter-badge">Unassigned</span>
+            )}
+            {owner === "me" && (
+              <span className="filter-badge">Assigned to Me</span>
+            )}
+            {actionAssignee === "me" && actionStatus === "PENDING" && (
+              <span className="filter-badge">Pending Actions Assigned to Me</span>
+            )}
+            {completedBy === "me" && completedDate === "today" && (
+              <span className="filter-badge">Completed Today (UTC)</span>
+            )}
+            {search.trim() && (
+              <span className="filter-badge">Search: &ldquo;{search.trim()}&rdquo;</span>
+            )}
+            {status && (
+              <span className="filter-badge">Status: {formatStatus(status)}</span>
+            )}
+            {requestedPriority && (
+              <span className="filter-badge">Req. Priority: {requestedPriority}</span>
+            )}
+            {itPriority && (
+              <span className="filter-badge">IT Priority: {itPriority}</span>
+            )}
+            {categoryId && (
+              <span className="filter-badge">
+                Category: {categories.find((c) => String(c.id) === String(categoryId))?.name || categoryId}
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn btn-outline-secondary btn-sm clear-filters-btn"
+            onClick={handleClearFilters}
+          >
+            Clear Filters
+          </button>
+        </div>
+      )}
 
       {/* Main Content Areas */}
       {loading ? (

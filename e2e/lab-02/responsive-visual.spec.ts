@@ -13,7 +13,7 @@ const viewports = [
 test.describe("E2E-LAB2-VIS-01: authenticated requester responsive regression", () => {
   test("captures requester list, form, detail, dialog, and safe error states at each breakpoint", async ({ page, browser }) => {
     test.setTimeout(120_000);
-    const screenshotDir = path.resolve(process.cwd(), "artifacts/lab-03/screenshots/requester-regression");
+    const screenshotDir = path.resolve(process.cwd(), "artifacts/lab-04/screenshots/requester-regression");
     fs.mkdirSync(screenshotDir, { recursive: true });
     const capture = async (name: string, fullPage = true) => {
       if (!fullPage) {

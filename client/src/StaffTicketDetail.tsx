@@ -18,6 +18,7 @@ import {
   downloadAttachmentFile,
 } from "./api.js";
 import { useRequester } from "./RequesterContext.js";
+import ActionsTakenSection from "./ActionsTakenSection.js";
 
 interface StaffTicketDetailProps {
   ticketId: number;
@@ -89,6 +90,8 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
   const [error, setError] = useState<{ code: string; message: string; status?: number } | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [conflictError, setConflictError] = useState<string | null>(null);
+  const [resolutionGateError, setResolutionGateError] = useState<{ code: string; message: string } | null>(null);
+  const resolutionAlertRef = useRef<HTMLDivElement>(null);
 
   // Workflow state
   const [claiming, setClaiming] = useState(false);
@@ -124,12 +127,14 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
 
   const [reloadKey, setReloadKey] = useState(0);
 
-  function loadData() {
-    setLoading(true);
+  function loadData(options?: { forceLoading?: boolean }) {
+    if (options?.forceLoading || !ticket) {
+      setLoading(true);
+    }
     setError(null);
     setConflictError(null);
 
-    Promise.all([fetchStaffTicketDetail(ticketId), fetchAssignees()])
+    return Promise.all([fetchStaffTicketDetail(ticketId), fetchAssignees()])
       .then(([ticketRes, assigneesRes]) => {
         setTicket(ticketRes.data);
         setAssignees(assigneesRes.data);
@@ -137,19 +142,30 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
         setSelectedPriority(ticketRes.data.itPriority);
         setSelectedStatus(ticketRes.data.currentStatus);
         setLoading(false);
+        return ticketRes.data;
       })
       .catch((err: unknown) => {
-        if (err instanceof ApiError) {
-          setError({ code: err.code || "ERROR", message: err.message, status: err.status });
-        } else {
-          setError({ code: "UNKNOWN_ERROR", message: "Failed to load ticket details." });
+        if (!ticket) {
+          if (err instanceof ApiError) {
+            setError({ code: err.code || "ERROR", message: err.message, status: err.status });
+          } else {
+            setError({ code: "UNKNOWN_ERROR", message: "Failed to load ticket details." });
+          }
         }
         setLoading(false);
+        throw err;
       });
   }
 
+  const prevTicketIdRef = useRef(ticketId);
   useEffect(() => {
-    loadData();
+    if (prevTicketIdRef.current !== ticketId) {
+      prevTicketIdRef.current = ticketId;
+      setTicket(null);
+      loadData({ forceLoading: true }).catch(() => {});
+    } else {
+      loadData().catch(() => {});
+    }
   }, [ticketId, reloadKey]);
 
   // Dialog focus management
@@ -323,6 +339,7 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
     setConflictError(null);
     setSuccessMessage(null);
 
+    setResolutionGateError(null);
     try {
       const res = await updateStaffTicketStatus(ticket.id, targetStatus, ticket.updatedAt);
       setTicket((prev) =>
@@ -338,9 +355,19 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
       );
       setSelectedStatus(res.data.currentStatus);
       setSuccessMessage(`Ticket status updated to ${formatStatus(res.data.currentStatus)}.`);
+      setResolutionGateError(null);
+      loadData();
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 409) {
         setConflictError(err.message || "This ticket was modified by another operation. Refresh and try again.");
+      } else if (err instanceof ApiError && (err.status === 422 || err.code?.startsWith("RESOLUTION_GATE_"))) {
+        setResolutionGateError({
+          code: err.code || "RESOLUTION_GATE_FAILED",
+          message: err.message,
+        });
+        setTimeout(() => {
+          resolutionAlertRef.current?.focus();
+        }, 50);
       } else {
         setError({
           code: "STATUS_UPDATE_FAILED",
@@ -530,7 +557,7 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
       <section className="state-card state-error" aria-labelledby="error-title">
         <h2 id="error-title">Unable to Load Ticket</h2>
         <p className="state-message">{error?.message || "An unexpected error occurred."}</p>
-        <button type="button" className="btn btn-outline-success" onClick={loadData}>
+        <button type="button" className="btn btn-outline-success" onClick={() => loadData()}>
           Retry
         </button>
       </section>
@@ -573,9 +600,73 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
             <button
               type="button"
               className="btn btn-sm btn-outline-danger"
-              onClick={() => setReloadKey((k) => k + 1)}
+              onClick={() => {
+                setConflictError(null);
+                loadData().catch(() => {});
+              }}
             >
               Refresh Ticket
+            </button>
+          </div>
+        )}
+        {resolutionGateError && (
+          <div
+            ref={resolutionAlertRef}
+            tabIndex={-1}
+            className="alert alert-danger resolution-gate-banner"
+            role="alert"
+            aria-live="assertive"
+            style={{
+              backgroundColor: "#fee2e2",
+              color: "#991b1b",
+              border: "1px solid #f87171",
+              borderRadius: "8px",
+              padding: "16px",
+              marginTop: "16px",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <h3 style={{ margin: "0 0 8px 0", fontSize: "1.05rem", fontWeight: 700, color: "#991b1b" }}>
+                CANNOT RESOLVE TICKET: RESOLUTION REQUIREMENTS NOT MET
+              </h3>
+              <button
+                type="button"
+                className="btn-close-modal"
+                aria-label="Dismiss Alert"
+                onClick={() => setResolutionGateError(null)}
+                style={{ color: "#991b1b" }}
+              >
+                ×
+              </button>
+            </div>
+            <p style={{ margin: "0 0 8px 0", fontSize: "0.95rem" }}>
+              The following prerequisites must be fulfilled before resolving this ticket:
+            </p>
+            <ul style={{ margin: "0 0 10px 0", paddingLeft: "20px", fontSize: "0.9rem" }}>
+              <li>
+                Primary Ticket Owner assigned (Current: {ticket.owner ? ticket.owner.name : "Unassigned"})
+              </li>
+              <li>
+                At least one COMPLETED Action Taken with documented results
+              </li>
+              <li>
+                Zero PENDING Actions Taken
+              </li>
+            </ul>
+            {resolutionGateError.message && (
+              <p style={{ margin: "0 0 10px 0", fontWeight: 600 }}>
+                {resolutionGateError.message}
+              </p>
+            )}
+            <p style={{ margin: "0 0 12px 0", fontSize: "0.88rem" }}>
+              Please complete or cancel outstanding actions and ensure results are documented before resolving.
+            </p>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-danger"
+              onClick={() => setResolutionGateError(null)}
+            >
+              Dismiss Alert
             </button>
           </div>
         )}
@@ -791,6 +882,14 @@ export default function StaffTicketDetail({ ticketId, onNavigate }: StaffTicketD
           </ul>
         )}
       </section>
+
+      {/* Actions Taken Section */}
+      <ActionsTakenSection
+        ticketId={ticket.id}
+        ticketStatus={ticket.currentStatus}
+        isStaff={true}
+        onActionMutated={loadData}
+      />
 
       {/* Conversation Card: Public Comments & Internal Notes */}
       <section className="ticket-group conversation-section" aria-labelledby="discussion-heading">

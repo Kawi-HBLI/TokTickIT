@@ -13,12 +13,15 @@ import { formatTicketStatus } from "./ticket-status.js";
 
 interface MyTicketsProps {
   onNavigate: (path: string) => void;
+  url?: string;
 }
 
 const defaultQuery: Required<TicketQueryState> = {
   search: "",
   categoryId: null,
   requestedPriority: null,
+  statusGroup: null,
+  status: null,
   sortBy: "updatedAt",
   sortOrder: "desc",
   page: 1,
@@ -40,7 +43,27 @@ function formatDate(iso: string): string {
   }
 }
 
-export default function MyTickets({ onNavigate }: MyTicketsProps) {
+function parseRequesterSearchParams(searchStr?: string) {
+  let search = typeof window !== "undefined" ? window.location.search : "";
+  if (searchStr !== undefined) {
+    const qIndex = searchStr.indexOf("?");
+    search = qIndex !== -1 ? searchStr.slice(qIndex) : (searchStr.startsWith("?") ? searchStr : "");
+  }
+  const params = new URLSearchParams(search);
+  return {
+    search: params.get("search") || "",
+    categoryId: params.get("categoryId") || "",
+    priority: params.get("requestedPriority") || params.get("priority") || "",
+    statusGroup: (params.get("statusGroup") as "active" | "resolved_closed" | null) || null,
+    status: params.get("status") || "",
+    sortBy: (params.get("sortBy") as "createdAt" | "updatedAt" | "requestedPriority") || "updatedAt",
+    sortOrder: (params.get("sortOrder") as "asc" | "desc") || "desc",
+    page: params.get("page") ? Math.max(1, parseInt(params.get("page")!, 10)) : 1,
+    pageSize: (params.get("pageSize") ? parseInt(params.get("pageSize")!, 10) : 10) as 10 | 20 | 50,
+  };
+}
+
+export default function MyTickets({ onNavigate, url }: MyTicketsProps) {
   const { currentRequester } = useRequester();
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryState, setCategoryState] = useState<"loading" | "ready" | "error">("loading");
@@ -55,17 +78,53 @@ export default function MyTickets({ onNavigate }: MyTicketsProps) {
     hasNextPage: false,
   });
 
-  const [search, setSearch] = useState("");
-  const [categoryId, setCategoryId] = useState<string>("");
-  const [priority, setPriority] = useState<string>("");
-  const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt" | "requestedPriority">("updatedAt");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [page, setPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<10 | 20 | 50>(10);
+  const [search, setSearch] = useState(() => parseRequesterSearchParams(url).search);
+  const [categoryId, setCategoryId] = useState<string>(() => parseRequesterSearchParams(url).categoryId);
+  const [priority, setPriority] = useState<string>(() => parseRequesterSearchParams(url).priority);
+  const [statusGroup, setStatusGroup] = useState<"active" | "resolved_closed" | null>(() => parseRequesterSearchParams(url).statusGroup);
+  const [status, setStatus] = useState<string>(() => parseRequesterSearchParams(url).status);
+  const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt" | "requestedPriority">(() => parseRequesterSearchParams(url).sortBy);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => parseRequesterSearchParams(url).sortOrder);
+  const [page, setPage] = useState<number>(() => parseRequesterSearchParams(url).page);
+  const [pageSize, setPageSize] = useState<10 | 20 | 50>(() => parseRequesterSearchParams(url).pageSize);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [listReload, setListReload] = useState(0);
+
+  // Listen to popstate
+  useEffect(() => {
+    const onPop = () => {
+      const sp = parseRequesterSearchParams();
+      setSearch(sp.search);
+      setCategoryId(sp.categoryId);
+      setPriority(sp.priority);
+      setStatusGroup(sp.statusGroup);
+      setStatus(sp.status);
+      setSortBy(sp.sortBy);
+      setSortOrder(sp.sortOrder);
+      setPage(sp.page);
+      setPageSize(sp.pageSize);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // Re-sync query state when navigation changes route / url
+  useEffect(() => {
+    if (url !== undefined) {
+      const sp = parseRequesterSearchParams(url);
+      setSearch(sp.search);
+      setCategoryId(sp.categoryId);
+      setPriority(sp.priority);
+      setStatusGroup(sp.statusGroup);
+      setStatus(sp.status);
+      setSortBy(sp.sortBy);
+      setSortOrder(sp.sortOrder);
+      setPage(sp.page);
+      setPageSize(sp.pageSize);
+    }
+  }, [url]);
 
   const searchInputId = useId();
   const categoryFilterId = useId();
@@ -98,11 +157,30 @@ export default function MyTickets({ onNavigate }: MyTicketsProps) {
       search: search.trim() || undefined,
       categoryId: categoryId ? Number(categoryId) : null,
       requestedPriority: (priority as RequestedPriority) || null,
+      statusGroup: statusGroup || null,
+      status: status || null,
       sortBy,
       sortOrder,
       page,
       pageSize,
     };
+
+    // Reflect query parameters into URL
+    const sp = new URLSearchParams();
+    if (search.trim()) sp.set("search", search.trim());
+    if (categoryId) sp.set("categoryId", categoryId);
+    if (priority) sp.set("requestedPriority", priority);
+    if (statusGroup) sp.set("statusGroup", statusGroup);
+    if (status) sp.set("status", status);
+    if (sortBy !== "updatedAt") sp.set("sortBy", sortBy);
+    if (sortOrder !== "desc") sp.set("sortOrder", sortOrder);
+    if (page > 1) sp.set("page", String(page));
+    if (pageSize !== 10) sp.set("pageSize", String(pageSize));
+    const qs = sp.toString();
+    const nextUrl = `/tickets${qs ? `?${qs}` : ""}`;
+    if (window.location.pathname + window.location.search !== nextUrl) {
+      window.history.replaceState({}, "", nextUrl);
+    }
 
     getMyTickets(query)
       .then((res) => {
@@ -119,19 +197,22 @@ export default function MyTickets({ onNavigate }: MyTicketsProps) {
       });
     // Ignore every completion from obsolete queries, including errors/loading changes.
     return () => { current = false; };
-  }, [currentRequester?.id, search, categoryId, priority, sortBy, sortOrder, page, pageSize, listReload]);
+  }, [currentRequester?.id, search, categoryId, priority, statusGroup, status, sortBy, sortOrder, page, pageSize, listReload]);
 
   // Handler to clear all filters
   const handleClearFilters = () => {
     setSearch("");
     setCategoryId("");
     setPriority("");
+    setStatusGroup(null);
+    setStatus("");
     setSortBy("updatedAt");
     setSortOrder("desc");
     setPage(1);
+    window.history.replaceState({}, "", "/tickets");
   };
 
-  const hasActiveFilters = Boolean(search.trim() || categoryId || priority);
+  const hasActiveFilters = Boolean(search.trim() || categoryId || priority || statusGroup || status);
 
   // Pagination calculation
   const startItem = pagination.totalItems === 0 ? 0 : (pagination.page - 1) * pagination.pageSize + 1;
@@ -297,6 +378,44 @@ export default function MyTickets({ onNavigate }: MyTicketsProps) {
           </div>
         )}
       </section>
+
+      {hasActiveFilters && (
+        <div className="active-filters-container" aria-label="Active filters">
+          <span className="active-filters-label">Filtered by:</span>
+          <div className="active-filter-badges">
+            {statusGroup === "active" && (
+              <span className="filter-badge">Active Tickets</span>
+            )}
+            {statusGroup === "resolved_closed" && (
+              <span className="filter-badge">Resolved &amp; Closed</span>
+            )}
+            {status === "WAITING_FOR_REQUESTER" && (
+              <span className="filter-badge">Awaiting Your Input</span>
+            )}
+            {status && status !== "WAITING_FOR_REQUESTER" && (
+              <span className="filter-badge">Status: {formatTicketStatus(status as any)}</span>
+            )}
+            {search.trim() && (
+              <span className="filter-badge">Search: &ldquo;{search.trim()}&rdquo;</span>
+            )}
+            {priority && (
+              <span className="filter-badge">Priority: {priority}</span>
+            )}
+            {categoryId && (
+              <span className="filter-badge">
+                Category: {categories.find((c) => String(c.id) === String(categoryId))?.name || categoryId}
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn btn-outline-secondary btn-sm clear-filters-btn"
+            onClick={handleClearFilters}
+          >
+            Clear Filters
+          </button>
+        </div>
+      )}
 
       {/* Main Content Area */}
       {loading ? (

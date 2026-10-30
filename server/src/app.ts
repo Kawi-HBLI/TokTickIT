@@ -6,6 +6,8 @@ import { attachmentsRouter } from "./attachments-router.js";
 import { authRouter } from "./auth.js";
 import { staffQueueRouter } from "./staff-queue.js";
 import { adminUsersRouter } from "./admin-users.js";
+import { actionsRouter, ticketActionsRouter } from "./actions-router.js";
+import { dashboardRouter } from "./dashboard-router.js";
 
 
 // The Express app is exported separately from app.listen() (see index.ts) so
@@ -59,8 +61,12 @@ app.get("/api/related-systems", async (_req, res) => {
     res.status(500).json({ error: { code: "REFERENCE_DATA_UNAVAILABLE", message: "Related Systems are temporarily unavailable.", retryable: true } });
   }
 });
+app.use("/api/tickets/:ticketId/actions", ticketActionsRouter);
 app.use("/api/tickets", createTicketRouter);
+app.use("/api/actions", actionsRouter);
 app.use("/api/attachments", attachmentsRouter);
 app.use("/api/staff", staffQueueRouter);
 app.use("/api/admin/users", adminUsersRouter);
+app.use("/api", dashboardRouter);
+
 export default app;

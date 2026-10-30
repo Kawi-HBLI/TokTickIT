@@ -11,6 +11,8 @@ import {
 import { useRequester } from "./RequesterContext.js";
 import { formatTicketStatus } from "./ticket-status.js";
 import AttachmentSection from "./AttachmentSection.js";
+import ActionsTakenSection from "./ActionsTakenSection.js";
+import type { TicketStatus } from "./api.js";
 
 interface RequesterTicketDetailProps {
   ticketId: number;
@@ -337,6 +339,15 @@ export default function RequesterTicketDetail({
           </div>
         </div>
       </section>
+
+      {/* Actions Taken by IT Staff (Read-Only) */}
+      <ActionsTakenSection
+        ticketId={ticket.id}
+        ticketStatus={ticket.currentStatus as TicketStatus}
+        isStaff={false}
+      />
+
+
 
       {/* Conversation Section */}
       <section className="ticket-group conversation-section" aria-labelledby="conversation-heading">
