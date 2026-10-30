@@ -373,7 +373,9 @@ test.describe("Lab 4: Role Dashboards, Interactive Drill-Downs & Accessibility",
     await page.goto("/staff/tickets?owner=unassigned&statusGroup=active");
     await expect(page.getByRole("heading", { name: /Ticket Queue/i })).toBeVisible();
     await expect(page.locator(".active-filters-container")).toBeVisible();
-    await expect(page.locator(".staff-queue-table, .state-message").first()).toBeVisible();
+    const visibleQueue = page.locator(".staff-queue-table:visible, .staff-queue-cards:visible");
+    await expect(visibleQueue).toHaveCount(1);
+    await expect(visibleQueue).toBeVisible();
 
     const queueAxeResults = await new AxeBuilder({ page })
       .withTags(axeTags)
